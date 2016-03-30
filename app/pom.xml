@@ -8,7 +8,7 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>event-scheduler-app</artifactId>
     <packaging>war</packaging>
-    <name>event-scheduler-app Maven Webapp</name>
+    <name>event-scheduler-app</name>
     <url>http://maven.apache.org</url>
     <dependencies>
         <dependency>
@@ -42,6 +42,10 @@
                 <exclusion>
                     <artifactId>commons-lang3</artifactId>
                     <groupId>org.apache.commons</groupId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.walmart.platform.security.iam</groupId>
+                    <artifactId>iam-common</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
