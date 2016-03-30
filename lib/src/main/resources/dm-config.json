@@ -1,0 +1,10 @@
+{
+  "primaryConfigs": {
+    "V1": {
+      "type": "DB",
+      "ccmPath": "partner-data-receiver-app/databaseConfig/feed"
+    }
+  },
+  "secondaryConfigs": {},
+  "entityPackages": ["com.walmartlabs.components.scheduler.model"]
+}

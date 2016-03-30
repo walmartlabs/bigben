@@ -1,0 +1,33 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:jaxrs="http://cxf.apache.org/jaxrs"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd http://cxf.apache.org/jaxrs http://cxf.apache.org/schemas/jaxrs.xsd">
+
+    <import resource="classpath*:scheduler-config.xml"/>
+
+    <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
+        <constructor-arg index="0" value="WEB-INF/simulationCodes.json"/>
+    </bean>
+
+    <bean id="provider" class="com.walmart.platform.soa.common.providers.SOAJSONJAXBProvider"/>
+
+    <bean id="exceptionMapper" class="com.walmart.partnerapi.common.soari.ExceptionMapper"/>
+
+    <bean id="sehat" class="com.walmart.services.sehat.SehatImpl">
+        <constructor-arg>
+            <list>
+                <bean class="com.walmart.services.sehat.modules.base.VMModule"/>
+            </list>
+        </constructor-arg>
+    </bean>
+
+    <jaxrs:server address="/services">
+        <jaxrs:serviceBeans>
+            <ref bean="sehat"/>
+        </jaxrs:serviceBeans>
+        <jaxrs:providers>
+            <ref bean="provider"/>
+            <ref bean="exceptionMapper"/>
+        </jaxrs:providers>
+    </jaxrs:server>
+</beans>

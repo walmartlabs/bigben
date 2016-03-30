@@ -1,0 +1,13 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <import resource="classpath*:scheduler-config.xml"/>
+
+    <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
+        <constructor-arg index="0" value="simulationCodes.json"/>
+    </bean>
+
+    <bean id="eventProcessor" class="com.walmartlabs.components.tests.TestEventProcessor"/>
+</beans>
