@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="gmp-ingestion-platform">
+    <test name="dist-evt-app-tests" verbose="1" parallel="false" preserve-order="true"/>
+</suite>
