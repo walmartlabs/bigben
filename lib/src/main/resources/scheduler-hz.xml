@@ -1,0 +1,64 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:hz="http://www.hazelcast.com/schema/spring"
+       xsi:schemaLocation=
+               "http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+              http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+
+              http://www.hazelcast.com/schema/spring http://www.hazelcast.com/schema/spring/hazelcast-spring.xsd">
+
+    <bean id="bucketCacheStore" class="com.walmartlabs.components.scheduler.core.hz.HzBucketStore"/>
+
+    <hz:hazelcast id="hz">
+        <hz:config>
+            <hz:spring-aware/>
+            <hz:instance-name>${hz.instance.name}</hz:instance-name>
+            <hz:group name="${hz.group.name}" password="${hz.group.password}"/>
+            <hz:management-center enabled="${hz.management.center.enabled}"
+                                  url="${hz.management.center.url}"/>
+            <hz:network port="${hz.network.port}" port-auto-increment="${hz.network.port.auto.increment}">
+                <hz:outbound-ports>
+                    <hz:ports>0</hz:ports>
+                </hz:outbound-ports>
+                <hz:join>
+                    <hz:multicast enabled="false"/>
+                    <hz:tcp-ip enabled="true">
+                        <hz:members>${hz.members}</hz:members>
+                    </hz:tcp-ip>
+                </hz:join>
+                <hz:ssl enabled="false"/>
+                <hz:socket-interceptor enabled="false"/>
+            </hz:network>
+            <hz:partition-group enabled="false"/>
+            <hz:map name="bucketCache"
+                    in-memory-format="OBJECT"
+                    backup-count="${bucketCache.backup.count}"
+                    async-backup-count="${bucketCache.async.backup.count}"
+                    max-size="${bucketCache.max.size}"
+                    eviction-percentage="${bucketCache.eviction.percentage}"
+                    read-backup-data="${bucketCache.read.backup.data}"
+                    eviction-policy="${bucketCache.eviction.policy}"
+                    merge-policy="${bucketStore.merge.policy}"
+                    max-idle-seconds="${bucketStore.max.idle.seconds}"
+                    time-to-live-seconds="${bucketStore.ttl}"
+                    max-size-policy="PER_NODE"
+                    min-eviction-check-millis="${bucketStore.min.eviction.check.millis}">
+                <hz:map-store enabled="${bucketStore.map.store.enabled}"
+                              write-delay-seconds="${bucketStore.map.store.write.delay.seconds}"
+                              write-batch-size="${bucketStore.map.store.write.batch.size}"
+                              write-coalescing="true"
+                              implementation="bucketCacheStore"
+                              initial-mode="LAZY"/>
+            </hz:map>
+            <hz:serialization>
+                <hz:data-serializable-factories>
+                    <hz:data-serializable-factory factory-id="1" class-name="com.walmartlabs.components.scheduler.core.hz.ObjectFactory"/>
+                </hz:data-serializable-factories>
+            </hz:serialization>
+        </hz:config>
+    </hz:hazelcast>
+
+    <bean class="com.walmart.gmp.ingestion.platform.framework.core.Hz">
+        <constructor-arg ref="hz"/>
+    </bean>
+</beans>

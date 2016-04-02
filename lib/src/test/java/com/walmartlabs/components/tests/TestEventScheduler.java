@@ -1,7 +1,7 @@
 package com.walmartlabs.components.tests;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmartlabs.components.scheduler.core.EventReceiver;
+import com.walmartlabs.components.scheduler.core.hz.HzEventReceiver;
 import com.walmartlabs.components.scheduler.model.EventBucketStatusEntity;
 import com.walmartlabs.components.scheduler.model.EventScheduleDO;
 import com.walmartlabs.components.scheduler.model.EventScheduleDO.EventKey;
@@ -34,6 +34,8 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
 
     static {
         System.setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.model");
+        System.setProperty("com.walmart.platform.config.runOnEnv", "dev");
+        System.setProperty("ips.list", "file://ips.json");
     }
 
     @Autowired
@@ -43,22 +45,25 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
     private DataManager<Long, EventBucketStatusEntity> bucketDM;
 
     @Autowired
-    private EventReceiver eventReceiver;
+    private HzEventReceiver eventReceiver;
 
     @Test
     public void testEventScheduler() throws InterruptedException {
-        final long now = now().withMinute(0).withSecond(0).withNano(0).atZone(systemDefault()).toInstant().toEpochMilli();
-        final ExecutorService executorService = new ThreadPoolExecutor(100, 100, 60, MINUTES, new LinkedBlockingQueue<>());
-        final AtomicInteger i = new AtomicInteger();
-        final Random random = new Random();
-        final List<Callable<Object>> tasks = nCopies(2, 0L).stream().map($ -> (Callable<Object>) () -> {
-            final EventScheduleDO entity = new EventScheduleDO();
-            entity.setEventKey(EventKey.of(0, 0, now + random.nextInt(3600) * 1000, "EId#" + i.get() + random.nextInt(1_000_000)));
-            eventReceiver.addEvent(entity);
-            return null;
-        }).collect(Collectors.toList());
-        executorService.invokeAll(tasks);
-        System.out.println("done: " + (currentTimeMillis() - now) + "ms");
+        if (System.getProperty("run.it") != null) {
+            System.out.println("loading data");
+            final long now = now().withMinute(0).withSecond(0).withNano(0).atZone(systemDefault()).toInstant().toEpochMilli();
+            final ExecutorService executorService = new ThreadPoolExecutor(100, 100, 60, MINUTES, new LinkedBlockingQueue<>());
+            final AtomicInteger i = new AtomicInteger();
+            final Random random = new Random();
+            final List<Callable<Object>> tasks = nCopies(10_000, 0L).stream().map($ -> (Callable<Object>) () -> {
+                final EventScheduleDO entity = new EventScheduleDO();
+                entity.setEventKey(EventKey.of(0, 0, now + random.nextInt(3600) * 1000, "EId#" + i.get() + random.nextInt(1_000_000)));
+                eventReceiver.addEvent(entity);
+                return null;
+            }).collect(Collectors.toList());
+            executorService.invokeAll(tasks);
+            System.out.println("done: " + (currentTimeMillis() - now) + "ms");
+        } else System.out.println("not loading data");
         Thread.sleep(1000000);
     }
 }

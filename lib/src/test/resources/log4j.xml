@@ -13,17 +13,17 @@
     </appender>
 
     <root>
-        <level value="DEBUG"/>
+        <level value="WARN"/>
         <appender-ref ref="console"/>
     </root>
 
-    <logger name="org.reflections" additivity="false">
+    <logger name="com.walmartlabs.components.scheduler" additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
     </logger>
 
-    <logger name="com.walmartlabs.components.scheduler" additivity="false">
-        <level value="DEBUG"/>
+    <logger name="com.walmart.gmp.ingestion.platform.framework" additivity="false">
+        <level value="INFO"/>
         <appender-ref ref="console"/>
     </logger>
 

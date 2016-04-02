@@ -1,0 +1,11 @@
+{
+  "hz": {
+    "port": 7777,
+    "autoIncrement": true
+  },
+  "map": {
+    "store": {
+      "beanName": "bucketStore"
+    }
+  }
+}

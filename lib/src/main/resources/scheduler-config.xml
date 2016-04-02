@@ -48,23 +48,27 @@
                 <ref bean="bucketCache"/>
             </array>
         </property>
-        <!--<property name="discoverySpi">
+        <property name="discoverySpi">
             <bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">
+                <property name="localAddress" value="127.0.0.1"/>
+                <property name="localPort" value="12000"/>
                 <property name="ipFinder">
                     <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder">
                         <property name="addresses">
-                            <list>
-                                <value>127.0.0.1:12000</value>
-                            </list>
+                            <bean class="com.walmartlabs.components.scheduler.utils.ConfiguredIPList">
+                                <constructor-arg value="${ips.list}"/>
+                            </bean>
                         </property>
                     </bean>
                 </property>
             </bean>
-        </property>-->
+        </property>
     </bean>
 
     <bean id="ignite" class="org.apache.ignite.IgniteSpringBean">
         <property name="configuration" ref="igniteConfiguration"/>
     </bean>
+
+    <bean class="com.walmartlabs.components.scheduler.core.hz.HzEventReceiver"/>
 
 </beans>

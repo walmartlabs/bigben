@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- DO NOT INDENT THIS MACRO -->
+#macro(resolve $parm $default)
+#if (!$!parm || $!parm == "")
+$default#else
+$parm#end
+#end
+<hazelcast xsi:schemaLocation="http://www.hazelcast.com/schema/config hazelcast-config-3.5.xsd"
+           xmlns="http://www.hazelcast.com/schema/config"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <group>
+        <name>dev</name>
+        <password>dev-pass</password>
+    </group>
+    <management-center enabled="false">http://localhost:8080/mancenter</management-center>
+    <network>
+        <port auto-increment="#resolve($hz.autoIncrement false)">#resolve($hz.port 5701)</port>
+        <outbound-ports>
+            <ports>0</ports>
+        </outbound-ports>
+        <join>
+            <multicast enabled="false"/>
+            <tcp-ip enabled="true">
+                <members>#resolve($hz.members '127.0.0.1')</members>
+            </tcp-ip>
+        </join>
+        <ssl enabled="false"/>
+        <socket-interceptor enabled="false"/>
+    </network>
+    <partition-group enabled="false"/>
+    <map name="bucketCache">
+        <in-memory-format>OBJECT</in-memory-format>
+        <map-store enabled="true" initial-mode="LAZY">
+            <factory-class-name>com.walmart.gmp.ingestion.platform.framework.core.GenericMapStoreFactory
+            </factory-class-name>
+            <properties>
+                <property name="bucketCache_bean">$map.store.beanName</property>
+            </properties>
+            <write-delay-seconds>#resolve($map.store.writeDelay 60)</write-delay-seconds>
+            <write-batch-size>#resolve($map.store.batchSize 1000)</write-batch-size>
+            <write-coalescing>#resolve($map.store.writeCoalescing true)</write-coalescing>
+        </map-store>
+        <backup-count>#resolve($map.backupCount 1)</backup-count>
+        <async-backup-count>#resolve($map.asyncBackupCount 0)</async-backup-count>
+        <time-to-live-seconds>#resolve($map.ttl 0)</time-to-live-seconds>
+        <max-idle-seconds>#resolve($map.maxIdleSeconds 0)</max-idle-seconds>
+        <eviction-policy>#resolve($map.evictionPolicy 'LRU')</eviction-policy>
+        <max-size policy="#resolve($map.sizePolicy 'PER_NODE')">#resolve($map.MaxSize 1000000)</max-size>
+        <eviction-percentage>#resolve($map.evictionPercentage 25)</eviction-percentage>
+        <min-eviction-check-millis>#resolve($map.evictionCheckMillis 2000)</min-eviction-check-millis>
+        <merge-policy>#resolve($map.mergePolicy 'com.hazelcast.map.merge.LatestUpdateMapMergePolicy')</merge-policy>
+    </map>
+    <services enable-defaults="true"/>
+</hazelcast>

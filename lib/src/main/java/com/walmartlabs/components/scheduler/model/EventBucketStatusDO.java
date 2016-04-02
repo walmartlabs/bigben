@@ -2,6 +2,9 @@ package com.walmartlabs.components.scheduler.model;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.hazelcast.nio.ObjectDataInput;
+import com.hazelcast.nio.ObjectDataOutput;
+import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
 import info.archinnov.achilles.annotations.Column;
@@ -10,19 +13,22 @@ import info.archinnov.achilles.annotations.Id;
 import info.archinnov.achilles.annotations.PartitionKey;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.BitSet;
 import java.util.Set;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.gmp.ingestion.platform.framework.messaging.kafka.Constants.OBJECT_MAPPER;
+import static com.walmartlabs.components.scheduler.core.hz.ObjectFactory.OBJECT_ID.EVENT_BUCKET_DO;
+import static com.walmartlabs.components.scheduler.core.hz.ObjectFactory.SCHEDULER_FACTORY_ID;
 
 /**
  * Created by smalik3 on 3/18/16
  */
 @Entity(table = "event_ring")
 @KeyMapping(keyClass = Long.class, entityClass = EventBucketStatusEntity.class, version = V1)
-public class EventBucketStatusDO implements EventBucketStatusEntity, MutableEntity<Long> {
+public class EventBucketStatusDO implements EventBucketStatusEntity, MutableEntity<Long>, Serializable { //TODO: Data Serializable
 
     @PartitionKey
     @Id(name = "offset")
@@ -166,4 +172,24 @@ public class EventBucketStatusDO implements EventBucketStatusEntity, MutableEnti
                 ", error='" + error + '\'' +
                 '}';
     }
+
+    /*@Override
+    public int getFactoryId() {
+        return SCHEDULER_FACTORY_ID;
+    }
+
+    @Override
+    public int getId() {
+        return EVENT_BUCKET_DO.ordinal();
+    }
+
+    @Override
+    public void writeData(ObjectDataOutput out) throws IOException {
+
+    }
+
+    @Override
+    public void readData(ObjectDataInput in) throws IOException {
+
+    }*/
 }

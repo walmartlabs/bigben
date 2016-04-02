@@ -178,6 +178,7 @@
                     <systemPropertyVariables>
                         <buildDirectory>${project.basedir}</buildDirectory>
                     </systemPropertyVariables>
+                    <argLine>-Xms1G -Xmx2G</argLine>
                 </configuration>
             </plugin>
             <plugin>

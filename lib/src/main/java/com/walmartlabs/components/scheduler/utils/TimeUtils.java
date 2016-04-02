@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler;
+package com.walmartlabs.components.scheduler.utils;
 
 import java.time.Instant;
 import java.time.LocalDateTime;

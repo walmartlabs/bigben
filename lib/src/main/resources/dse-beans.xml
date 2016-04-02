@@ -15,5 +15,5 @@
         <constructor-arg index="0" value="file://dm-config.json"/>
     </bean>
 
-    <bean class="com.walmartlabs.components.scheduler.core.EventReceiver"/>
+    <bean class="com.walmartlabs.components.scheduler.core.hz.HzEventReceiver"/>
 </beans>
