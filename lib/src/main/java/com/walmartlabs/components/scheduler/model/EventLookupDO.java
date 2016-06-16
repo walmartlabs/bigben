@@ -14,8 +14,8 @@ import static java.lang.String.format;
  * Created by smalik3 on 3/29/16
  */
 @Entity(table = "event_lookup")
-@KeyMapping(keyClass = EventLookupDO.EventLookupKey.class, entityClass = EventLookupEntity.class, version = V1)
-public class EventLookupDO implements EventLookupEntity, MutableEntity<EventLookupDO.EventLookupKey> {
+@KeyMapping(keyClass = EventLookupDO.EventLookupKey.class, entityClass = EventLookup.class, version = V1)
+public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.EventLookupKey> {
 
     @EmbeddedId
     private EventLookupKey id;

@@ -13,18 +13,7 @@
     </appender>
 
     <root>
-        <level value="WARN"/>
-        <appender-ref ref="console"/>
-    </root>
-
-    <logger name="com.walmartlabs.components.scheduler" additivity="false">
-        <level value="DEBUG"/>
-        <appender-ref ref="console"/>
-    </logger>
-
-    <logger name="com.walmart.gmp.ingestion.platform.framework" additivity="false">
         <level value="INFO"/>
         <appender-ref ref="console"/>
-    </logger>
-
+    </root>
 </log4j:configuration>

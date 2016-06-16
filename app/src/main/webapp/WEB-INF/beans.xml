@@ -3,7 +3,7 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd http://cxf.apache.org/jaxrs http://cxf.apache.org/schemas/jaxrs.xsd">
 
-    <import resource="classpath*:scheduler-config.xml"/>
+    <import resource="classpath*:extra/scheduler-config.xml"/>
 
     <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
         <constructor-arg index="0" value="WEB-INF/simulationCodes.json"/>

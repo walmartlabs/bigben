@@ -10,7 +10,7 @@
     <!--<import resource="scheduler-config.xml"/>-->
     <!--<import resource="scheduler-hz-config.xml"/>-->
     <import resource="dse-beans.xml"/>
-    <import resource="scheduler-hz.xml"/>
+    <import resource="scheduler-hz-spring.xml"/>
 
     <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
         <constructor-arg index="0" value="simulationCodes.json"/>

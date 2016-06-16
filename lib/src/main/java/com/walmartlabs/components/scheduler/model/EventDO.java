@@ -17,8 +17,8 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * Created by smalik3 on 3/8/16
  */
 @Entity(table = "event_schedule")
-@KeyMapping(keyClass = EventScheduleDO.EventKey.class, entityClass = EventScheduleEntity.class, version = V1)
-public class EventScheduleDO implements Serializable, Delayed, EventScheduleEntity, MutableEntity<EventScheduleDO.EventKey> {
+@KeyMapping(keyClass = EventDO.EventKey.class, entityClass = Event.class, version = V1)
+public class EventDO implements Serializable, Delayed, Event, MutableEntity<EventDO.EventKey> {
 
     @EmbeddedId
     private EventKey eventKey;
@@ -153,7 +153,7 @@ public class EventScheduleDO implements Serializable, Delayed, EventScheduleEnti
 
     @Override
     public String toString() {
-        return "EventScheduleDO{" +
+        return "EventDO{" +
                 "eventKey=" + eventKey +
                 ", state='" + state + '\'' +
                 ", error='" + error + '\'' +

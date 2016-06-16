@@ -3,7 +3,7 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
 
-    <import resource="dse-beans.xml"/>
+    <import resource="../dse-beans.xml"/>
 
     <bean id="bucketCache" class="org.apache.ignite.configuration.CacheConfiguration">
         <property name="name" value="bucketCache"/>
@@ -16,7 +16,7 @@
         <property name="cacheStoreFactory">
             <bean class="javax.cache.configuration.FactoryBuilder$SingletonFactory">
                 <constructor-arg>
-                    <bean class="com.walmartlabs.components.scheduler.core.BucketStore"/>
+                    <bean class="com.walmartlabs.components.scheduler.core.ignite.BucketStore"/>
                 </constructor-arg>
             </bean>
         </property>
@@ -28,7 +28,7 @@
         <property name="writeBehindFlushSize" value="100"/>
     </bean>
 
-    <bean id="eventScheduler" class="com.walmartlabs.components.scheduler.core.EventScheduleScanner"/>
+    <bean id="eventScheduler" class="com.walmartlabs.components.scheduler.core.ignite.EventScheduleScanner"/>
     <bean id="serviceConfiguration" class="org.apache.ignite.services.ServiceConfiguration">
         <property name="maxPerNodeCount" value="1"/>
         <property name="totalCount" value="1"/>

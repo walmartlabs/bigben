@@ -1,12 +1,12 @@
 package com.walmartlabs.components.scheduler.model;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
-import com.walmartlabs.components.scheduler.model.EventScheduleDO.EventKey;
+import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
 
 /**
  * Created by smalik3 on 3/16/16
  */
-public interface EventScheduleEntity extends Entity<EventKey> {
+public interface Event extends Entity<EventKey> {
 
     String getState();
 

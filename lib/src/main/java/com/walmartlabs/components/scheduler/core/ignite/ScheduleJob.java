@@ -1,13 +1,14 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.core.ignite;
 
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.*;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.services.nosql.data.CqlDAO;
-import com.walmartlabs.components.scheduler.model.EventBucketStatusEntity;
-import com.walmartlabs.components.scheduler.model.EventScheduleDO;
-import com.walmartlabs.components.scheduler.model.EventScheduleEntity;
+import com.walmartlabs.components.scheduler.core.EventProcessor;
+import com.walmartlabs.components.scheduler.model.Bucket;
+import com.walmartlabs.components.scheduler.model.Event;
+import com.walmartlabs.components.scheduler.model.EventDO;
 import info.archinnov.achilles.persistence.AsyncManager;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
@@ -36,9 +37,9 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
-import static com.walmartlabs.components.scheduler.core.EventScheduleScanner.BUCKET_CACHE;
-import static com.walmartlabs.components.scheduler.model.EventBucketStatusEntity.BucketStatus.ERROR;
-import static com.walmartlabs.components.scheduler.model.EventBucketStatusEntity.BucketStatus.PROCESSED;
+import static com.walmartlabs.components.scheduler.core.ignite.EventScheduleScanner.BUCKET_CACHE;
+import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.ERROR;
+import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.PROCESSED;
 import static java.lang.Integer.getInteger;
 import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
@@ -60,10 +61,10 @@ public class ScheduleJob implements IgniteRunnable {
     private final String jobKey;
 
     @SpringResource(resourceName = "eventProcessor")
-    private transient EventProcessor<EventScheduleEntity> eventProcessor;
+    private transient EventProcessor<Event> eventProcessor;
 
     @SpringResource(resourceName = "dataManager")
-    private transient DataManager<EventScheduleDO.EventKey, EventScheduleEntity> dataManager;
+    private transient DataManager<EventDO.EventKey, Event> dataManager;
 
     @IgniteInstanceResource
     private transient Ignite ignite;
@@ -88,23 +89,23 @@ public class ScheduleJob implements IgniteRunnable {
             final CqlDAO<?, ?> cqlDAO = (CqlDAO<?, ?>) dataManager.getPrimaryDAO(V1).unwrap();
             final AsyncManager pm = cqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
             L.debug(format("%s, processing shards", jobKey));
-            final ListenableFuture<List<List<EventScheduleEntity>>> shardsFuture =
+            final ListenableFuture<List<List<Event>>> shardsFuture =
                     allAsList(shards.stream().map(s -> {
                         L.debug(format("%s, loading shard %d from the db", jobKey, s));
                         return async(() ->
-                                transform(pm.sliceQuery(EventScheduleDO.class).forSelect().
+                                transform(pm.sliceQuery(EventDO.class).forSelect().
                                                 withPartitionComponents(bucketKey, s).get(),
-                                        (Function<List<EventScheduleDO>, List<EventScheduleEntity>>)
+                                        (Function<List<EventDO>, List<Event>>)
                                                 l -> l.stream().filter(i -> !PROCESSED.name().equals(i.getState())).
                                                         map(pm::removeProxy).collect(toList())), "load-shard#" + s);
                     }).collect(toList()));
-            final ListenableFuture<List<EventScheduleEntity>> processedFuture =
-                    transform(shardsFuture, (AsyncFunction<List<List<EventScheduleEntity>>, List<EventScheduleEntity>>) ll -> {
-                        final List<EventScheduleEntity> entities = newArrayList(concat(ll));
+            final ListenableFuture<List<Event>> processedFuture =
+                    transform(shardsFuture, (AsyncFunction<List<List<Event>>, List<Event>>) ll -> {
+                        final List<Event> entities = newArrayList(concat(ll));
                         L.debug(format("%s, shards data loaded successfully, total %d events found", jobKey, entities.size()));
                         if (!entities.isEmpty())
                             L.debug(format("%s, scheduling the events", jobKey));
-                        final List<ListenableFuture<EventScheduleEntity>> processFutures =
+                        final List<ListenableFuture<Event>> processFutures =
                                 entities.stream().map(e -> {
                                     final long delay = e.id().getEventTime() - currentTimeMillis();
                                     if (delay <= 0) {
@@ -117,20 +118,20 @@ public class ScheduleJob implements IgniteRunnable {
                                 }).collect(toList());
                         return allAsList(processFutures);
                     });
-            final ListenableFuture<List<EventScheduleEntity>> syncedFuture =
-                    transform(processedFuture, (AsyncFunction<List<EventScheduleEntity>, List<EventScheduleEntity>>) l -> {
+            final ListenableFuture<List<Event>> syncedFuture =
+                    transform(processedFuture, (AsyncFunction<List<Event>, List<Event>>) l -> {
                         L.debug(format("%s, syncing event status to the db", jobKey));
-                        final List<ListenableFuture<EventScheduleEntity>> $ = l.stream().map(e -> {
+                        final List<ListenableFuture<Event>> $ = l.stream().map(e -> {
                             L.debug(format("%s, syncing event: %s to the DB, the status is '%s'", jobKey, e.id(), e.getState()));
-                            final EventScheduleEntity entity = entity(EventScheduleEntity.class, e.id());
+                            final Event entity = entity(Event.class, e.id());
                             entity.setState(e.getState());
                             if (e.getError() != null)
                                 entity.setError(e.getError());
-                            return transform(dataManager.saveAsync(entity), (Function<EventScheduleEntity, EventScheduleEntity>) DataManager::raw);
+                            return transform(dataManager.saveAsync(entity), (Function<Event, Event>) DataManager::raw);
                         }).collect(toList());
                         return allAsList($);
                     });
-            addCallback(transform(syncedFuture, (Function<List<EventScheduleEntity>, Set<Integer>>) l -> {
+            addCallback(transform(syncedFuture, (Function<List<Event>, Set<Integer>>) l -> {
                 L.debug(format("%s, calculating failed shards", jobKey));
                 final Set<Integer> failedShards = l.stream().filter(
                         e -> !PROCESSED.name().equals(e.getState())).map(e -> e.id().getShard()).collect(toSet());
@@ -142,10 +143,10 @@ public class ScheduleJob implements IgniteRunnable {
             }), new FutureCallback<Set<Integer>>() {
                 @Override
                 public void onSuccess(Set<Integer> failedShards) {
-                    final IgniteCache<Long, EventBucketStatusEntity> cache = ignite.cache(BUCKET_CACHE);
-                    cache.invoke(bucketOffset, (EntryProcessor<Long, EventBucketStatusEntity, Object>) (entry, arguments) -> {
+                    final IgniteCache<Long, Bucket> cache = ignite.cache(BUCKET_CACHE);
+                    cache.invoke(bucketOffset, (EntryProcessor<Long, Bucket, Object>) (entry, arguments) -> {
                         if (entry.getValue() != null) {
-                            final EventBucketStatusEntity entity = entry.getValue();
+                            final Bucket entity = entry.getValue();
                             entity.setJobCount(entity.getJobCount() - 1);
                             if (failedShards.isEmpty()) {
                                 L.debug(format("%s, shards are done, with no errors", jobKey));
@@ -180,12 +181,12 @@ public class ScheduleJob implements IgniteRunnable {
     }
 
     @NotNull
-    private ListenableFuture<EventScheduleEntity> processEvent(EventScheduleEntity e) {
+    private ListenableFuture<Event> processEvent(Event e) {
         try {
             L.debug(format("%s, processing event: %s", jobKey, e.id()));
-            final ListenableFuture<EventScheduleEntity> f = async(() -> eventProcessor.process(e), "process-event:" + e.id());
+            final ListenableFuture<Event> f = async(() -> eventProcessor.process(e), "process-event:" + e.id());
             L.debug(format("%s, processed event: %s", jobKey, e.id()));
-            return transform(f, (Function<EventScheduleEntity, EventScheduleEntity>) $ -> {
+            return transform(f, (Function<Event, Event>) $ -> {
                 $.setState(PROCESSED.name());
                 return $;
             });
@@ -199,10 +200,10 @@ public class ScheduleJob implements IgniteRunnable {
 
     private void reprocessAllShards(Throwable t) {
         L.error(format("%s, error in processing the job, the entire job will be re-processed", jobKey), getRootCause(t));
-        final IgniteCache<Long, EventBucketStatusEntity> cache = ignite.cache(BUCKET_CACHE);
-        cache.invoke(bucketOffset, (EntryProcessor<Long, EventBucketStatusEntity, Object>) (entry, arguments) -> {
+        final IgniteCache<Long, Bucket> cache = ignite.cache(BUCKET_CACHE);
+        cache.invoke(bucketOffset, (EntryProcessor<Long, Bucket, Object>) (entry, arguments) -> {
             if (entry.getValue() != null) {
-                final EventBucketStatusEntity entity = entry.getValue();
+                final Bucket entity = entry.getValue();
                 entity.setStatus(ERROR.name());
                 entity.addFailedShards(shards);
                 entry.setValue(entity);

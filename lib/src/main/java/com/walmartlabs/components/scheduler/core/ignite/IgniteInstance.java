@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.core.ignite;
 
 import org.apache.ignite.Ignite;
 import org.apache.log4j.Logger;

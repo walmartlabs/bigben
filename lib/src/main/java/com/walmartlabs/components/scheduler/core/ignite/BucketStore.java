@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.core.ignite;
 
 import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.ResultSet;
@@ -7,14 +7,13 @@ import com.datastax.driver.core.exceptions.QueryExecutionException;
 import com.datastax.driver.core.querybuilder.Select;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.hazelcast.core.MapStore;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.gmp.ingestion.platform.framework.data.core.QueryHelper;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.services.nosql.data.CqlDAO;
-import com.walmartlabs.components.scheduler.model.EventBucketStatusDO;
-import com.walmartlabs.components.scheduler.model.EventBucketStatusEntity;
+import com.walmartlabs.components.scheduler.model.Bucket;
+import com.walmartlabs.components.scheduler.model.BucketDO;
 import info.archinnov.achilles.persistence.PersistenceManager;
 import org.apache.ignite.cache.store.CacheStore;
 import org.apache.ignite.lang.IgniteBiInClosure;
@@ -51,23 +50,23 @@ import static java.util.stream.Collectors.toMap;
 /**
  * Created by smalik3 on 3/21/16
  */
-public class BucketStore implements CacheStore<Long, EventBucketStatusEntity>, Serializable {
+public class BucketStore implements CacheStore<Long, Bucket>, Serializable {
 
     private static final Logger L = Logger.getLogger(BucketStore.class);
 
     @SpringResource(resourceName = "dataManager")
-    private transient DataManager<Long, EventBucketStatusEntity> dataManager;
+    private transient DataManager<Long, Bucket> dataManager;
 
     @Override
-    public void loadCache(IgniteBiInClosure<Long, EventBucketStatusEntity> clo, @Nullable Object... args) throws CacheLoaderException {
+    public void loadCache(IgniteBiInClosure<Long, Bucket> clo, @Nullable Object... args) throws CacheLoaderException {
         L.info("bootstrapping the cache");
         try {
-            prepare(EventBucketStatusDO.class);
+            prepare(BucketDO.class);
             final CqlDAO cqlDAO = (CqlDAO) dataManager.getPrimaryDAO(V1).unwrap();
             final PersistenceManager pm = cqlDAO.cqlDriverConfig().getPersistenceManager();
 
             final Select select = select().from(cqlDAO.cqlDriverConfig().getCqlConfig().getKeySpace(),
-                    entityMeta(EventBucketStatusDO.class).getTableName()).limit(366 * 24); //TODO: load in the steps of 1000
+                    entityMeta(BucketDO.class).getTableName()).limit(366 * 24); //TODO: load in the steps of 1000
             final String query = select.getQueryString();
 
             L.info("executing query " + query);
@@ -77,9 +76,9 @@ public class BucketStore implements CacheStore<Long, EventBucketStatusEntity>, S
                     new FutureCallback<ResultSet>() {
                         @Override
                         public void onSuccess(ResultSet result) {
-                            final QueryHelper<Long, EventBucketStatusDO> qh = new QueryHelper<>(EventBucketStatusDO.class, result, fullSelector(0L));
+                            final QueryHelper<Long, BucketDO> qh = new QueryHelper<>(BucketDO.class, result, fullSelector(0L));
                             result.forEach(row -> {
-                                final EventBucketStatusEntity entity = qh.apply(row);
+                                final Bucket entity = qh.apply(row);
                                 L.debug(format("loaded key '%s'", entity.id()));
                                 clo.apply(entity.id(), raw(entity));
                                 counter.incrementAndGet();
@@ -100,49 +99,49 @@ public class BucketStore implements CacheStore<Long, EventBucketStatusEntity>, S
     private transient final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(NoHostAvailableException.class, QueryExecutionException.class));
 
     @Override
-    public EventBucketStatusEntity load(Long key) throws CacheLoaderException {
-        final Map<Long, EventBucketStatusEntity> map = loadAll(singletonList(key));
+    public Bucket load(Long key) throws CacheLoaderException {
+        final Map<Long, Bucket> map = loadAll(singletonList(key));
         return map.isEmpty() ? null : map.entrySet().iterator().next().getValue();
     }
 
-    private ListenableFuture<EventBucketStatusEntity> load0(Long key) throws CacheLoaderException {
+    private ListenableFuture<Bucket> load0(Long key) throws CacheLoaderException {
         L.debug("loading data for key " + key);
         return transform(dataManager.getAsync(key, fullSelector(key)), //TODO: dont use full selector, no need to load the error
-                (com.google.common.base.Function<EventBucketStatusEntity, EventBucketStatusEntity>) DataManager::raw);
+                (com.google.common.base.Function<Bucket, Bucket>) DataManager::raw);
     }
 
     @Override
-    public Map<Long, EventBucketStatusEntity> loadAll(Iterable<? extends Long> iterable) throws CacheLoaderException {
+    public Map<Long, Bucket> loadAll(Iterable<? extends Long> iterable) throws CacheLoaderException {
         try {
             return allAsList(newArrayList(iterable).stream().map(this::load0).
                     collect(toList())).get(30, SECONDS).stream().filter(e -> e != null).collect(
-                    toMap((Function<EventBucketStatusEntity, Long>) Entity::id, identity()));
+                    toMap((Function<Bucket, Long>) Entity::id, identity()));
         } catch (Exception e) {
             throw new CacheLoaderException(e);
         }
     }
 
     @Override
-    public void write(Entry<? extends Long, ? extends EventBucketStatusEntity> entry) throws CacheWriterException {
+    public void write(Entry<? extends Long, ? extends Bucket> entry) throws CacheWriterException {
         writeAll(singletonList(entry));
     }
 
-    private ListenableFuture<EventBucketStatusEntity> write0(Entry<? extends Long, ? extends EventBucketStatusEntity> entry) {
+    private ListenableFuture<Bucket> write0(Entry<? extends Long, ? extends Bucket> entry) {
         if (entry.getValue() == null) {
             L.warn("null value for key: " + entry.getKey());
             return immediateFuture(entry.getValue());
         }
         L.debug(format("syncing key: %s, value: %s", entry.getKey(), entry.getValue()));
-        final EventBucketStatusEntity entity = DataManager.entity(EventBucketStatusEntity.class, entry.getKey());
+        final Bucket entity = DataManager.entity(Bucket.class, entry.getKey());
         entity.setStatus(entry.getValue().getStatus());
         entity.setCount(entry.getValue().getCount());
         if (entry.getValue().getError() != null)
             entity.setError(entry.getValue().getError());
         entity.setFailedShards(entry.getValue().getFailedShards());
-        final ListenableFuture<EventBucketStatusEntity> f = dataManager.saveAsync(entity);
-        addCallback(f, new FutureCallback<EventBucketStatusEntity>() {
+        final ListenableFuture<Bucket> f = dataManager.saveAsync(entity);
+        addCallback(f, new FutureCallback<Bucket>() {
             @Override
-            public void onSuccess(EventBucketStatusEntity result) {
+            public void onSuccess(Bucket result) {
                 L.debug(format("key: %s synced successfully, value: %s", entry.getKey(), entry.getValue()));
             }
 
@@ -155,7 +154,7 @@ public class BucketStore implements CacheStore<Long, EventBucketStatusEntity>, S
     }
 
     @Override
-    public void writeAll(Collection<Entry<? extends Long, ? extends EventBucketStatusEntity>> collection) throws CacheWriterException {
+    public void writeAll(Collection<Entry<? extends Long, ? extends Bucket>> collection) throws CacheWriterException {
         try {
             allAsList(collection.stream().map(this::write0).collect(toList())).get(30, SECONDS);
         } catch (Exception e) {

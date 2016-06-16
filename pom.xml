@@ -18,10 +18,21 @@
     </parent>
     <properties>
         <ignite.version>1.5.0.final</ignite.version>
-        <gmp-ingestion-platform.version>1.57-SNAPSHOT</gmp-ingestion-platform.version>
+        <gmp-ingestion-platform.version>1.69-SNAPSHOT</gmp-ingestion-platform.version>
+        <hazelcast.version>3.6.3</hazelcast.version>
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.hazelcast</groupId>
+                <artifactId>hazelcast</artifactId>
+                <version>${hazelcast.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.hazelcast</groupId>
+                <artifactId>hazelcast-all</artifactId>
+                <version>${hazelcast.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.walmartlabs.components</groupId>
                 <artifactId>event-scheduler-lib</artifactId>
@@ -46,6 +57,16 @@
                 <groupId>com.walmart.services</groupId>
                 <artifactId>gmp-ingestion-platform</artifactId>
                 <version>${gmp-ingestion-platform.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>com.hazelcast</groupId>
+                        <artifactId>hazelcast</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.hazelcast</groupId>
+                        <artifactId>hazelcast-all</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>junit</groupId>

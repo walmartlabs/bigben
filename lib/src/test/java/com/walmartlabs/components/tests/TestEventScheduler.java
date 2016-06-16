@@ -2,10 +2,10 @@ package com.walmartlabs.components.tests;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmartlabs.components.scheduler.core.hz.HzEventReceiver;
-import com.walmartlabs.components.scheduler.model.EventBucketStatusEntity;
-import com.walmartlabs.components.scheduler.model.EventScheduleDO;
-import com.walmartlabs.components.scheduler.model.EventScheduleDO.EventKey;
-import com.walmartlabs.components.scheduler.model.EventScheduleEntity;
+import com.walmartlabs.components.scheduler.model.Bucket;
+import com.walmartlabs.components.scheduler.model.Event;
+import com.walmartlabs.components.scheduler.model.EventDO;
+import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
@@ -39,10 +39,10 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
     }
 
     @Autowired
-    private DataManager<EventKey, EventScheduleEntity> dataManager;
+    private DataManager<EventKey, Event> dataManager;
 
     @Autowired
-    private DataManager<Long, EventBucketStatusEntity> bucketDM;
+    private DataManager<Long, Bucket> bucketDM;
 
     @Autowired
     private HzEventReceiver eventReceiver;
@@ -51,12 +51,13 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
     public void testEventScheduler() throws InterruptedException {
         if (System.getProperty("run.it") != null) {
             System.out.println("loading data");
+            final int count = Integer.getInteger("count", 10);
             final long now = now().withMinute(0).withSecond(0).withNano(0).atZone(systemDefault()).toInstant().toEpochMilli();
             final ExecutorService executorService = new ThreadPoolExecutor(100, 100, 60, MINUTES, new LinkedBlockingQueue<>());
             final AtomicInteger i = new AtomicInteger();
             final Random random = new Random();
-            final List<Callable<Object>> tasks = nCopies(10_000, 0L).stream().map($ -> (Callable<Object>) () -> {
-                final EventScheduleDO entity = new EventScheduleDO();
+            final List<Callable<Object>> tasks = nCopies(count, 0L).stream().map($ -> (Callable<Object>) () -> {
+                final EventDO entity = new EventDO();
                 entity.setEventKey(EventKey.of(0, 0, now + random.nextInt(3600) * 1000, "EId#" + i.get() + random.nextInt(1_000_000)));
                 eventReceiver.addEvent(entity);
                 return null;
