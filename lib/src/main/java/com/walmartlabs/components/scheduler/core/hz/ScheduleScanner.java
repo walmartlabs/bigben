@@ -1,14 +1,15 @@
 package com.walmartlabs.components.scheduler.core.hz;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.IMap;
 import com.hazelcast.core.Member;
 import com.hazelcast.query.Predicate;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
+import com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmartlabs.components.scheduler.model.Bucket;
+import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
 import com.walmartlabs.components.scheduler.services.Service;
 import com.walmartlabs.components.scheduler.utils.TimeUtils;
 import org.apache.log4j.Logger;
@@ -21,22 +22,21 @@ import java.util.Map.Entry;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
-import static com.google.common.collect.Iterables.concat;
+import static com.google.common.collect.Iterators.cycle;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.partition;
 import static com.google.common.collect.Maps.transformValues;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.util.concurrent.Futures.successfulAsList;
-import static com.google.common.util.concurrent.Futures.transformAsync;
-import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
-import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.toAbsolute;
 import static java.lang.String.format;
 import static java.time.LocalDateTime.now;
 import static java.time.LocalDateTime.of;
+import static java.util.concurrent.Executors.callable;
 import static java.util.concurrent.TimeUnit.*;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
@@ -109,33 +109,28 @@ public class ScheduleScanner implements Service {
             if (!bucketIds.isEmpty())
                 L.debug(format("%d, following bucketIds will not be scheduled, (either no events or all processed): %s", currentBucketId, bucketIds));
 
+            final int submitRetries = PROPS.getInteger("event.submit.max.retries", 10);
+            final int submitInitialDelay = PROPS.getInteger("event.submit.initial.delay", 1);
+            final int submitBackoff = PROPS.getInteger("event.submit.backoff.multiplier", 1);
+
             L.debug("submitting the schedules for execution" + shards);
             final IExecutorService executorService = hz.hz().getExecutorService("default");
             final Set<Member> members = hz.hz().getCluster().getMembers();
-            final Iterator<Member> iterator = members.iterator();
-            transformAsync(successfulAsList(partition(newArrayList(shards.entrySet()), members.size() != 1 ? shards.size() / members.size() : 1).stream().
+            final Iterator<Member> iterator = cycle(members);
+
+            successfulAsList(partition(newArrayList(shards.entrySet()), members.size() != 1 ? shards.size() / members.size() : 1).stream().
                     map(l -> l.stream().collect(toMap(Entry::getKey, Entry::getValue))).
                     collect(toList()).stream().map(BulkEventTask::new).collect(toList()).stream().map(e ->
-                    submit(executorService, e, iterator.next())).collect(toList())), l -> successfulAsList(newArrayList(concat(
-                    l.stream().map(m -> m.entrySet().stream().map(e -> {
-                        final Bucket entity = entity(Bucket.class, e.getKey());
-                        entity.setFailedEventsId(e.getValue());
-                        return dataManager.saveAsync(entity);
-                    }).collect(toList())).collect(toList())))));
+                    taskExecutor.async(() -> () -> ListenableFutureAdapter.<Map<Long, BucketStatus>>adapt(
+                            executorService.submitToMember(callable(e), iterator.next())), "event-submit",
+                            submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList())).addListener(() ->
+                    L.info("shards submitted successfully for processing: " + shards), directExecutor());
         } catch (Exception e) {
             L.error("schedule scan failed", getRootCause(e));
         }
     }
 
     private final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(Exception.class));
-
-    private ListenableFuture<Map<Long, String>> submit(IExecutorService executorService, BulkEventTask task, Member member) {
-        final ListenableFuture<Map<Long, String>> f = adapt(executorService.submitToMember(task, member));
-        return taskExecutor.async(() -> f, "",
-                PROPS.getInteger("event.submit.max.retries", 3),
-                PROPS.getInteger("event.submit.retry.initial.delay", 1),
-                PROPS.getInteger("event.submit.back.off.multiplier", 2), SECONDS);
-    }
 
     private Map<Long, Set<Integer>> calculateScheduleDistribution(long calcId, final Set<Long> bucketIds) {
         final IMap<Long, Bucket> cache = hz.hz().getMap(BUCKET_CACHE);

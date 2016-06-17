@@ -7,10 +7,11 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.core.EventProcessor;
+import com.walmartlabs.components.scheduler.model.Bucket;
+import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
 import com.walmartlabs.components.scheduler.model.Event;
 import com.walmartlabs.components.scheduler.model.EventDO;
 import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
-import com.walmartlabs.components.scheduler.model.FailedEvents;
 import info.archinnov.achilles.persistence.AsyncManager;
 import org.apache.log4j.Logger;
 
@@ -32,20 +33,18 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
-import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.ERROR;
-import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.PROCESSED;
+import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.*;
 import static java.lang.Integer.getInteger;
 import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
 import static java.lang.System.currentTimeMillis;
-import static java.util.UUID.randomUUID;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.stream.Collectors.toList;
 
 /**
  * Created by smalik3 on 3/26/16
  */
-public class EventTask implements Callable<ListenableFuture<String>> {
+public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
 
     private static final Logger L = Logger.getLogger(EventTask.class);
     private transient final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(Exception.class)); //TODO: narrow down the list
@@ -55,8 +54,8 @@ public class EventTask implements Callable<ListenableFuture<String>> {
     private final String executionKey;
 
     private transient EventProcessor<Event> eventProcessor;
-    private transient DataManager<EventKey, Event> dataManager;
-    private transient DataManager<String, FailedEvents> dm;
+    private transient DataManager<EventKey, Event> eventDM;
+    private transient DataManager<Long, Bucket> bucketDM;
 
     private static String shardRange(Set<Integer> shards) {
         return shards == null || shards.isEmpty() ? "[-]" : shards.size() == 1 ? "[" + shards.iterator().next() + "]"
@@ -69,24 +68,27 @@ public class EventTask implements Callable<ListenableFuture<String>> {
         this.shards = shards;
         executionKey = format("%d/%s", bucketId, shardRange(shards));
         this.eventProcessor = eventProcessor;
-        this.dataManager = (DataManager<EventKey, Event>) dataManager;
-        this.dm = (DataManager<String, FailedEvents>) dataManager;
+        this.eventDM = (DataManager<EventKey, Event>) dataManager;
+        this.bucketDM = (DataManager<Long, Bucket>) dataManager;
     }
 
     @Override
-    public ListenableFuture<String> call() throws Exception {
+    public ListenableFuture<BucketStatus> call() throws Exception {
         L.debug(format("%s, processing shards", executionKey));
-        final int fetchSize = PROPS.getInteger("dm.events.fetch.size", 400);
+        final int fetchSize = PROPS.getInteger("bucketDM.events.fetch.size", 400);
         return transformAsync(successfulAsList(shards.stream().map($ ->
                         loadAndProcess($, fetchSize, getAsyncManager(), -1L)).collect(toList())),
                 ll -> {
                     final List<EventKey> l = newArrayList(concat(ll)).stream().filter(e -> !PROCESSED.name().equals(e.getState())).
                             map(EventDO::getEventKey).collect(toList());
+                    final Bucket entity = entity(Bucket.class, bucketId);
                     if (!l.isEmpty()) {
-                        final FailedEvents entity = entity(FailedEvents.class, randomUUID().toString());
                         entity.setFailedEvents(l);
-                        return transform(dm.saveAsync(entity), (Function<FailedEvents, String>) $ -> entity.id());
-                    } else return immediateFuture("");
+                        entity.setStatus(ERROR.name());
+                    } else {
+                        entity.setStatus(PROCESSED.name());
+                    }
+                    return transform(bucketDM.saveAsync(entity), (Function<Bucket, BucketStatus>) e -> valueOf(e.getStatus()));
                 });
     }
 
@@ -118,7 +120,7 @@ public class EventTask implements Callable<ListenableFuture<String>> {
             entity.setState(e.getState());
             if (e.getError() != null)
                 entity.setError(e.getError());
-            return transform(dataManager.saveAsync(entity), (Function<Event, EventDO>) $ -> (EventDO) $);
+            return transform(eventDM.saveAsync(entity), (Function<Event, EventDO>) $ -> (EventDO) $);
         }).collect(toList()));
     }
 
@@ -150,7 +152,7 @@ public class EventTask implements Callable<ListenableFuture<String>> {
     }
 
     private AsyncManager getAsyncManager() {
-        final CqlDAO<?, ?> cqlDAO = (CqlDAO<?, ?>) dataManager.getPrimaryDAO(V1).unwrap();
+        final CqlDAO<?, ?> cqlDAO = (CqlDAO<?, ?>) eventDM.getPrimaryDAO(V1).unwrap();
         return cqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
     }
 
@@ -162,9 +164,9 @@ public class EventTask implements Callable<ListenableFuture<String>> {
 
     private <R> ListenableFuture<R> async(Callable<ListenableFuture<R>> task, String taskId) {
         return taskExecutor.async(task, taskId,
-                getInteger("dm.max.retries", 3),
-                getInteger("dm.retry.initial.delay.ms", 1000),
-                getInteger("dm.retry.backoff.multiplier", 2),
+                getInteger("bucketDM.max.retries", 3),
+                getInteger("bucketDM.retry.initial.delay.ms", 1000),
+                getInteger("bucketDM.retry.backoff.multiplier", 2),
                 MILLISECONDS);
     }
 }
