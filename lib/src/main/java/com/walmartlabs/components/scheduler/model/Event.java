@@ -8,9 +8,9 @@ import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
  */
 public interface Event extends Entity<EventKey> {
 
-    String getState();
+    String getStatus();
 
-    void setState(String state);
+    void setStatus(String status);
 
     void setError(String error);
 

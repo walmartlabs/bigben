@@ -135,9 +135,9 @@ public class BucketStore implements CacheStore<Long, Bucket>, Serializable {
         final Bucket entity = DataManager.entity(Bucket.class, entry.getKey());
         entity.setStatus(entry.getValue().getStatus());
         entity.setCount(entry.getValue().getCount());
-        if (entry.getValue().getError() != null)
+        /*if (entry.getValue().getError() != null)
             entity.setError(entry.getValue().getError());
-        entity.setFailedShards(entry.getValue().getFailedShards());
+        entity.setFailedShards(entry.getValue().getFailedShards());*/
         final ListenableFuture<Bucket> f = dataManager.saveAsync(entity);
         addCallback(f, new FutureCallback<Bucket>() {
             @Override

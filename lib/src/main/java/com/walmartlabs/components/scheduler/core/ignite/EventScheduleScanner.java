@@ -137,7 +137,7 @@ public class EventScheduleScanner implements Service, Runnable {
         @Override
         public Object process(MutableEntry<Long, Bucket> entry, Object... arguments) throws EntryProcessorException {
             final int jobCount = (int) arguments[0];
-            entry.getValue().setJobCount(jobCount);
+            //entry.getValue().setJobCount(jobCount);
             entry.setValue(entry.getValue());
             return null;
         }

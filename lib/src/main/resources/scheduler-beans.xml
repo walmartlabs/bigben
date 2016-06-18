@@ -9,6 +9,10 @@
 
     <import resource="classpath*:platform-minimal.xml"/>
 
+    <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
+        <constructor-arg index="0" value="simulationCodes.json"/>
+    </bean>
+
     <bean id="dataManager" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
         <constructor-arg index="0" value="file://dm-config.json"/>
     </bean>
@@ -19,7 +23,7 @@
 
     <bean id="hz" class="com.walmart.gmp.ingestion.platform.framework.core.Hz">
         <constructor-arg index="0" value="hz.xml.vm"/>
-        <constructor-arg index="1" value="file://scheduler.hz.json"/>
+        <constructor-arg index="1" value="file://hz.json"/>
     </bean>
 
     <bean class="com.walmartlabs.components.scheduler.utils.ClusterSingleton">

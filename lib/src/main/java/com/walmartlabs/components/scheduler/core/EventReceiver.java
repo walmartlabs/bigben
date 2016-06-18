@@ -42,22 +42,22 @@ public class EventReceiver {
 
     public void addEvent(Event entity) {
         /*try {
-            entity.id().setOffsetTime(toHour(entity.id().getEventTime()));
+            entity.id().setBucketId(bucketize(entity.id().getEventTime()));
             L.debug(format("%s, add-event: bucket-table: insert, %s", entity.id(), entity));
             final IgniteCache<Long, Bucket> cache = ignite.cache(BUCKET_CACHE);
-            final long bucketOffset = toOffset(toHour(entity.id().getEventTime()));
+            final long bucketOffset = toOffset(bucketize(entity.id().getEventTime()));
             L.debug(format("%s, event-time: %d -> bucket-offset: %d", entity.id(), entity.id().getEventTime(), bucketOffset));
             L.debug(format("%s, adjusting counts", entity.id()));
             final Long shardIndex = cache.invoke(bucketOffset, new CountIncrementer(), entity, bucketOffset);
             final EventKey eventKey = EventKey.of(toAbsolute(bucketOffset), shardIndex.intValue(), entity.id().getEventTime(), entity.id().getEventId());
             L.debug(format("%s, add-event: event-table: insert", eventKey));
             final Event e = DataManager.entity(Event.class, eventKey);
-            e.setState(UN_PROCESSED.name());
+            e.setStatus(UN_PROCESSED.name());
             dataManager.insert(e);
             L.debug(format("%s, add-event: event-table: insert: successful", eventKey));
             L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
             final EventLookup lookupEntity = DataManager.entity(EventLookup.class, EventLookupKey.of(eventKey.getEventTime(), eventKey.getEventId()));
-            lookupEntity.setOffset(eventKey.getOffsetTime());
+            lookupEntity.setOffset(eventKey.getBucketId());
             lookupEntity.setShard(eventKey.getShard());
             lookupDataManager.insert(lookupEntity);
             L.debug(format("%s, add-event: event-lookup-table: insert: successful", eventKey));

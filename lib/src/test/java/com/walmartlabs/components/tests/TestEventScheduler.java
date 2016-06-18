@@ -29,7 +29,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 /**
  * Created by smalik3 on 3/9/16
  */
-@ContextConfiguration(locations = "/test-ignite-config.xml")
+@ContextConfiguration(locations = "/scheduler-beans.xml")
 public class TestEventScheduler extends AbstractTestNGSpringContextTests {
 
     static {
@@ -49,11 +49,11 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
 
     @Test
     public void testEventScheduler() throws InterruptedException {
-        if (System.getProperty("run.it") != null) {
+        if (System.getProperty("run.it") == null) {
             System.out.println("loading data");
             final int count = Integer.getInteger("count", 10);
             final long now = now().withMinute(0).withSecond(0).withNano(0).atZone(systemDefault()).toInstant().toEpochMilli();
-            final ExecutorService executorService = new ThreadPoolExecutor(100, 100, 60, MINUTES, new LinkedBlockingQueue<>());
+            //final ExecutorService executorService = new ThreadPoolExecutor(100, 100, 60, MINUTES, new LinkedBlockingQueue<>());
             final AtomicInteger i = new AtomicInteger();
             final Random random = new Random();
             final List<Callable<Object>> tasks = nCopies(count, 0L).stream().map($ -> (Callable<Object>) () -> {
@@ -62,7 +62,12 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
                 eventReceiver.addEvent(entity);
                 return null;
             }).collect(Collectors.toList());
-            executorService.invokeAll(tasks);
+            //executorService.invokeAll(tasks);
+            try {
+                tasks.get(0).call();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             System.out.println("done: " + (currentTimeMillis() - now) + "ms");
         } else System.out.println("not loading data");
         Thread.sleep(1000000);

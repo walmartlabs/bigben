@@ -16,7 +16,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 /**
  * Created by smalik3 on 3/8/16
  */
-@Entity(table = "event_schedule")
+@Entity(table = "events")
 @KeyMapping(keyClass = EventDO.EventKey.class, entityClass = Event.class, version = V1)
 public class EventDO implements Serializable, Delayed, Event, MutableEntity<EventDO.EventKey> {
 
@@ -25,20 +25,18 @@ public class EventDO implements Serializable, Delayed, Event, MutableEntity<Even
 
     //@Index
     @Column
-    private String state;
+    private String status;
 
     //@Index
     @Column
     private String error;
 
-    @Override
-    public String getState() {
-        return state;
+    public String getStatus() {
+        return status;
     }
 
-    @Override
-    public void setState(String state) {
-        this.state = state;
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     @Override
@@ -89,8 +87,8 @@ public class EventDO implements Serializable, Delayed, Event, MutableEntity<Even
 
     public static class EventKey {
         @PartitionKey
-        @Column(name = "offset_time")
-        private long offsetTime;
+        @Column(name = "bucket_id")
+        private long bucketId;
 
         @PartitionKey(2)
         @Column(name = "shard")
@@ -106,19 +104,19 @@ public class EventDO implements Serializable, Delayed, Event, MutableEntity<Even
 
         public static EventKey of(long offsetTime, int shard, long eventTime, String eventId) {
             final EventKey eventKey = new EventKey();
-            eventKey.offsetTime = offsetTime;
+            eventKey.bucketId = offsetTime;
             eventKey.eventTime = eventTime;
             eventKey.eventId = eventId;
             eventKey.shard = shard;
             return eventKey;
         }
 
-        public long getOffsetTime() {
-            return offsetTime;
+        public long getBucketId() {
+            return bucketId;
         }
 
-        public void setOffsetTime(long offsetTime) {
-            this.offsetTime = offsetTime;
+        public void setBucketId(long bucketId) {
+            this.bucketId = bucketId;
         }
 
         public String getEventId() {
@@ -147,7 +145,7 @@ public class EventDO implements Serializable, Delayed, Event, MutableEntity<Even
 
         @Override
         public String toString() {
-            return format("Event[%d/%d/%d/%s]", offsetTime, shard, eventTime, eventId);
+            return format("Event[%d/%d/%d/%s]", bucketId, shard, eventTime, eventId);
         }
     }
 
@@ -155,7 +153,7 @@ public class EventDO implements Serializable, Delayed, Event, MutableEntity<Even
     public String toString() {
         return "EventDO{" +
                 "eventKey=" + eventKey +
-                ", state='" + state + '\'' +
+                ", status='" + status + '\'' +
                 ", error='" + error + '\'' +
                 '}';
     }

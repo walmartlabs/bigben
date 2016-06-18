@@ -23,7 +23,7 @@ public class TimeUtils {
         return HOURS.between(of(now().getYear(), 1, 1, 0, 0), ofInstant(ofEpochMilli(hourInMillis), systemDefault()));
     }
 
-    public static long toHour(long instant) {
+    public static long bucketize(long instant) {
         return ofEpochMilli(instant).truncatedTo(HOURS).toEpochMilli();
     }
 

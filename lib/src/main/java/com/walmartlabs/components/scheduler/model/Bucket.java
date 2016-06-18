@@ -10,7 +10,7 @@ import java.util.List;
  */
 public interface Bucket extends Entity<Long> {
 
-    enum BucketStatus {PROCESSED, ERROR}
+    enum BucketStatus {PROCESSED, ERROR, UN_PROCESSED}
 
     String getStatus();
 
@@ -23,6 +23,4 @@ public interface Bucket extends Entity<Long> {
     void setFailedEvents(List<EventKey> failedEvents);
 
     List<EventKey> getFailedEvents();
-
-
 }

@@ -5,7 +5,9 @@
   },
   "map": {
     "store": {
-      "beanName": "bucketStore"
+      "writeDelay": 0,
+      "fqcn": "com.walmartlabs.components.scheduler.core.hz.HzBucketStore",
+      "dmConfigPath": "file://dm-config.json"
     }
   }
 }

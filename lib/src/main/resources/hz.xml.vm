@@ -34,7 +34,8 @@ $parm#end
             <factory-class-name>com.walmart.gmp.ingestion.platform.framework.core.GenericMapStoreFactory
             </factory-class-name>
             <properties>
-                <property name="bucketCache_bean">$map.store.beanName</property>
+                <property name="fqcn">$map.store.fqcn</property>
+                <property name="dmConfigPath">$map.store.dmConfigPath</property>
             </properties>
             <write-delay-seconds>#resolve($map.store.writeDelay 60)</write-delay-seconds>
             <write-batch-size>#resolve($map.store.batchSize 1000)</write-batch-size>

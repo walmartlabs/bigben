@@ -79,7 +79,7 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
         return transformAsync(successfulAsList(shards.stream().map($ ->
                         loadAndProcess($, fetchSize, getAsyncManager(), -1L)).collect(toList())),
                 ll -> {
-                    final List<EventKey> l = newArrayList(concat(ll)).stream().filter(e -> !PROCESSED.name().equals(e.getState())).
+                    final List<EventKey> l = newArrayList(concat(ll)).stream().filter(e -> !PROCESSED.name().equals(e.getStatus())).
                             map(EventDO::getEventKey).collect(toList());
                     final Bucket entity = entity(Bucket.class, bucketId);
                     if (!l.isEmpty()) {
@@ -106,7 +106,7 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
             return transformAsync(
                     transformAsync(
                             async(() -> successfulAsList(l.stream().filter(e ->
-                                    !PROCESSED.name().equals(e.getState())).map(am::removeProxy).map(this::schedule).
+                                    !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
                                     collect(toList())), "process-events#" + taskId), this::save),
                     $ -> loadAndProcess(shardIndex, fetchSize, am, l.get(l.size() - 1).id().getEventTime()));
         });
@@ -115,9 +115,9 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
     private ListenableFuture<List<EventDO>> save(List<EventDO> l) {
         L.debug(format("%s, saving event status to the db", executionKey));
         return successfulAsList(l.stream().map(e -> {
-            L.debug(format("%s, saving event: %s to the DB, the status is '%s'", executionKey, e.id(), e.getState()));
+            L.debug(format("%s, saving event: %s to the DB, the status is '%s'", executionKey, e.id(), e.getStatus()));
             final Event entity = entity(Event.class, e.id());
-            entity.setState(e.getState());
+            entity.setStatus(e.getStatus());
             if (e.getError() != null)
                 entity.setError(e.getError());
             return transform(eventDM.saveAsync(entity), (Function<Event, EventDO>) $ -> (EventDO) $);
@@ -140,12 +140,12 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
             L.debug(format("%s, processing event: %s", executionKey, e.id()));
             return transform(eventProcessor.process(e), (Function<Event, EventDO>) $ -> {
                 L.debug(format("%s, processed event: %s", executionKey, e.id()));
-                $.setState(PROCESSED.name());
+                $.setStatus(PROCESSED.name());
                 return (EventDO) $;
             });
         } catch (Throwable t) {
             L.error(format("%s, error in processing event: %s", executionKey, e.id()));
-            e.setState(ERROR.name());
+            e.setStatus(ERROR.name());
             e.setError(getStackTraceString(getRootCause(t)));
             return immediateFuture(e);
         }

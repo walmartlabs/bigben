@@ -4,6 +4,7 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.MapStore;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
+import com.walmart.gmp.ingestion.platform.framework.data.core.DataManagerConfig;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmartlabs.components.scheduler.model.Bucket;
 import org.apache.log4j.Logger;
@@ -13,26 +14,39 @@ import javax.cache.integration.CacheLoaderException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Properties;
 import java.util.function.Function;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableMap.of;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
+import static com.walmart.gmp.ingestion.platform.framework.utils.ConfigParser.parse;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static java.lang.String.format;
-import static java.util.Collections.nCopies;
 import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.function.Function.identity;
-import static java.util.stream.Collectors.*;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toMap;
 
 /**
  * Created by smalik3 on 4/1/16
  */
 public class HzBucketStore implements MapStore<Long, Bucket> {
+
+    public HzBucketStore(Properties properties) throws Exception {
+        final String dmConfigPath = "dmConfigPath";
+        checkArgument(properties != null && properties.containsKey(dmConfigPath), "null or incomplete properties: " +
+                "(" + dmConfigPath + " is required)" + properties);
+        final DataManagerConfig dataManagerConfig = parse(properties.getProperty(dmConfigPath), DataManagerConfig.class);
+        dataManagerConfig.getInterceptorConfigs().clear();
+        dataManager = new DataManager<>(dataManagerConfig);
+    }
+
+    public HzBucketStore() {
+    }
 
     private static final Logger L = Logger.getLogger(HzBucketStore.class);
 
@@ -62,9 +76,6 @@ public class HzBucketStore implements MapStore<Long, Bucket> {
         final Bucket entity = DataManager.entity(Bucket.class, key);
         entity.setStatus(value.getStatus());
         entity.setCount(value.getCount());
-        if (value.getError() != null)
-            entity.setError(value.getError());
-        entity.setFailedShards(value.getFailedShards());
         final ListenableFuture<Bucket> f = dataManager.saveAsync(entity);
         addCallback(f, new FutureCallback<Bucket>() {
             @Override
@@ -113,9 +124,6 @@ public class HzBucketStore implements MapStore<Long, Bucket> {
         return transform(dataManager.getAsync(key, fullSelector(key)), //TODO: dont use full selector, no need to load the error
                 (com.google.common.base.Function<Bucket, Bucket>) DataManager::raw);
     }
-
-    private static final AtomicLong counter = new AtomicLong();
-    private static final Set<Long> ALL_KEYS = nCopies(366 * 24, 0L).stream().map($ -> counter.getAndIncrement()).collect(toSet());
 
     @Override
     public Iterable<Long> loadAllKeys() {

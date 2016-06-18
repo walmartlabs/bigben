@@ -96,7 +96,7 @@ public class ScheduleJob implements IgniteRunnable {
                                 transform(pm.sliceQuery(EventDO.class).forSelect().
                                                 withPartitionComponents(bucketKey, s).get(),
                                         (Function<List<EventDO>, List<Event>>)
-                                                l -> l.stream().filter(i -> !PROCESSED.name().equals(i.getState())).
+                                                l -> l.stream().filter(i -> !PROCESSED.name().equals(i.getStatus())).
                                                         map(pm::removeProxy).collect(toList())), "load-shard#" + s);
                     }).collect(toList()));
             final ListenableFuture<List<Event>> processedFuture =
@@ -122,9 +122,9 @@ public class ScheduleJob implements IgniteRunnable {
                     transform(processedFuture, (AsyncFunction<List<Event>, List<Event>>) l -> {
                         L.debug(format("%s, syncing event status to the db", jobKey));
                         final List<ListenableFuture<Event>> $ = l.stream().map(e -> {
-                            L.debug(format("%s, syncing event: %s to the DB, the status is '%s'", jobKey, e.id(), e.getState()));
+                            L.debug(format("%s, syncing event: %s to the DB, the status is '%s'", jobKey, e.id(), e.getStatus()));
                             final Event entity = entity(Event.class, e.id());
-                            entity.setState(e.getState());
+                            entity.setStatus(e.getStatus());
                             if (e.getError() != null)
                                 entity.setError(e.getError());
                             return transform(dataManager.saveAsync(entity), (Function<Event, Event>) DataManager::raw);
@@ -134,7 +134,7 @@ public class ScheduleJob implements IgniteRunnable {
             addCallback(transform(syncedFuture, (Function<List<Event>, Set<Integer>>) l -> {
                 L.debug(format("%s, calculating failed shards", jobKey));
                 final Set<Integer> failedShards = l.stream().filter(
-                        e -> !PROCESSED.name().equals(e.getState())).map(e -> e.id().getShard()).collect(toSet());
+                        e -> !PROCESSED.name().equals(e.getStatus())).map(e -> e.id().getShard()).collect(toSet());
                 if (!failedShards.isEmpty())
                     L.warn(format("%s, following shards failed: %s", jobKey, failedShards));
                 else
@@ -147,7 +147,7 @@ public class ScheduleJob implements IgniteRunnable {
                     cache.invoke(bucketOffset, (EntryProcessor<Long, Bucket, Object>) (entry, arguments) -> {
                         if (entry.getValue() != null) {
                             final Bucket entity = entry.getValue();
-                            entity.setJobCount(entity.getJobCount() - 1);
+                            /*entity.setJobCount(entity.getJobCount() - 1);
                             if (failedShards.isEmpty()) {
                                 L.debug(format("%s, shards are done, with no errors", jobKey));
                                 if (entity.getJobCount() == 0) {
@@ -161,7 +161,7 @@ public class ScheduleJob implements IgniteRunnable {
                                     L.debug(format("%s, all shards done (some with errors), all jobs done, marking the status as %s", jobKey, ERROR.name()));
                                     entity.setStatus(ERROR.name());
                                 }
-                            }
+                            }*/
                             entry.setValue(entity);
                         } else {
                             L.warn("found null bucket value for key: " + entry.getKey());
@@ -187,12 +187,12 @@ public class ScheduleJob implements IgniteRunnable {
             final ListenableFuture<Event> f = async(() -> eventProcessor.process(e), "process-event:" + e.id());
             L.debug(format("%s, processed event: %s", jobKey, e.id()));
             return transform(f, (Function<Event, Event>) $ -> {
-                $.setState(PROCESSED.name());
+                $.setStatus(PROCESSED.name());
                 return $;
             });
         } catch (Throwable t) {
             L.error(format("%s, error in processing event: %s", jobKey, e.id()));
-            e.setState(ERROR.name());
+            e.setStatus(ERROR.name());
             e.setError(getStackTraceString(getRootCause(t)));
             return immediateFuture(e);
         }
@@ -205,7 +205,7 @@ public class ScheduleJob implements IgniteRunnable {
             if (entry.getValue() != null) {
                 final Bucket entity = entry.getValue();
                 entity.setStatus(ERROR.name());
-                entity.addFailedShards(shards);
+                //entity.addFailedShards(shards);
                 entry.setValue(entity);
             } else {
                 L.warn(format("%s, found null bucket value for key: %d, something is broken! ", jobKey, entry.getKey()));
