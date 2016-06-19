@@ -57,7 +57,8 @@ public class HzEventReceiver {
     static final CountIncrementer CACHED_PROCESSOR = new CountIncrementer();
 
     public ListenableFuture<EventKey> addEvent(Event entity) {
-        final long bucketId = bucketize(entity.id().getEventTime());
+        final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
+        final long bucketId = bucketize(entity.id().getEventTime(), scanInterval);
         entity.id().setBucketId(bucketId);
         L.debug(format("%s, event-time: %d -> bucket-id: %d", entity.id(), entity.id().getEventTime(), bucketId));
         L.debug(format("%s, add-event: bucket-table: insert, %s", entity.id(), entity));

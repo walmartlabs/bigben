@@ -102,9 +102,9 @@ public class EventDO implements Serializable, Delayed, Event, MutableEntity<Even
         @Column(name = "event_id")
         private String eventId;
 
-        public static EventKey of(long offsetTime, int shard, long eventTime, String eventId) {
+        public static EventKey of(long bucketId, int shard, long eventTime, String eventId) {
             final EventKey eventKey = new EventKey();
-            eventKey.bucketId = offsetTime;
+            eventKey.bucketId = bucketId;
             eventKey.eventTime = eventTime;
             eventKey.eventId = eventId;
             eventKey.shard = shard;

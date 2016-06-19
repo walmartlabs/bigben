@@ -97,7 +97,7 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
         L.debug(format("%s, loading and processing shardIndex %d, fetchSize %d, from eventTime: %d", executionKey, shardIndex, fetchSize, eventTime));
         @SuppressWarnings("unchecked")
         final ListenableFuture<List<EventDO>> f = async(() -> am.sliceQuery(EventDO.class).forSelect().
-                withPartitionComponents(bucketId, shardIndex).fromClusterings(eventTime).withInclusiveBounds().limit(fetchSize).get(), "load-shard-slice#" + taskId);
+                withPartitionComponents(bucketId, shardIndex).fromClusterings(eventTime).withExclusiveBounds().limit(fetchSize).get(), "load-shard-slice#" + taskId);
         return transformAsync(f, l -> {
             if (l.isEmpty()) {
                 L.debug(format("%s, no more events to process: shardIndex %d, fetchSize %d, from eventTime: %d", executionKey, shardIndex, fetchSize, eventTime));

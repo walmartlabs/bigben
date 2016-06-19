@@ -52,4 +52,9 @@ $parm#end
         <merge-policy>#resolve($map.mergePolicy 'com.hazelcast.map.merge.LatestUpdateMapMergePolicy')</merge-policy>
     </map>
     <services enable-defaults="true"/>
+    <serialization>
+        <data-serializable-factories>
+            <data-serializable-factory factory-id="1">com.walmartlabs.components.scheduler.core.hz.ObjectFactory</data-serializable-factory>
+        </data-serializable-factories>
+    </serialization>
 </hazelcast>

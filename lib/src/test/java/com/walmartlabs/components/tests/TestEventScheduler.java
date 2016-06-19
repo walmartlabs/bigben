@@ -11,20 +11,19 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static java.lang.System.currentTimeMillis;
 import static java.time.LocalDateTime.now;
 import static java.time.ZoneId.systemDefault;
+import static java.time.ZoneOffset.UTC;
 import static java.util.Collections.nCopies;
-import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.UUID.randomUUID;
 
 /**
  * Created by smalik3 on 3/9/16
@@ -49,7 +48,20 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
 
     @Test
     public void testEventScheduler() throws InterruptedException {
-        if (System.getProperty("run.it") == null) {
+        final Random random = new Random();
+        final EventDO entity = new EventDO();
+        final ZonedDateTime now = ZonedDateTime.now(UTC);
+        final ZonedDateTime nextMinute = now.plusMinutes(1).withSecond(0).withNano(0);
+        System.out.println(now);
+        System.out.println(nextMinute);
+        entity.setEventKey(EventKey.of(0, 0, nextMinute.plusSeconds(random.nextInt(60)).toInstant().toEpochMilli(), "EId#" + randomUUID().toString()));
+        eventReceiver.addEvent(entity);
+        Thread.sleep(1000000);
+    }
+
+    @Test
+    public void testEventScheduler1() throws InterruptedException {
+        if (System.getProperty("run.it") != null) {
             System.out.println("loading data");
             final int count = Integer.getInteger("count", 10);
             final long now = now().withMinute(0).withSecond(0).withNano(0).atZone(systemDefault()).toInstant().toEpochMilli();

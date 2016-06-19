@@ -14,7 +14,7 @@ public class ObjectFactory implements DataSerializableFactory {
 
     public enum OBJECT_ID {
         EVENT_RECEIVER_ADD_EVENT,
-        EVENT_BUCKET_DO
+        BULK_EVENT_TASK
     }
 
     @Override
@@ -22,6 +22,8 @@ public class ObjectFactory implements DataSerializableFactory {
         switch (ObjectFactory.OBJECT_ID.values()[typeId]) {
             case EVENT_RECEIVER_ADD_EVENT:
                 return CACHED_PROCESSOR;
+            case BULK_EVENT_TASK:
+                return new BulkEventTask();
             /*case EVENT_BUCKET_DO:
                 return new BucketDO();*/
             default:

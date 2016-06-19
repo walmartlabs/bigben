@@ -31,7 +31,6 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.PROCESSED;
-import static com.walmartlabs.components.scheduler.utils.TimeUtils.toAbsolute;
 import static java.lang.String.format;
 import static java.time.LocalDateTime.now;
 import static java.time.LocalDateTime.of;
@@ -78,7 +77,7 @@ public class EventScheduleScanner implements Service, Runnable {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 60);
         L.info("calculating the next scan offset");
         final LocalDateTime now = now();
-        final LocalDateTime nextScan = TimeUtils.nextScan(now, scanInterval);
+        final LocalDateTime nextScan = null;//TimeUtils.nextScan(now, scanInterval);
         final long delay = ChronoUnit.MILLIS.between(now, nextScan);
         L.info(format("first-scan at: %s, next-scan at: %s, " +
                 "initial-delay: %d ms, subsequent-scans: after every %d minutes", now(), nextScan, delay, scanInterval));
@@ -119,7 +118,7 @@ public class EventScheduleScanner implements Service, Runnable {
                 }
                 final int gridSize = ignite.cluster().nodes().size();
                 final List<List<Integer>> partitions = partition(shardIndexes, numShards < gridSize ? 1 : numShards / gridSize);
-                final long bucketKey = toAbsolute(e.getKey());
+                final long bucketKey = -1L;//toAbsolute(e.getKey());
                 L.debug(format("%d, distribution profile: bucketKey: %d, nodes: %d, partitions: %s", currentOffset, bucketKey, gridSize, partitions));
                 cache.invoke(e.getKey(), new JobCountSetter(), partitions.size());
                 partitions.forEach(p -> async.run(new ScheduleJob(bucketKey, newHashSet(p), e.getKey())));

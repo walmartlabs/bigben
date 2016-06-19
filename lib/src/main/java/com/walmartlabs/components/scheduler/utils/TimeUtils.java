@@ -1,12 +1,13 @@
 package com.walmartlabs.components.scheduler.utils;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoField;
+import java.time.ZonedDateTime;
 
 import static java.time.Instant.ofEpochMilli;
-import static java.time.LocalDateTime.*;
-import static java.time.ZoneId.systemDefault;
+import static java.time.ZoneOffset.UTC;
+import static java.time.ZonedDateTime.ofInstant;
+import static java.time.temporal.ChronoField.MILLI_OF_SECOND;
+import static java.time.temporal.ChronoField.MINUTE_OF_HOUR;
 import static java.time.temporal.ChronoUnit.HOURS;
 import static java.time.temporal.ChronoUnit.MINUTES;
 
@@ -15,23 +16,23 @@ import static java.time.temporal.ChronoUnit.MINUTES;
  */
 public class TimeUtils {
 
-    public static long toAbsolute(Long hourOffset) {
-        return HOURS.addTo(of(now().getYear(), 1, 1, 0, 0), hourOffset).atZone(systemDefault()).toInstant().toEpochMilli();
+    public static long bucketize(long instant, int bucketWidth) {
+        final Instant epoch = ofEpochMilli(instant);
+        final long hours = epoch.truncatedTo(HOURS).toEpochMilli();
+        final long mins = epoch.truncatedTo(MINUTES).toEpochMilli();
+        final long delta = (mins - hours) / (60 * 1000);
+        final long boundary = (delta / bucketWidth) * bucketWidth;
+        return hours + boundary * 60 * 1000;
     }
 
-    public static long toOffset(Long hourInMillis) {
-        return HOURS.between(of(now().getYear(), 1, 1, 0, 0), ofInstant(ofEpochMilli(hourInMillis), systemDefault()));
-    }
-
-    public static long bucketize(long instant) {
-        return ofEpochMilli(instant).truncatedTo(HOURS).toEpochMilli();
-    }
-
-    public static LocalDateTime nextScan(LocalDateTime ldt, int scanInterval) {
-        final Instant minutesInstant = ldt.atZone(systemDefault()).toInstant().truncatedTo(MINUTES);
-        final LocalDateTime ld = LocalDateTime.ofInstant(minutesInstant, systemDefault());
-        final int currentMinutes = ld.get(ChronoField.MINUTE_OF_HOUR);
+    public static ZonedDateTime nextScan(ZonedDateTime zdt, int scanInterval) {
+        final ZonedDateTime minZdt = zdt.toInstant().truncatedTo(MINUTES).atZone(UTC);
+        final int currentMinutes = minZdt.get(MINUTE_OF_HOUR);
         final int offset = scanInterval - currentMinutes % scanInterval;
-        return ld.plusMinutes(offset);
+        return zdt.plusMinutes(offset).withSecond(0).with(MILLI_OF_SECOND, 0).withNano(0);
+    }
+
+    public static ZonedDateTime utc(long millis) {
+        return ofInstant(ofEpochMilli(millis), UTC);
     }
 }

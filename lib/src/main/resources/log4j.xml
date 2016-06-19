@@ -16,4 +16,10 @@
         <level value="INFO"/>
         <appender-ref ref="console"/>
     </root>
+
+    <logger name="com.walmartlabs.components.scheduler" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="console"/>
+    </logger>
+
 </log4j:configuration>
