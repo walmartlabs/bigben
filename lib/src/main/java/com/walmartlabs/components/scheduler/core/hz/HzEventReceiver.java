@@ -86,7 +86,7 @@ public class HzEventReceiver {
             final Bucket b = entry.getValue() == null ? new BucketDO() : entry.getValue();
             b.setCount(b.getCount() + 1);
             entry.setValue(b);
-            L.debug(format("bucket-id: %d, old-count: %d, new-count: %d ", entry.getKey(), b.getCount(), b.getCount() + 1));
+            L.debug(format("bucket-id: %d, old-count: %d, new-count: %d ", entry.getKey(), b.getCount() - 1, b.getCount()));
             return b.getCount();
         }
 

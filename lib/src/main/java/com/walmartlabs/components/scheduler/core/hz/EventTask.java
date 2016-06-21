@@ -34,6 +34,7 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersi
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.*;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.lang.Integer.getInteger;
 import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
@@ -66,7 +67,7 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
     public EventTask(long bucketId, Set<Integer> shards, DataManager<?, ?> dataManager, EventProcessor<Event> eventProcessor) {
         this.bucketId = bucketId;
         this.shards = shards;
-        executionKey = format("%d/%s", bucketId, shardRange(shards));
+        executionKey = format("%s/%s", utc(bucketId), shardRange(shards));
         this.eventProcessor = eventProcessor;
         this.eventDM = (DataManager<EventKey, Event>) dataManager;
         this.bucketDM = (DataManager<Long, Bucket>) dataManager;
@@ -77,7 +78,7 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
         L.debug(format("%s, processing shards", executionKey));
         final int fetchSize = PROPS.getInteger("bucketDM.events.fetch.size", 400);
         return transformAsync(successfulAsList(shards.stream().map($ ->
-                        loadAndProcess($, fetchSize, getAsyncManager(), -1L)).collect(toList())),
+                        loadAndProcess($, fetchSize, getAsyncManager(), -1L, "")).collect(toList())),
                 ll -> {
                     final List<EventKey> l = newArrayList(concat(ll)).stream().filter(e -> !PROCESSED.name().equals(e.getStatus())).
                             map(EventDO::getEventKey).collect(toList());
@@ -92,12 +93,12 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
                 });
     }
 
-    private ListenableFuture<List<EventDO>> loadAndProcess(int shardIndex, int fetchSize, AsyncManager am, long eventTime) {
+    private ListenableFuture<List<EventDO>> loadAndProcess(int shardIndex, int fetchSize, AsyncManager am, long eventTime, String eventId) {
         final String taskId = shardIndex + "[" + eventTime + "(" + fetchSize + ")]";
         L.debug(format("%s, loading and processing shardIndex %d, fetchSize %d, from eventTime: %d", executionKey, shardIndex, fetchSize, eventTime));
         @SuppressWarnings("unchecked")
         final ListenableFuture<List<EventDO>> f = async(() -> am.sliceQuery(EventDO.class).forSelect().
-                withPartitionComponents(bucketId, shardIndex).fromClusterings(eventTime).withExclusiveBounds().limit(fetchSize).get(), "load-shard-slice#" + taskId);
+                withPartitionComponents(bucketId, shardIndex).fromClusterings(eventTime, eventId).withExclusiveBounds().limit(fetchSize).get(), "load-shard-slice#" + taskId);
         return transformAsync(f, l -> {
             if (l.isEmpty()) {
                 L.debug(format("%s, no more events to process: shardIndex %d, fetchSize %d, from eventTime: %d", executionKey, shardIndex, fetchSize, eventTime));
@@ -108,7 +109,11 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
                             async(() -> successfulAsList(l.stream().filter(e ->
                                     !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
                                     collect(toList())), "process-events#" + taskId), this::save),
-                    $ -> loadAndProcess(shardIndex, fetchSize, am, l.get(l.size() - 1).id().getEventTime()));
+                    $ -> {
+                        if (l.size() == fetchSize)
+                            return loadAndProcess(shardIndex, fetchSize, am, l.get(l.size() - 1).id().getEventTime(), l.get(l.size() - 1).id().getEventId());
+                        else return immediateFuture(l);
+                    });
         });
     }
 

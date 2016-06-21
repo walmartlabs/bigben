@@ -13,6 +13,8 @@
         <constructor-arg index="0" value="simulationCodes.json"/>
     </bean>
 
+    <bean class="com.walmartlabs.components.tests.TestEventScheduler"/>
+
     <!--<bean id="dataManager" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
         <constructor-arg index="0" value="file://dm-config.json"/>
     </bean>

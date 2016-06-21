@@ -47,6 +47,13 @@ public class ScheduleScanner implements Service {
 
     static final String BUCKET_CACHE = "bucketCache";
 
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            System.out.println("uncaught exception: " + t);
+            e.printStackTrace();
+        });
+    }
+
     @Autowired
     private transient DataManager<Long, Bucket> dataManager;
 

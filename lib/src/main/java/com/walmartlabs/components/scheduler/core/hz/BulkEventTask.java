@@ -23,6 +23,8 @@ import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmartlabs.components.scheduler.core.hz.ObjectFactory.OBJECT_ID.BULK_EVENT_TASK;
 import static com.walmartlabs.components.scheduler.core.hz.ObjectFactory.SCHEDULER_FACTORY_ID;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
+import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -54,6 +56,8 @@ public class BulkEventTask implements Runnable, Callable<Map<Long, BucketStatus>
         if (shards == null || shards.isEmpty()) {
             return DONE;
         }
+        final List<String> buckets = shards.keySet().stream().map(millis -> utc(millis).toString()).collect(toList());
+        L.debug(format("%s, executing bulk event task for buckets", buckets));
         final DataManager<?, ?> dm = spring().getBean(DataManager.class);
         @SuppressWarnings("unchecked")
         final EventProcessor<Event> ep = spring().getBean(EventProcessor.class);
@@ -65,7 +69,7 @@ public class BulkEventTask implements Runnable, Callable<Map<Long, BucketStatus>
                 return Futures.<BucketStatus>immediateFailedFuture(ex);
             }
         }).collect(toList())), (Function<List<BucketStatus>, Map<Long, BucketStatus>>) l -> {
-            L.info("shards done, input: " + entries + ", output: " + l);
+            L.info(format("%s, shards done, input: %s, output: %s", buckets, entries, l));
             final AtomicInteger index = new AtomicInteger();
             return entries.stream().collect(toMap((java.util.function.Function<Entry<Long, Set<Integer>>, Long>)
                     Entry::getKey, e -> l.get(index.getAndIncrement())));
