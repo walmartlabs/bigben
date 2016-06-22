@@ -3,16 +3,19 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd http://cxf.apache.org/jaxrs http://cxf.apache.org/schemas/jaxrs.xsd">
 
-    <import resource="classpath*:extra/scheduler-config.xml"/>
+    <import resource="classpath*:scheduler-beans.xml"/>
 
     <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
         <constructor-arg index="0" value="WEB-INF/simulationCodes.json"/>
     </bean>
 
+    <bean id="processRegistry" class="com.walmartlabs.components.scheduler.processors.ProcessorRegistry">
+        <constructor-arg index="0" value="file://processors.json"/>
+        <constructor-arg index="1" value="false"/>
+    </bean>
+
     <bean id="provider" class="com.walmart.platform.soa.common.providers.SOAJSONJAXBProvider"/>
-
     <bean id="exceptionMapper" class="com.walmart.partnerapi.common.soari.ExceptionMapper"/>
-
     <bean id="sehat" class="com.walmart.services.sehat.SehatImpl">
         <constructor-arg>
             <list>
@@ -20,10 +23,12 @@
             </list>
         </constructor-arg>
     </bean>
+    <bean class="com.walmartlabs.components.scheduler.processors.DefaultEventProcessor"/>
 
     <jaxrs:server address="/services">
         <jaxrs:serviceBeans>
             <ref bean="sehat"/>
+            <ref bean="eventService"/>
         </jaxrs:serviceBeans>
         <jaxrs:providers>
             <ref bean="provider"/>

@@ -3,11 +3,12 @@ package com.walmartlabs.components.tests;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmartlabs.components.scheduler.core.EventProcessor;
-import com.walmartlabs.components.scheduler.core.hz.HzEventReceiver;
+import com.walmartlabs.components.scheduler.core.EventReceiver;
 import com.walmartlabs.components.scheduler.model.Bucket;
 import com.walmartlabs.components.scheduler.model.Event;
 import com.walmartlabs.components.scheduler.model.EventDO;
 import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.services.EventService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
@@ -48,13 +49,16 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
     private DataManager<Long, Bucket> bucketDM;
 
     @Autowired
-    private HzEventReceiver eventReceiver;
+    private EventReceiver eventReceiver;
+
+    @Autowired
+    private EventService eventService;
 
     @Override
     public ListenableFuture<Event> process(Event event) {
         System.out.println("processing event: " + event);
         events.remove(event.id().toString());
-        if(events.size() == 0) {
+        if (events.size() == 0) {
             System.out.println("test done");
         }
         return immediateFuture(event);
@@ -62,7 +66,13 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
 
     private static final Map<String, Boolean> events = new ConcurrentHashMap<>();
 
-    @Test
+    @Test(enabled = false)
+    public void testEventScheduler2() throws Exception {
+        eventService.generateEvents("2016-06-21T18:30Z", "2016-06-21T18:40Z", 10000, "0");
+        Thread.sleep(1000000);
+    }
+
+    @Test(enabled = false)
     public void testEventScheduler() throws InterruptedException {
         //final ListeningExecutorService executorService = listeningDecorator(newFixedThreadPool(getRuntime().availableProcessors()));
         final Random random = new Random();
@@ -79,7 +89,7 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
         Thread.sleep(1000000);
     }
 
-    @Test
+    @Test(enabled = false)
     public void testEventScheduler1() throws InterruptedException {
         if (System.getProperty("run.it") != null) {
             System.out.println("loading data");

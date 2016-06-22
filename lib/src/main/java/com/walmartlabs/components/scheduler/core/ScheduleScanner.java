@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core.hz;
+package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -10,7 +10,6 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmartlabs.components.scheduler.model.Bucket;
 import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
-import com.walmartlabs.components.scheduler.services.Service;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -18,6 +17,7 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
@@ -30,6 +30,7 @@ import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.PROCESSED;
+import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.UN_PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;
@@ -48,6 +49,7 @@ public class ScheduleScanner implements Service {
     static final String BUCKET_CACHE = "bucketCache";
 
     static {
+        System.setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.model");
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             System.out.println("uncaught exception: " + t);
             e.printStackTrace();
@@ -95,6 +97,8 @@ public class ScheduleScanner implements Service {
         scan();
     }
 
+    private final Map<Long, BucketStatus> processedBuckets = new ConcurrentHashMap<>();
+
     private void scan() {
         final Integer bucketWidth = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now(UTC);
@@ -106,8 +110,17 @@ public class ScheduleScanner implements Service {
             final int lookbackRange = PROPS.getInteger("events.backlog.check.limit", 2);
             final Set<Long> bucketIds = new HashSet<>();
             for (long i = 0; i <= lookbackRange; i++) {
-                bucketIds.add(currentBucketId - i * bucketWidth * 60 * 1000);
+                final long bucketId = currentBucketId - i * bucketWidth * 60 * 1000;
+                bucketIds.add(bucketId);
             }
+            newHashSet(processedBuckets.keySet()).forEach(bId -> {
+                if (!bucketIds.contains(bId))
+                    processedBuckets.remove(bId);
+                else if (processedBuckets.get(bId) == PROCESSED)
+                    bucketIds.remove(bId);
+            });
+            L.debug(format("%s, buckets to be scheduled: %s ", currentBucketId, bucketIds));
+
             L.debug(format("%s, calculating scan for buckets: %s", bucket, bucketIds.stream().sorted().map(b -> utc(b).toString()).collect(toList())));
             transformAsync(calculateScheduleDistribution(bucket, bucketIds), shards -> {
                 if (shards.isEmpty()) {
@@ -132,8 +145,8 @@ public class ScheduleScanner implements Service {
                                         executorService.submitToMember(e, iterator.next())), "event-submit",
                                         submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList())),
                         (Function<List<Map<Long, BucketStatus>>, Map<Long, BucketStatus>>) l -> {
-                            L.info(format("%s, shards submitted successfully for processing: %s", bucket, shards));
-                            return l.stream().reduce(new HashMap<>(), (a, m) -> {
+                            L.info(format("%s, shards processed successfully for processing: %s", bucket, shards));
+                            return l.stream().reduce(processedBuckets, (a, m) -> {
                                 a.putAll(m);
                                 return a;
                             });
@@ -148,8 +161,13 @@ public class ScheduleScanner implements Service {
     private static final ListenableFuture<Map<Long, BucketStatus>> NO_OP = immediateFuture(new HashMap<>());
 
     private ListenableFuture<Map<Long, Set<Integer>>> calculateScheduleDistribution(String calcId, final Set<Long> bucketIds) {
-        L.debug(format("%s, checking if following bucketIds have schedules: %s", calcId, bucketIds));
-        return transform(successfulAsList(bucketIds.stream().map(bId -> dataManager.getAsync(bId, fullSelector(bId))).collect(toList())),
+        L.debug(format("%s, checking if following bucketIds have events: %s", calcId, bucketIds));
+        return transform(successfulAsList(bucketIds.stream().map(bId -> transform(dataManager.getAsync(bId, fullSelector(bId)), (Function<Bucket, Bucket>) b -> {
+                    if (b == null || b.getCount() == 0 || PROCESSED.name().equals(b.getStatus())) {
+                        processedBuckets.put(bId, b == null || b.getStatus() == null ? PROCESSED : BucketStatus.valueOf(b.getStatus()));
+                    }
+                    return b;
+                })).collect(toList())),
                 (Function<List<Bucket>, Map<Long, Set<Integer>>>) l ->
                         l.stream().filter(b -> b != null && b.getCount() > 0 && !PROCESSED.name().equals(b.getStatus())).collect(toMap(Bucket::id, b -> {
                                     L.debug(format("%s, scheduling bucket: %d", calcId, b.id()));

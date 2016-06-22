@@ -1,16 +1,15 @@
 package com.walmartlabs.components.scheduler.model;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
-import com.walmartlabs.components.scheduler.model.EventLookupDO.EventLookupKey;
 
 /**
  * Created by smalik3 on 3/29/16
  */
-public interface EventLookup extends Entity<EventLookupKey> {
+public interface EventLookup extends Entity<String> {
 
-    long getOffset();
+    long getBucketId();
 
-    void setOffset(long offset);
+    void setBucketId(long bucketId);
 
     int getShard();
 

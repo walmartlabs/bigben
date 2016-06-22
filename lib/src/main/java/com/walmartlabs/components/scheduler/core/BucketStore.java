@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core.hz;
+package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -34,9 +34,9 @@ import static java.util.stream.Collectors.toMap;
 /**
  * Created by smalik3 on 4/1/16
  */
-public class HzBucketStore implements MapStore<Long, Bucket> {
+public class BucketStore implements MapStore<Long, Bucket> {
 
-    public HzBucketStore(Properties properties) throws Exception {
+    public BucketStore(Properties properties) throws Exception {
         final String dmConfigPath = "dmConfigPath";
         checkArgument(properties != null && properties.containsKey(dmConfigPath), "null or incomplete properties: " +
                 "(" + dmConfigPath + " is required)" + properties);
@@ -45,10 +45,10 @@ public class HzBucketStore implements MapStore<Long, Bucket> {
         dataManager = new DataManager<>(dataManagerConfig);
     }
 
-    public HzBucketStore() {
+    public BucketStore() {
     }
 
-    private static final Logger L = Logger.getLogger(HzBucketStore.class);
+    private static final Logger L = Logger.getLogger(BucketStore.class);
 
     @Autowired
     private transient DataManager<Long, Bucket> dataManager;

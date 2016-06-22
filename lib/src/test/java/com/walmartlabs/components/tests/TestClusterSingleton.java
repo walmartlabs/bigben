@@ -1,6 +1,6 @@
 package com.walmartlabs.components.tests;
 
-import com.walmartlabs.components.scheduler.services.Service;
+import com.walmartlabs.components.scheduler.core.Service;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;

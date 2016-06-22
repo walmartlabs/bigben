@@ -1,9 +1,9 @@
-package com.walmartlabs.components.scheduler.core.hz;
+package com.walmartlabs.components.scheduler.core;
 
 import com.hazelcast.nio.serialization.DataSerializableFactory;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 
-import static com.walmartlabs.components.scheduler.core.hz.HzEventReceiver.CACHED_PROCESSOR;
+import static com.walmartlabs.components.scheduler.core.EventReceiver.CACHED_PROCESSOR;
 
 /**
  * Created by smalik3 on 4/1/16

@@ -9,17 +9,15 @@
 
     <import resource="classpath*:platform-minimal.xml"/>
 
-    <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
-        <constructor-arg index="0" value="simulationCodes.json"/>
-    </bean>
+    <bean id="eventService" class="com.walmartlabs.components.scheduler.services.EventService"/>
 
     <bean id="dataManager" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
         <constructor-arg index="0" value="file://dm-config.json"/>
     </bean>
 
-    <bean id="eventScheduler" class="com.walmartlabs.components.scheduler.core.hz.ScheduleScanner"/>
-    <bean class="com.walmartlabs.components.scheduler.core.hz.HzEventReceiver"/>
-    <bean id="bucketStore" class="com.walmartlabs.components.scheduler.core.hz.HzBucketStore"/>
+    <bean id="eventScheduler" class="com.walmartlabs.components.scheduler.core.ScheduleScanner"/>
+    <bean class="com.walmartlabs.components.scheduler.core.EventReceiver"/>
+    <bean id="bucketStore" class="com.walmartlabs.components.scheduler.core.BucketStore"/>
 
     <bean id="hz" class="com.walmart.gmp.ingestion.platform.framework.core.Hz">
         <constructor-arg index="0" value="hz.xml.vm"/>

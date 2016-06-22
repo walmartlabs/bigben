@@ -4,32 +4,27 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
 import info.archinnov.achilles.annotations.*;
 
-import java.io.Serializable;
-import java.util.concurrent.Delayed;
-import java.util.concurrent.TimeUnit;
-
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
-import static java.lang.Long.compare;
 import static java.lang.String.format;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * Created by smalik3 on 3/8/16
  */
 @Entity(table = "events")
 @KeyMapping(keyClass = EventDO.EventKey.class, entityClass = Event.class, version = V1)
-public class EventDO implements Serializable, Delayed, Event, MutableEntity<EventDO.EventKey> {
+public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
 
     @EmbeddedId
     private EventKey eventKey;
 
-    //@Index
     @Column
     private String status;
 
-    //@Index
     @Column
     private String error;
+
+    @Column
+    private String tenant;
 
     public String getStatus() {
         return status;
@@ -75,14 +70,24 @@ public class EventDO implements Serializable, Delayed, Event, MutableEntity<Even
         this.error = error;
     }
 
+    public String getTenant() {
+        return tenant;
+    }
+
+    public void setTenant(String tenant) {
+        this.tenant = tenant;
+    }
+
+    private long millis;
+
     @Override
-    public long getDelay(TimeUnit unit) {
-        return 0L;
+    public void setProcessedAt(long millis) {
+        this.millis = millis;
     }
 
     @Override
-    public int compareTo(Delayed o) {
-        return compare(getDelay(SECONDS), o.getDelay(SECONDS));
+    public long getProcessedAt() {
+        return millis;
     }
 
     public static class EventKey {
@@ -155,6 +160,7 @@ public class EventDO implements Serializable, Delayed, Event, MutableEntity<Even
                 "eventKey=" + eventKey +
                 ", status='" + status + '\'' +
                 ", error='" + error + '\'' +
+                ", tenant='" + tenant + '\'' +
                 '}';
     }
 }

@@ -22,9 +22,9 @@ import static java.lang.Long.parseLong;
 /**
  * Created by smalik3 on 3/18/16
  */
-@Entity(table = "event_bucket")
+@Entity(table = "event_buckets")
 @KeyMapping(keyClass = Long.class, entityClass = Bucket.class, version = V1)
-public class BucketDO implements Bucket, MutableEntity<Long>, Serializable { //TODO: Data Serializable
+public class BucketDO implements Bucket, MutableEntity<Long>, Serializable {
 
     @PartitionKey
     @Id(name = "id")
@@ -124,23 +124,4 @@ public class BucketDO implements Bucket, MutableEntity<Long>, Serializable { //T
                 ", failedEvents='" + _failedEvents + '\'' +
                 '}';
     }
-/*@Override
-    public int getFactoryId() {
-        return SCHEDULER_FACTORY_ID;
-    }
-
-    @Override
-    public int getId() {
-        return EVENT_BUCKET_DO.ordinal();
-    }
-
-    @Override
-    public void writeData(ObjectDataOutput out) throws IOException {
-
-    }
-
-    @Override
-    public void readData(ObjectDataInput in) throws IOException {
-
-    }*/
 }

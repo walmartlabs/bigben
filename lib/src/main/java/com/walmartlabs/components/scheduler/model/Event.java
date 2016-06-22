@@ -15,4 +15,12 @@ public interface Event extends Entity<EventKey> {
     void setError(String error);
 
     String getError();
+
+    String getTenant();
+
+    void setTenant(String tenant);
+
+    void setProcessedAt(long millis);
+
+    long getProcessedAt();
 }

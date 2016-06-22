@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core.hz;
+package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -6,7 +6,6 @@ import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.services.nosql.data.CqlDAO;
-import com.walmartlabs.components.scheduler.core.EventProcessor;
 import com.walmartlabs.components.scheduler.model.Bucket;
 import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
 import com.walmartlabs.components.scheduler.model.Event;
@@ -76,7 +75,7 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
     @Override
     public ListenableFuture<BucketStatus> call() throws Exception {
         L.debug(format("%s, processing shards", executionKey));
-        final int fetchSize = PROPS.getInteger("bucketDM.events.fetch.size", 400);
+        final int fetchSize = PROPS.getInteger("events.fetch.size", 400);
         return transformAsync(successfulAsList(shards.stream().map($ ->
                         loadAndProcess($, fetchSize, getAsyncManager(), -1L, "")).collect(toList())),
                 ll -> {
@@ -89,7 +88,7 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
                     } else {
                         entity.setStatus(PROCESSED.name());
                     }
-                    return transform(bucketDM.saveAsync(entity), (Function<Bucket, BucketStatus>) e -> valueOf(e.getStatus()));
+                    return transform(bucketDM.saveAsync(entity), (Function<Bucket, BucketStatus>) $ -> valueOf(entity.getStatus()));
                 });
     }
 
@@ -105,10 +104,9 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
                 return immediateFuture(l);
             }
             return transformAsync(
-                    transformAsync(
-                            async(() -> successfulAsList(l.stream().filter(e ->
-                                    !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
-                                    collect(toList())), "process-events#" + taskId), this::save),
+                    async(() -> successfulAsList(l.stream().filter(e ->
+                            !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
+                            collect(toList())), "process-events#" + taskId),
                     $ -> {
                         if (l.size() == fetchSize)
                             return loadAndProcess(shardIndex, fetchSize, am, l.get(l.size() - 1).id().getEventTime(), l.get(l.size() - 1).id().getEventId());
@@ -117,26 +115,14 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
         });
     }
 
-    private ListenableFuture<List<EventDO>> save(List<EventDO> l) {
-        L.debug(format("%s, saving event status to the db", executionKey));
-        return successfulAsList(l.stream().map(e -> {
-            L.debug(format("%s, saving event: %s to the DB, the status is '%s'", executionKey, e.id(), e.getStatus()));
-            final Event entity = entity(Event.class, e.id());
-            entity.setStatus(e.getStatus());
-            if (e.getError() != null)
-                entity.setError(e.getError());
-            return transform(eventDM.saveAsync(entity), (Function<Event, EventDO>) $ -> (EventDO) $);
-        }).collect(toList()));
-    }
-
     private ListenableFuture<EventDO> schedule(EventDO e) {
         final long delay = e.id().getEventTime() - currentTimeMillis();
         if (delay <= 0) {
             L.debug(format("%s, event %s time has expired, processing immediately", executionKey, e.id()));
-            return process(e);
+            return transformAsync(process(e), $ -> save(e));
         } else {
             L.debug(format("%s, scheduling event '%s' after delay %d, at %s", executionKey, e.id(), delay, new Date(e.id().getEventTime())));
-            return dereference(EXECUTOR.schedule(() -> process(e), delay, MILLISECONDS));
+            return transformAsync(dereference(EXECUTOR.schedule(() -> process(e), delay, MILLISECONDS)), $ -> save(e));
         }
     }
 
@@ -145,8 +131,8 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
             L.debug(format("%s, processing event: %s", executionKey, e.id()));
             return transform(eventProcessor.process(e), (Function<Event, EventDO>) $ -> {
                 L.debug(format("%s, processed event: %s", executionKey, e.id()));
-                $.setStatus(PROCESSED.name());
-                return (EventDO) $;
+                e.setStatus(PROCESSED.name());
+                return e;
             });
         } catch (Throwable t) {
             L.error(format("%s, error in processing event: %s", executionKey, e.id()));
@@ -154,6 +140,15 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
             e.setError(getStackTraceString(getRootCause(t)));
             return immediateFuture(e);
         }
+    }
+
+    private ListenableFuture<EventDO> save(EventDO e) {
+        L.debug(format("%s, saving event: %s to the DB, the status is '%s'", executionKey, e.id(), e.getStatus()));
+        final Event entity = entity(Event.class, e.id());
+        entity.setStatus(e.getStatus());
+        if (e.getError() != null)
+            entity.setError(e.getError());
+        return transform(eventDM.saveAsync(entity), (Function<Event, EventDO>) $ -> (EventDO) $);
     }
 
     private AsyncManager getAsyncManager() {
@@ -169,9 +164,9 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
 
     private <R> ListenableFuture<R> async(Callable<ListenableFuture<R>> task, String taskId) {
         return taskExecutor.async(task, taskId,
-                getInteger("bucketDM.max.retries", 3),
-                getInteger("bucketDM.retry.initial.delay.ms", 1000),
-                getInteger("bucketDM.retry.backoff.multiplier", 2),
+                getInteger("dm.max.retries", 3),
+                getInteger("dm.retry.initial.delay.ms", 1000),
+                getInteger("dm.retry.backoff.multiplier", 2),
                 MILLISECONDS);
     }
 }

@@ -1,0 +1,12 @@
+{
+  "hz": {
+    "port": 7777,
+    "autoIncrement": true
+  },
+  "map": {
+    "store": {
+      "fqcn": "com.walmartlabs.components.scheduler.core.BucketStore",
+      "dmConfigPath": "file://dm-config.json"
+    }
+  }
+}

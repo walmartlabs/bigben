@@ -19,8 +19,8 @@
         <constructor-arg index="0" value="file://dm-config.json"/>
     </bean>
 
-    <bean id="eventScheduler" class="com.walmartlabs.components.scheduler.core.hz.ScheduleScanner <bean class="com.walmartlabs.components.scheduler.core.hz.HzEventReceiver"/>
-    <bean id="bucketStore" class="com.walmartlabs.components.scheduler.core.hz.HzBucketStore"/>-->
+    <bean id="eventScheduler" class="com.walmartlabs.components.scheduler.core.ScheduleScanner <bean class="com.walmartlabs.components.scheduler.core.EventReceiver>
+    <bean id="bucketStore" class="com.walmartlabs.components.scheduler.core.BucketStore>-->
 
     <bean id="hz" class="com.walmart.gmp.ingestion.platform.framework.core.Hz">
         <constructor-arg index="0" value="hz.xml.vm"/>

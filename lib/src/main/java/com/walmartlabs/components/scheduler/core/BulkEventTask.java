@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core.hz;
+package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.Futures;
@@ -7,9 +7,9 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmartlabs.components.scheduler.core.EventProcessor;
 import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
 import com.walmartlabs.components.scheduler.model.Event;
+import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -21,8 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.beust.jcommander.internal.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
-import static com.walmartlabs.components.scheduler.core.hz.ObjectFactory.OBJECT_ID.BULK_EVENT_TASK;
-import static com.walmartlabs.components.scheduler.core.hz.ObjectFactory.SCHEDULER_FACTORY_ID;
+import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
@@ -48,8 +47,15 @@ public class BulkEventTask implements Runnable, Callable<Map<Long, BucketStatus>
 
     @Override
     public Map<Long, BucketStatus> call() throws Exception {
-        execute();
-        return DONE.get();
+        final Map<Long, BucketStatus> status;
+        try {
+            status = execute().get();
+        } catch (Exception e) {
+            final Throwable cause = getRootCause(e);
+            L.error("error in processing events", cause);
+            throw new RuntimeException(cause);
+        }
+        return status;
     }
 
     private ListenableFuture<Map<Long, BucketStatus>> execute() {
@@ -60,7 +66,7 @@ public class BulkEventTask implements Runnable, Callable<Map<Long, BucketStatus>
         L.debug(format("%s, executing bulk event task for buckets", buckets));
         final DataManager<?, ?> dm = spring().getBean(DataManager.class);
         @SuppressWarnings("unchecked")
-        final EventProcessor<Event> ep = spring().getBean(EventProcessor.class);
+        final EventProcessor<Event> ep = spring().getBean(ProcessorRegistry.class);
         final List<Entry<Long, Set<Integer>>> entries = newArrayList(shards.entrySet());
         return transform(successfulAsList(entries.stream().map(e -> {
             try {
@@ -84,12 +90,12 @@ public class BulkEventTask implements Runnable, Callable<Map<Long, BucketStatus>
 
     @Override
     public int getFactoryId() {
-        return SCHEDULER_FACTORY_ID;
+        return ObjectFactory.SCHEDULER_FACTORY_ID;
     }
 
     @Override
     public int getId() {
-        return BULK_EVENT_TASK.ordinal();
+        return ObjectFactory.OBJECT_ID.BULK_EVENT_TASK.ordinal();
     }
 
     @Override

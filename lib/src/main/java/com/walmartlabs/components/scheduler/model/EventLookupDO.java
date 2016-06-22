@@ -3,37 +3,34 @@ package com.walmartlabs.components.scheduler.model;
 import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
 import info.archinnov.achilles.annotations.Column;
-import info.archinnov.achilles.annotations.EmbeddedId;
 import info.archinnov.achilles.annotations.Entity;
-import info.archinnov.achilles.annotations.PartitionKey;
+import info.archinnov.achilles.annotations.Id;
 
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
-import static java.lang.String.format;
 
 /**
  * Created by smalik3 on 3/29/16
  */
 @Entity(table = "event_lookup")
-@KeyMapping(keyClass = EventLookupDO.EventLookupKey.class, entityClass = EventLookup.class, version = V1)
-public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.EventLookupKey> {
+@KeyMapping(keyClass = String.class, entityClass = EventLookup.class, version = V1)
+public class EventLookupDO implements EventLookup, MutableEntity<String> {
 
-    @EmbeddedId
-    private EventLookupKey id;
+    @Id(name = "event_id")
+    @Column(name = "event_id")
+    private String id;
 
-    @Column
-    private long offset;
+    @Column(name = "bucket_id")
+    private long bucketId;
 
     @Column
     private int shard;
 
-    @Override
-    public long getOffset() {
-        return offset;
+    public long getBucketId() {
+        return bucketId;
     }
 
-    @Override
-    public void setOffset(long offset) {
-        this.offset = offset;
+    public void setBucketId(long bucketId) {
+        this.bucketId = bucketId;
     }
 
     @Override
@@ -47,69 +44,39 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
     }
 
     @Override
-    public void id(EventLookupKey eventLookupKey) {
-        this.id = eventLookupKey;
+    public void id(String s) {
+        this.id = s;
     }
 
     @Override
     public void key(Object key) {
-        this.id = (EventLookupKey) key;
+        this.id = key.toString();
     }
 
     @Override
-    public EventLookupKey id() {
+    public String id() {
         return id;
     }
 
     @Override
     public Object key() {
+        return id();
+    }
+
+    public String getId() {
         return id;
     }
 
-    public EventLookupKey getId() {
-        return id;
-    }
-
-    public void setId(EventLookupKey id) {
+    public void setId(String id) {
         this.id = id;
     }
 
-    public static class EventLookupKey {
-        @PartitionKey
-        @Column(name = "event_time")
-        private long eventTime;
-
-        @PartitionKey(2)
-        @Column(name = "event_id")
-        private String eventId;
-
-        public static EventLookupKey of(long eventTime, String eventId) {
-            final EventLookupKey eventLookupKey = new EventLookupKey();
-            eventLookupKey.eventTime = eventTime;
-            eventLookupKey.eventId = eventId;
-            return eventLookupKey;
-        }
-
-        public long getEventTime() {
-            return eventTime;
-        }
-
-        public void setEventTime(long eventTime) {
-            this.eventTime = eventTime;
-        }
-
-        public String getEventId() {
-            return eventId;
-        }
-
-        public void setEventId(String eventId) {
-            this.eventId = eventId;
-        }
-
-        @Override
-        public String toString() {
-            return format("EventLookKey[%d/%s]", eventTime, eventId);
-        }
+    @Override
+    public String toString() {
+        return "EventLookupDO{" +
+                "id='" + id + '\'' +
+                ", bucketId=" + bucketId +
+                ", shard=" + shard +
+                '}';
     }
-
 }

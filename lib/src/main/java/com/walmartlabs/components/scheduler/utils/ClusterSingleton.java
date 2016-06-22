@@ -3,7 +3,7 @@ package com.walmartlabs.components.scheduler.utils;
 import com.hazelcast.core.ILock;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
-import com.walmartlabs.components.scheduler.services.Service;
+import com.walmartlabs.components.scheduler.core.Service;
 import org.apache.log4j.Logger;
 
 import java.util.Set;

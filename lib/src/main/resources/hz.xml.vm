@@ -54,7 +54,7 @@ $parm#end
     <services enable-defaults="true"/>
     <serialization>
         <data-serializable-factories>
-            <data-serializable-factory factory-id="1">com.walmartlabs.components.scheduler.core.hz.ObjectFactory</data-serializable-factory>
+            <data-serializable-factory factory-id="1">com.walmartlabs.components.scheduler.core.ObjectFactory</data-serializable-factory>
         </data-serializable-factories>
     </serialization>
 </hazelcast>
