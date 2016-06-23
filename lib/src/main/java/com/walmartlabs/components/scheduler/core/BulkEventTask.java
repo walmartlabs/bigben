@@ -47,15 +47,13 @@ public class BulkEventTask implements Runnable, Callable<Map<Long, BucketStatus>
 
     @Override
     public Map<Long, BucketStatus> call() throws Exception {
-        final Map<Long, BucketStatus> status;
         try {
-            status = execute().get();
+            return execute().get();
         } catch (Exception e) {
             final Throwable cause = getRootCause(e);
             L.error("error in processing events", cause);
             throw new RuntimeException(cause);
         }
-        return status;
     }
 
     private ListenableFuture<Map<Long, BucketStatus>> execute() {
@@ -75,10 +73,11 @@ public class BulkEventTask implements Runnable, Callable<Map<Long, BucketStatus>
                 return Futures.<BucketStatus>immediateFailedFuture(ex);
             }
         }).collect(toList())), (Function<List<BucketStatus>, Map<Long, BucketStatus>>) l -> {
-            L.info(format("%s, shards done, input: %s, output: %s", buckets, entries, l));
             final AtomicInteger index = new AtomicInteger();
-            return entries.stream().collect(toMap((java.util.function.Function<Entry<Long, Set<Integer>>, Long>)
+            final Map<Long, BucketStatus> result = entries.stream().collect(toMap((java.util.function.Function<Entry<Long, Set<Integer>>, Long>)
                     Entry::getKey, e -> l.get(index.getAndIncrement())));
+            L.info(format("%s, shards processed: %s", buckets, result));
+            return result;
         });
 
     }

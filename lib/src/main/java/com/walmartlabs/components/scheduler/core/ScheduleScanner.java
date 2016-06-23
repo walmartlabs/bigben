@@ -1,6 +1,8 @@
 package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.base.Function;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.Member;
@@ -24,7 +26,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.collect.Iterators.cycle;
 import static com.google.common.collect.Lists.newArrayList;
-import static com.google.common.collect.Lists.partition;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
@@ -145,7 +146,7 @@ public class ScheduleScanner implements Service {
                 final IExecutorService executorService = hz.hz().getExecutorService(EVENT_SCHEDULER);
                 final Set<Member> members = hz.hz().getCluster().getMembers();
                 final Iterator<Member> iterator = cycle(members);
-                return transform(successfulAsList(partition(newArrayList(shards.entrySet()), members.size() != 1 ? shards.size() / members.size() : 1).stream().
+                return transform(allAsList(partition(newArrayList(shards.entrySet()), members.size()).stream().
                                 map(l -> l.stream().collect(toMap(Entry::getKey, Entry::getValue))).
                                 collect(toList()).stream().map(BulkEventTask::new).collect(toList()).stream().map(e ->
                                 taskExecutor.async(() -> () -> ListenableFutureAdapter.<Map<Long, BucketStatus>>adapt(
@@ -162,6 +163,19 @@ public class ScheduleScanner implements Service {
         } catch (Exception e) {
             L.error(format("%s, schedule scan failed", bucket), getRootCause(e));
         }
+    }
+
+    private static <T> List<List<T>> partition(List<T> shards, int splits) {
+        final Multimap<Integer, T> map = HashMultimap.create();
+        int counter = 0;
+        for (T entry : shards) {
+            map.put(counter++ % splits, entry);
+        }
+        final List<List<T>> result = new ArrayList<>(splits);
+        for (Integer index : map.keySet()) {
+            result.add(newArrayList(map.get(index)));
+        }
+        return result;
     }
 
     private final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(Exception.class));
