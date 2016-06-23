@@ -20,6 +20,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.collect.Iterators.cycle;
 import static com.google.common.collect.Lists.newArrayList;
@@ -30,7 +31,6 @@ import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.PROCESSED;
-import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.UN_PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;
@@ -47,6 +47,7 @@ import static java.util.stream.Collectors.toMap;
 public class ScheduleScanner implements Service {
 
     static final String BUCKET_CACHE = "bucketCache";
+    public static final String EVENT_SCHEDULER = "event_scheduler";
 
     static {
         System.setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.model");
@@ -61,6 +62,8 @@ public class ScheduleScanner implements Service {
 
     @Autowired
     private Hz hz;
+
+    private final AtomicReference<Boolean> isShutdown = new AtomicReference<>(false);
 
     private static final ScheduledExecutorService EXECUTOR_SERVICE =
             new ScheduledThreadPoolExecutor(1, r -> new Thread(r, "EventSchedulerThread"));
@@ -100,6 +103,9 @@ public class ScheduleScanner implements Service {
     private final Map<Long, BucketStatus> processedBuckets = new ConcurrentHashMap<>();
 
     private void scan() {
+        if (isShutdown.get()) {
+            L.info("system is shutdown, no more scans will be done");
+        }
         final Integer bucketWidth = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now(UTC);
         final long currentBucketId = bucketize(now.toInstant().toEpochMilli(), bucketWidth);
@@ -135,7 +141,7 @@ public class ScheduleScanner implements Service {
                 final int submitBackoff = PROPS.getInteger("event.submit.backoff.multiplier", 1);
 
                 L.debug(format("%s, submitting the schedules for execution: %s", bucket, shards));
-                final IExecutorService executorService = hz.hz().getExecutorService("default");
+                final IExecutorService executorService = hz.hz().getExecutorService(EVENT_SCHEDULER);
                 final Set<Member> members = hz.hz().getCluster().getMembers();
                 final Iterator<Member> iterator = cycle(members);
                 return transform(successfulAsList(partition(newArrayList(shards.entrySet()), members.size() != 1 ? shards.size() / members.size() : 1).stream().
@@ -187,5 +193,13 @@ public class ScheduleScanner implements Service {
                                     return newHashSet(shardIndexes);
                                 }
                         )));
+    }
+
+    public void shutdown() {
+        isShutdown.set(true);
+    }
+
+    public boolean isShutdown() {
+        return isShutdown.get();
     }
 }

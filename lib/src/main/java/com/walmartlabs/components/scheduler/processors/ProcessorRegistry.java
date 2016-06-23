@@ -1,6 +1,7 @@
 package com.walmartlabs.components.scheduler.processors;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.google.common.base.Function;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -12,6 +13,7 @@ import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePubli
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
 import com.walmartlabs.components.scheduler.core.EventProcessor;
 import com.walmartlabs.components.scheduler.model.Event;
+import com.walmartlabs.components.scheduler.model.EventResponse;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -24,11 +26,13 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static com.google.common.util.concurrent.SettableFuture.create;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmart.gmp.ingestion.platform.framework.utils.ConfigParser.parse;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.services.common.util.JsonUtil.convertToString;
+import static com.walmartlabs.components.scheduler.model.EventResponse.toResponse;
 import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -41,7 +45,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
 
     private static final Logger L = Logger.getLogger(ProcessorRegistry.class);
 
-    final Map<String, ProcessorConfig> configs;
+    private final Map<String, ProcessorConfig> configs;
 
     public ProcessorRegistry(String configPath) throws Exception {
         this(configPath, false);
@@ -66,8 +70,6 @@ public class ProcessorRegistry implements EventProcessor<Event> {
     public ListenableFuture<Event> process(Event event) {
         try {
             event.setProcessedAt(now(UTC).toInstant().toEpochMilli());
-            event.id().setBucketId(0);
-            event.id().setShard(0);
             return catchingAsync(taskExecutor.async(() -> {
                         return getOrCreate(event.getTenant()).process(event);
                     }, "event-processor",
@@ -93,16 +95,16 @@ public class ProcessorRegistry implements EventProcessor<Event> {
             switch (processorConfig.getType()) {
                 case KAFKA:
                     return producerCache.get(tenant, () -> {
-                        final MessagePublisher<String, Event, Event> publisher =
+                        final MessagePublisher<String, EventResponse, EventResponse> publisher =
                                 new PublisherFactory(processorConfig.getProperties().get("topic").toString(), processorConfig.getConfig()).create();
-                        return e -> publisher.publish(e.id().getEventId(), e);
+                        return e -> transform(publisher.publish(e.id().getEventId(), toResponse(e)), (Function<EventResponse, Event>) $ -> e);
                     });
                 case HTTP:
                     producerCache.get(tenant, () -> e -> {
                         try {
                             final com.ning.http.client.ListenableFuture<Response> f = ASYNC_HTTP_CLIENT.
-                                    preparePost(processorConfig.getProperties().get("url").toString()).setBody(convertToString(e)).execute();
-                            final SettableFuture<Event> future = SettableFuture.create();
+                                    preparePost(processorConfig.getProperties().get("url").toString()).setBody(convertToString(toResponse(e))).execute();
+                            final SettableFuture<Event> future = create();
                             f.addListener(() -> {
                                 try {
                                     final Response response = f.get();
@@ -143,5 +145,9 @@ public class ProcessorRegistry implements EventProcessor<Event> {
         } catch (ExecutionException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void register(ProcessorConfig config) {
+
     }
 }

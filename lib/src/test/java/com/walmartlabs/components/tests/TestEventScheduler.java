@@ -21,7 +21,6 @@ import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static java.lang.System.currentTimeMillis;
@@ -29,6 +28,7 @@ import static java.time.LocalDateTime.now;
 import static java.time.ZoneId.systemDefault;
 import static java.time.ZoneOffset.UTC;
 import static java.util.Collections.nCopies;
+import static java.util.stream.Collectors.toList;
 
 /**
  * Created by smalik3 on 3/9/16
@@ -83,7 +83,7 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
             entity.setEventKey(EventKey.of(0, 0, nextMinute.plusSeconds(random.nextInt(60)).toInstant().toEpochMilli(), "EId#" + i));
             System.out.println("event: " + entity.id());
             events.put(entity.id().toString(), true);
-            eventReceiver.addEvent(entity);
+            eventReceiver.addEvent(null);
         }
         System.out.println("all events added");
         Thread.sleep(1000000);
@@ -101,9 +101,9 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
             final List<Callable<Object>> tasks = nCopies(count, 0L).stream().map($ -> (Callable<Object>) () -> {
                 final EventDO entity = new EventDO();
                 entity.setEventKey(EventKey.of(0, 0, now + random.nextInt(3600) * 1000, "EId#" + i.get() + random.nextInt(1_000_000)));
-                eventReceiver.addEvent(entity);
+                eventReceiver.addEvent(null);
                 return null;
-            }).collect(Collectors.toList());
+            }).collect(toList());
             //executorService.invokeAll(tasks);
             try {
                 tasks.get(0).call();

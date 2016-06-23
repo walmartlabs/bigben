@@ -5,7 +5,7 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 /**
  * Created by smalik3 on 3/29/16
  */
-public interface EventLookup extends Entity<String> {
+public interface EventLookup extends Entity<EventLookupDO.EventLookupKey> {
 
     long getBucketId();
 

@@ -23,4 +23,12 @@ public interface Event extends Entity<EventKey> {
     void setProcessedAt(long millis);
 
     long getProcessedAt();
+
+    void setXrefId(String xrefId);
+
+    String getXrefId();
+
+    void setPayload(String payload);
+
+    String getPayload();
 }

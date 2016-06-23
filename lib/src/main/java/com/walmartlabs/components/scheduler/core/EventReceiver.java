@@ -10,11 +10,11 @@ import com.walmart.gmp.ingestion.platform.framework.core.AbstractIDSGMPEntryProc
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
-import com.walmartlabs.components.scheduler.model.Bucket;
-import com.walmartlabs.components.scheduler.model.BucketDO;
-import com.walmartlabs.components.scheduler.model.Event;
+import com.walmart.platform.kernel.exception.error.Error;
+import com.walmart.services.common.util.UUIDUtil;
+import com.walmartlabs.components.scheduler.model.*;
 import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
-import com.walmartlabs.components.scheduler.model.EventLookup;
+import com.walmartlabs.components.scheduler.model.EventLookupDO.EventLookupKey;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -27,9 +27,12 @@ import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
+import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getErrorAtServer;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.UN_PROCESSED;
+import static com.walmartlabs.components.scheduler.model.EventResponse.fromRequest;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static java.lang.String.format;
+import static java.util.UUID.randomUUID;
 
 /**
  * Created by smalik3 on 3/23/16
@@ -45,31 +48,38 @@ public class EventReceiver {
     private Hz hz;
 
     @Autowired
-    private DataManager<String, EventLookup> lookupDataManager;
+    private DataManager<EventLookupKey, EventLookup> lookupDataManager;
 
     static final CountIncrementer CACHED_PROCESSOR = new CountIncrementer();
 
-    public ListenableFuture<EventKey> addEvent(Event entity) {
+    public ListenableFuture<EventResponse> addEvent(EventRequest entity) {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        final long bucketId = bucketize(entity.id().getEventTime(), scanInterval);
-        entity.id().setBucketId(bucketId);
-        L.debug(format("%s, event-time: %d -> bucket-id: %d", entity.id(), entity.id().getEventTime(), bucketId));
-        L.debug(format("%s, add-event: bucket-table: insert, %s", entity.id(), entity));
+        final long bucketId = bucketize(entity.getUtc(), scanInterval);
+        final EventKey eventKey = EventKey.of(bucketId, 0, entity.getUtc(), UUIDUtil.toString(randomUUID()));
+        L.debug(format("%s, event-time: %d -> bucket-id: %d", eventKey, eventKey.getEventTime(), bucketId));
+        L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, entity));
         final IMap<Long, Bucket> cache = hz.hz().getMap(ScheduleScanner.BUCKET_CACHE);
-        return transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, EventKey>) count -> {
-            final int shardIndex = (int) (count / PROPS.getInteger("event.shard.size", 1000));
-            final EventKey eventKey = EventKey.of(bucketId, shardIndex, entity.id().getEventTime(), entity.id().getEventId());
+        return catching(transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, EventResponse>) count -> {
+            eventKey.setShard((int) (count / PROPS.getInteger("event.shard.size", 1000)));
             L.debug(format("%s, add-event: event-table: insert", eventKey));
             final Event e = entity(Event.class, eventKey);
             e.setStatus(UN_PROCESSED.name());
+            e.setTenant(entity.getTenant());
+            e.setXrefId(entity.getId());
+            e.setPayload(entity.getPayload());
             L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
-            final EventLookup lookupEntity = entity(EventLookup.class, eventKey.getEventId());
+            final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(entity.getId() == null ? eventKey.getEventId() : entity.getId(), eventKey.getEventId()));
             lookupEntity.setBucketId(eventKey.getBucketId());
             lookupEntity.setShard(eventKey.getShard());
-            return transform(allAsList(dataManager.insertAsync(e), lookupDataManager.insertAsync(lookupEntity)), (Function<List<Entity<?>>, EventKey>) $ -> {
+            return transform(allAsList(dataManager.insertAsync(e), lookupDataManager.insertAsync(lookupEntity)), (Function<List<Entity<?>>, EventResponse>) $ -> {
                 L.debug(format("%s, add-event: successful", eventKey));
-                return eventKey;
+                return fromRequest(entity);
             });
+        }), Exception.class, ex -> {
+            final List<Error> errors = getErrorAtServer(ex);
+            final EventResponse eventResponse = fromRequest(entity);
+            eventResponse.setErrors(errors);
+            return eventResponse;
         });
     }
 

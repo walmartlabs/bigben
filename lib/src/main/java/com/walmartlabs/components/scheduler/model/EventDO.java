@@ -26,6 +26,12 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
     @Column
     private String tenant;
 
+    @Column(name = "xref_id")
+    private String xrefId;
+
+    @Column
+    private String payload;
+
     public String getStatus() {
         return status;
     }
@@ -76,6 +82,26 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
 
     public void setTenant(String tenant) {
         this.tenant = tenant;
+    }
+
+    @Override
+    public String getXrefId() {
+        return xrefId;
+    }
+
+    @Override
+    public void setXrefId(String xrefId) {
+        this.xrefId = xrefId;
+    }
+
+    @Override
+    public String getPayload() {
+        return payload;
+    }
+
+    @Override
+    public void setPayload(String payload) {
+        this.payload = payload;
     }
 
     private long millis;
@@ -161,6 +187,9 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
                 ", status='" + status + '\'' +
                 ", error='" + error + '\'' +
                 ", tenant='" + tenant + '\'' +
+                ", xrefId='" + xrefId + '\'' +
+                ", payload='" + payload + '\'' +
+                ", millis=" + millis +
                 '}';
     }
 }

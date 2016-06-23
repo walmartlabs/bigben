@@ -2,9 +2,7 @@ package com.walmartlabs.components.scheduler.model;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
-import info.archinnov.achilles.annotations.Column;
-import info.archinnov.achilles.annotations.Entity;
-import info.archinnov.achilles.annotations.Id;
+import info.archinnov.achilles.annotations.*;
 
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 
@@ -12,12 +10,11 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersi
  * Created by smalik3 on 3/29/16
  */
 @Entity(table = "event_lookup")
-@KeyMapping(keyClass = String.class, entityClass = EventLookup.class, version = V1)
-public class EventLookupDO implements EventLookup, MutableEntity<String> {
+@KeyMapping(keyClass = EventLookupDO.EventLookupKey.class, entityClass = EventLookup.class, version = V1)
+public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.EventLookupKey> {
 
-    @Id(name = "event_id")
-    @Column(name = "event_id")
-    private String id;
+    @EmbeddedId
+    private EventLookupKey id;
 
     @Column(name = "bucket_id")
     private long bucketId;
@@ -44,17 +41,17 @@ public class EventLookupDO implements EventLookup, MutableEntity<String> {
     }
 
     @Override
-    public void id(String s) {
+    public void id(EventLookupKey s) {
         this.id = s;
     }
 
     @Override
     public void key(Object key) {
-        this.id = key.toString();
+        this.id = (EventLookupKey) key;
     }
 
     @Override
-    public String id() {
+    public EventLookupKey id() {
         return id;
     }
 
@@ -63,12 +60,54 @@ public class EventLookupDO implements EventLookup, MutableEntity<String> {
         return id();
     }
 
-    public String getId() {
+    public EventLookupKey getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(EventLookupKey id) {
         this.id = id;
+    }
+
+    public static class EventLookupKey {
+        @PartitionKey
+        @Column(name = "xref_id")
+        private String xrefId;
+
+        @ClusteringColumn
+        @Column(name = "event_id")
+        private String eventId;
+
+        public String getXrefId() {
+            return xrefId;
+        }
+
+        public void setXrefId(String xrefId) {
+            this.xrefId = xrefId;
+        }
+
+        public String getEventId() {
+            return eventId;
+        }
+
+        public void setEventId(String eventId) {
+            this.eventId = eventId;
+        }
+
+        public EventLookupKey(String xrefId, String eventId) {
+            this.xrefId = xrefId;
+            this.eventId = eventId;
+        }
+
+        public EventLookupKey() {
+        }
+
+        @Override
+        public String toString() {
+            return "EventLookupKey{" +
+                    "xrefId='" + xrefId + '\'' +
+                    ", eventId='" + eventId + '\'' +
+                    '}';
+        }
     }
 
     @Override

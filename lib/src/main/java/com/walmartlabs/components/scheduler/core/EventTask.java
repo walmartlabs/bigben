@@ -100,17 +100,20 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
                 withPartitionComponents(bucketId, shardIndex).fromClusterings(eventTime, eventId).withExclusiveBounds().limit(fetchSize).get(), "load-shard-slice#" + taskId);
         return transformAsync(f, l -> {
             if (l.isEmpty()) {
-                L.debug(format("%s, no more events to process: shardIndex %d, fetchSize %d, from eventTime: %d", executionKey, shardIndex, fetchSize, eventTime));
+                L.debug(format("%s, no more events to process: shardIndex %d, fetchSize %d, (eventTime, eventId): (%d,%s)", executionKey, shardIndex, fetchSize, eventTime, eventId));
                 return immediateFuture(l);
             }
             return transformAsync(
                     async(() -> successfulAsList(l.stream().filter(e ->
-                            !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
+                            e != null && !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
                             collect(toList())), "process-events#" + taskId),
                     $ -> {
                         if (l.size() == fetchSize)
                             return loadAndProcess(shardIndex, fetchSize, am, l.get(l.size() - 1).id().getEventTime(), l.get(l.size() - 1).id().getEventId());
-                        else return immediateFuture(l);
+                        else {
+                            L.debug(format("%s, no more events to process: shardIndex %d, fetchSize %d, (eventTime, eventId): (%d,%s)", executionKey, shardIndex, fetchSize, eventTime, eventId));
+                            return immediateFuture(l);
+                        }
                     });
         });
     }
