@@ -61,7 +61,7 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
 
     private static final Map<String, Boolean> events = new ConcurrentHashMap<>();
 
-    @Test
+    @Test(enabled = false)
     public void testEventScheduler() throws Exception {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now();
