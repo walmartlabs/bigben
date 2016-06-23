@@ -65,11 +65,12 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
     public void testEventScheduler() throws Exception {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now();
-        final long from = bucketize(now.plusMinutes(2).toInstant().toEpochMilli(), scanInterval);
-        final long to = bucketize(now.plusMinutes(3).toInstant().toEpochMilli(), scanInterval);
+        final int delay = 4;
+        final long from = bucketize(now.plusMinutes(delay).toInstant().toEpochMilli(), scanInterval);
+        final long to = bucketize(now.plusMinutes(delay + 1).toInstant().toEpochMilli(), scanInterval);
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
         final String t2 = ofInstant(ofEpochMilli(to), UTC).toString();
-        System.out.println(eventService.generateEvents(t1, t2, 1, "0"));
+        System.out.println(eventService.generateEvents(t1, t2, 1000000, "0"));
         new CountDownLatch(1).await();
     }
 }
