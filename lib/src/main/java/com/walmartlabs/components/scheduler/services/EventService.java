@@ -4,9 +4,13 @@ import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Futures;
 import com.hazelcast.core.Member;
+import com.hazelcast.nio.ObjectDataInput;
+import com.hazelcast.nio.ObjectDataOutput;
+import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.core.Props;
 import com.walmartlabs.components.scheduler.core.EventReceiver;
+import com.walmartlabs.components.scheduler.core.ObjectFactory;
 import com.walmartlabs.components.scheduler.core.ScheduleScanner;
 import com.walmartlabs.components.scheduler.model.EventRequest;
 import com.walmartlabs.components.scheduler.model.EventResponse;
@@ -14,11 +18,13 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.ws.rs.*;
+import java.io.IOException;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -27,6 +33,7 @@ import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
+import static com.walmartlabs.components.scheduler.core.ObjectFactory.SCHEDULER_FACTORY_ID;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.EVENT_SCHEDULER;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static java.time.temporal.ChronoUnit.MILLIS;
@@ -92,15 +99,45 @@ public class EventService {
         return map;
     }
 
-    public Map<String, String> shutdown() {
-        final Map<Member, Future<Boolean>> results = hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(() -> {
+    public static class ShutdownTask implements IdentifiedDataSerializable, Callable<Boolean> {
+
+        @Override
+        public int getFactoryId() {
+            return SCHEDULER_FACTORY_ID;
+        }
+
+        @Override
+        public int getId() {
+            return ObjectFactory.OBJECT_ID.SHUTDOWN_TASK.ordinal();
+        }
+
+        @Override
+        public void writeData(ObjectDataOutput out) throws IOException {
+
+        }
+
+        @Override
+        public void readData(ObjectDataInput in) throws IOException {
+
+        }
+
+        @Override
+        public Boolean call() throws Exception {
             if (spring() != null) {
                 spring().getBean(ScheduleScanner.class).shutdown();
                 return true;
             } else {
                 return false;
             }
-        });
+        }
+    }
+
+    public static final ShutdownTask SHUTDOWN_TASK = new ShutdownTask();
+
+    @POST
+    @Path("/shutdown")
+    public Map<String, String> shutdown() {
+        final Map<Member, Future<Boolean>> results = hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(SHUTDOWN_TASK);
         return results.entrySet().stream().map(e -> {
             try {
                 return of(e.getKey().getAddress().getInetAddress().toString(), String.valueOf(e.getValue().get()));

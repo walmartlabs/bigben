@@ -104,7 +104,8 @@ public class ScheduleScanner implements Service {
 
     private void scan() {
         if (isShutdown.get()) {
-            L.info("system is shutdown, no more scans will be done");
+            L.info("system is shutdown, no more schedules will be processed");
+            return;
         }
         final Integer bucketWidth = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now(UTC);
