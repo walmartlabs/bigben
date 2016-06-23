@@ -76,20 +76,21 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
     public ListenableFuture<BucketStatus> call() throws Exception {
         L.debug(format("%s, processing shards", executionKey));
         final int fetchSize = PROPS.getInteger("events.fetch.size", 400);
-        return transformAsync(successfulAsList(shards.stream().map($ ->
-                        loadAndProcess($, fetchSize, getAsyncManager(), -1L, "")).collect(toList())),
-                ll -> {
-                    final List<EventKey> l = newArrayList(concat(ll)).stream().filter(e -> !PROCESSED.name().equals(e.getStatus())).
-                            map(EventDO::getEventKey).collect(toList());
-                    final Bucket entity = entity(Bucket.class, bucketId);
-                    if (!l.isEmpty()) {
-                        entity.setFailedEvents(l);
-                        entity.setStatus(ERROR.name());
-                    } else {
-                        entity.setStatus(PROCESSED.name());
-                    }
-                    return transform(bucketDM.saveAsync(entity), (Function<Bucket, BucketStatus>) $ -> valueOf(entity.getStatus()));
-                });
+        final ListenableFuture<List<List<EventDO>>> load = successfulAsList(shards.stream().map($ ->
+                loadAndProcess($, fetchSize, getAsyncManager(), -1L, "")).collect(toList()));
+        return transformAsync(load, ll -> {
+            final List<EventDO> eventDOs = newArrayList(concat(ll));
+            final List<EventKey> l = eventDOs.stream().filter(e -> !PROCESSED.name().equals(e.getStatus())).
+                    map(EventDO::getEventKey).collect(toList());
+            final Bucket entity = entity(Bucket.class, bucketId);
+            if (!l.isEmpty()) {
+                entity.setFailedEvents(l);
+                entity.setStatus(ERROR.name());
+            } else {
+                entity.setStatus(PROCESSED.name());
+            }
+            return transform(bucketDM.saveAsync(entity), (Function<Bucket, BucketStatus>) $ -> valueOf(entity.getStatus()));
+        });
     }
 
     private ListenableFuture<List<EventDO>> loadAndProcess(int shardIndex, int fetchSize, AsyncManager am, long eventTime, String eventId) {
