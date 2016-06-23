@@ -3,7 +3,7 @@
   <groupId>com.walmartlabs.components</groupId>
   <artifactId>dis-evt-sch</artifactId>
   <packaging>pom</packaging>
-  <version>0.1</version>
+  <version>0.2-SNAPSHOT</version>
   <modules>
     <module>lib</module>
     <module>app</module>
@@ -36,7 +36,7 @@
       <dependency>
         <groupId>com.walmartlabs.components</groupId>
         <artifactId>event-scheduler-lib</artifactId>
-        <version>0.1</version>
+        <version>0.2-SNAPSHOT</version>
       </dependency>
       <dependency>
         <groupId>org.apache.ignite</groupId>
@@ -202,8 +202,4 @@
       </snapshots>
     </pluginRepository>
   </pluginRepositories>
-
-  <scm>
-    <tag>dis-evt-sch-0.1</tag>
-  </scm>
 </project>
