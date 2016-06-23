@@ -126,7 +126,8 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
             return transformAsync(process(e), $ -> save(e));
         } else {
             L.debug(format("%s, scheduling event '%s' after delay %d, at %s", executionKey, e.id(), delay, new Date(e.id().getEventTime())));
-            return transformAsync(dereference(EXECUTOR.schedule(() -> process(e), delay, MILLISECONDS)), $ -> save(e));
+            final ListenableFuture<EventDO> process = dereference(EXECUTOR.schedule(() -> process(e), delay, MILLISECONDS));
+            return transformAsync(process, $ -> save(e));
         }
     }
 
