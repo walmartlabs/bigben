@@ -104,18 +104,17 @@ public class EventTask implements Callable<ListenableFuture<BucketStatus>> {
                 L.debug(format("%s, no more events to process: shardIndex %d, fetchSize %d, (eventTime, eventId): (%d,%s)", executionKey, shardIndex, fetchSize, eventTime, eventId));
                 return immediateFuture(l);
             }
-            return transformAsync(
-                    async(() -> successfulAsList(l.stream().filter(e ->
-                            e != null && !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
-                            collect(toList())), "process-events#" + taskId),
-                    $ -> {
-                        if (l.size() == fetchSize)
-                            return loadAndProcess(shardIndex, fetchSize, am, l.get(l.size() - 1).id().getEventTime(), l.get(l.size() - 1).id().getEventId());
-                        else {
-                            L.debug(format("%s, no more events to process: shardIndex %d, fetchSize %d, (eventTime, eventId): (%d,%s)", executionKey, shardIndex, fetchSize, eventTime, eventId));
-                            return immediateFuture(l);
-                        }
-                    });
+            final ListenableFuture<List<EventDO>> schedule = async(() -> successfulAsList(l.stream().filter(e ->
+                    e != null && !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
+                    collect(toList())), "process-events#" + taskId);
+            return transformAsync(schedule, $ -> {
+                if (l.size() == fetchSize)
+                    return loadAndProcess(shardIndex, fetchSize, am, l.get(l.size() - 1).id().getEventTime(), l.get(l.size() - 1).id().getEventId());
+                else {
+                    L.debug(format("%s, no more events to process: shardIndex %d, fetchSize %d, (eventTime, eventId): (%d,%s)", executionKey, shardIndex, fetchSize, eventTime, eventId));
+                    return immediateFuture(l);
+                }
+            });
         });
     }
 
