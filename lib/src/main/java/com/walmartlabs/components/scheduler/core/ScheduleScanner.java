@@ -133,8 +133,7 @@ public class ScheduleScanner implements Service {
             });
             L.debug(format("%s, buckets to be scheduled: %s ", currentBucketId, bucketIds));
             L.debug(format("%s, calculating scan for buckets: %s", bucket, bucketIds.stream().sorted().map(b -> utc(b).toString()).collect(toList())));
-            final ListenableFuture<Multimap<Integer, Pair<Long, Integer>>> dist = calculateTaskDistribution(bucket, bucketIds);
-            transformAsync(dist, distribution -> {
+            transformAsync(calculateTaskDistribution(bucket, bucketIds), distribution -> {
                 if (distribution.isEmpty()) {
                     L.debug(format("%s, nothing to schedule for bucketIds: %s", bucket, bucketIds));
                     return NO_OP;
@@ -150,10 +149,11 @@ public class ScheduleScanner implements Service {
                 final Iterator<Member> iterator = cycle(hz.hz().getCluster().getMembers());
                 final Map<Integer, Collection<Pair<Long, Integer>>> map = distribution.asMap();
 
-                return transformAsync(successfulAsList(map.entrySet().stream().map(e -> taskExecutor.async(() -> () ->
+                final ListenableFuture<List<List<ShardStatus>>> f = successfulAsList(map.entrySet().stream().map(e -> taskExecutor.async(() -> () ->
                                 transform(ListenableFutureAdapter.adapt(executorService.submitToMember(
                                         new BulkShardTask(e.getValue()), iterator.next())), ShardStatusList::getList),
-                        "event-submit", submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList())), ll -> {
+                        "event-submit", submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList()));
+                return transformAsync(f, ll -> {
                     final Map<Long, BucketStatus> m = new HashMap<>();
                     newArrayList(concat(ll)).forEach(s -> {
                         final long bucketId = s.getBucketId();
