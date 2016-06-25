@@ -1,7 +1,6 @@
 package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.base.Function;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.IExecutorService;
@@ -12,6 +11,7 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmartlabs.components.scheduler.model.Bucket;
 import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -24,13 +24,17 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.google.common.collect.HashMultimap.create;
+import static com.google.common.collect.Iterables.concat;
 import static com.google.common.collect.Iterators.cycle;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
+import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.ERROR;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
@@ -40,7 +44,7 @@ import static java.time.ZonedDateTime.now;
 import static java.time.ZonedDateTime.ofInstant;
 import static java.util.concurrent.TimeUnit.*;
 import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toMap;
+import static org.apache.commons.lang3.tuple.Pair.of;
 
 /**
  * Created by smalik3 on 3/8/16
@@ -128,10 +132,9 @@ public class ScheduleScanner implements Service {
                     bucketIds.remove(bId);
             });
             L.debug(format("%s, buckets to be scheduled: %s ", currentBucketId, bucketIds));
-
             L.debug(format("%s, calculating scan for buckets: %s", bucket, bucketIds.stream().sorted().map(b -> utc(b).toString()).collect(toList())));
-            transformAsync(calculateScheduleDistribution(bucket, bucketIds), shards -> {
-                if (shards.isEmpty()) {
+            transformAsync(calculateTaskDistribution(bucket, bucketIds), distribution -> {
+                if (distribution.isEmpty()) {
                     L.debug(format("%s, nothing to schedule for bucketIds: %s", bucket, bucketIds));
                     return NO_OP;
                 }
@@ -142,72 +145,78 @@ public class ScheduleScanner implements Service {
                 final int submitInitialDelay = PROPS.getInteger("event.submit.initial.delay", 1);
                 final int submitBackoff = PROPS.getInteger("event.submit.backoff.multiplier", 1);
 
-                L.debug(format("%s, submitting the schedules for execution: %s", bucket, shards));
                 final IExecutorService executorService = hz.hz().getExecutorService(EVENT_SCHEDULER);
-                final Set<Member> members = hz.hz().getCluster().getMembers();
-                final Iterator<Member> iterator = cycle(members);
-                return transform(allAsList(partition(newArrayList(shards.entrySet()), members.size()).stream().
-                                map(l -> l.stream().collect(toMap(Entry::getKey, Entry::getValue))).
-                                collect(toList()).stream().map(BulkEventTask::new).collect(toList()).stream().map(e ->
-                                taskExecutor.async(() -> () -> ListenableFutureAdapter.<Map<Long, BucketStatus>>adapt(
-                                        executorService.submitToMember(e, iterator.next())), "event-submit",
-                                        submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList())),
-                        (Function<List<Map<Long, BucketStatus>>, Map<Long, BucketStatus>>) l -> {
-                            L.info(format("%s, shards processed successfully for processing: %s", bucket, shards));
-                            return l.stream().reduce(processedBuckets, (a, m) -> {
-                                a.putAll(m);
-                                return a;
-                            });
-                        });
+                final Iterator<Member> iterator = cycle(hz.hz().getCluster().getMembers());
+                final Map<Integer, Collection<Pair<Long, Integer>>> map = distribution.asMap();
+
+                return transformAsync(successfulAsList(map.entrySet().stream().map(e -> taskExecutor.async(() -> () ->
+                                transform(ListenableFutureAdapter.adapt(executorService.submitToMember(
+                                        new BulkShardTask(e.getValue()), iterator.next())), ShardStatusList::getList),
+                        "event-submit", submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList())), ll -> {
+                    final Map<Long, BucketStatus> m = new HashMap<>();
+                    newArrayList(concat(ll)).forEach(s -> {
+                        final long bucketId = s.getBucketId();
+                        if (!m.containsKey(bucketId))
+                            m.put(bucketId, s.getStatus());
+                        else if (m.get(bucketId) != ERROR) {
+                            m.put(bucketId, s.getStatus());
+                        }
+                    });
+                    processedBuckets.putAll(m);
+                    return transform(successfulAsList(m.entrySet().stream().map(e -> {
+                        final Bucket b = entity(Bucket.class, e.getKey());
+                        b.setStatus(e.getValue().name());
+                        return transform(dataManager.saveAsync(b), (Function<Bucket, Bucket>) DataManager::raw);
+                    }).collect(toList())), (Function<List<Bucket>, List<Bucket>>) l1 -> {
+                        L.info(format("%s, buckets processed: " + l1, bucket));
+                        return l1;
+                    });
+                });
             });
         } catch (Exception e) {
             L.error(format("%s, schedule scan failed", bucket), getRootCause(e));
         }
     }
 
-    private static <T> List<List<T>> partition(List<T> shards, int splits) {
-        final Multimap<Integer, T> map = HashMultimap.create();
-        int counter = 0;
-        for (T entry : shards) {
-            map.put(counter++ % splits, entry);
-        }
-        final List<List<T>> result = new ArrayList<>(splits);
-        for (Integer index : map.keySet()) {
-            result.add(newArrayList(map.get(index)));
-        }
-        return result;
-    }
-
     private final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(Exception.class));
-    private static final ListenableFuture<Map<Long, BucketStatus>> NO_OP = immediateFuture(new HashMap<>());
+    private static final ListenableFuture<List<Bucket>> NO_OP = immediateFuture(new ArrayList<>());
 
-    private ListenableFuture<Map<Long, Set<Integer>>> calculateScheduleDistribution(String calcId, final Set<Long> bucketIds) {
+    private ListenableFuture<Multimap<Integer, Pair<Long, Integer>>> calculateTaskDistribution(String calcId, final Set<Long> bucketIds) {
         L.debug(format("%s, checking if following bucketIds have events: %s", calcId, bucketIds));
-        return transform(successfulAsList(bucketIds.stream().map(bId -> transform(dataManager.getAsync(bId, fullSelector(bId)), (Function<Bucket, Bucket>) b -> {
+        return transform(successfulAsList(bucketIds.stream().map(bId -> transform(dataManager.getAsync(bId, fullSelector(bId)),
+                (Function<Bucket, Bucket>) b -> {
                     if (b == null || b.getCount() == 0 || PROCESSED.name().equals(b.getStatus())) {
                         processedBuckets.put(bId, b == null || b.getStatus() == null ? PROCESSED : BucketStatus.valueOf(b.getStatus()));
                     }
                     return b;
                 })).collect(toList())),
-                (Function<List<Bucket>, Map<Long, Set<Integer>>>) l ->
-                        l.stream().filter(b -> b != null && b.getCount() > 0 && !PROCESSED.name().equals(b.getStatus())).collect(toMap(Bucket::id, b -> {
-                                    L.debug(format("%s, scheduling bucket: %d", calcId, b.id()));
-                                    bucketIds.remove(b.id());
-                                    L.debug(format("%s, calculating schedule distribution for bucketId: %d", calcId, b.id()));
-                                    int shardSize = PROPS.getInteger("event.shard.size", 1000);
-                                    final int numShards = (int) b.getCount() / shardSize + 1;
-                                    L.debug(format("%s, bucketId: %d, numShards: %d, count: %d, shardSize: %d", calcId, b.id(), numShards, b.getCount(), shardSize));
-                                    L.debug(format("%s, submitting the schedules over the grid", calcId));
-                                    final List<Integer> shardIndexes = new ArrayList<>();
-                                    for (int i = 0; i < numShards; i++) {
-                                        shardIndexes.add(i);
-                                    }
-                                    final int gridSize = hz.hz().getCluster().getMembers().size();
-                                    final List<List<Integer>> partitions = partition(shardIndexes, numShards < gridSize ? 1 : numShards / gridSize);
-                                    L.debug(format("%s, distribution profile: bucketId: %d, nodes: %d, partitions: %s", calcId, b.id(), gridSize, partitions));
-                                    return newHashSet(shardIndexes);
-                                }
-                        )));
+                (Function<List<Bucket>, Multimap<Integer, Pair<Long, Integer>>>) l -> {
+                    final List<Bucket> lb = l.stream().
+                            filter(b -> b != null && b.getCount() > 0 && !PROCESSED.name().equals(b.getStatus())).collect(toList());
+                    Multimap<Long, Integer> map = create();
+                    lb.forEach(b -> {
+                        L.debug(format("%s, scheduling bucket: %d", calcId, b.id()));
+                        bucketIds.remove(b.id());
+                        L.debug(format("%s, calculating schedule distribution for bucketId: %d", calcId, b.id()));
+                        int shardSize = PROPS.getInteger("event.shard.size", 1000);
+                        final int count = (int) b.getCount();
+                        final int numShards = count % shardSize == 0 ? count / shardSize : count / shardSize + 1;
+                        L.debug(format("%s, bucketId %d has %d events, and %d distribution", calcId, b.id(), b.getCount(), numShards));
+                        for (int i = 0; i < numShards; i++) {
+                            map.put(b.id(), i);
+                        }
+                    });
+                    final List<Member> members = newArrayList(hz.hz().getCluster().getMembers());
+                    final List<Entry<Long, Integer>> entries = newArrayList(map.entries());
+                    final Multimap<Integer, Pair<Long, Integer>> distro = create();
+                    final int size = members.size();
+                    for (int i = 0; i < entries.size(); i++) {
+                        final Entry<Long, Integer> e = entries.get(i);
+                        distro.put(i % size, of(e.getKey(), e.getValue()));
+                    }
+                    L.info(format("%s, schedule distribution: " + distro, calcId));
+                    return distro;
+                });
     }
 
     public void shutdown() {

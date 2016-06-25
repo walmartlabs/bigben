@@ -5,7 +5,7 @@
   },
   "map": {
     "store": {
-      "writeDelay": 60,
+      "writeDelay": 0,
       "fqcn": "com.walmartlabs.components.scheduler.core.BucketStore",
       "dmConfigPath": "file://dm-config.json"
     }

@@ -1,7 +1,6 @@
 package com.walmartlabs.components.scheduler.services;
 
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Futures;
 import com.hazelcast.core.Member;
 import com.hazelcast.nio.ObjectDataInput;
@@ -19,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.ws.rs.*;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
@@ -61,8 +61,8 @@ public class EventService {
 
     @GET
     @Path("/stats")
-    public Map<Long, Integer> getStats() {
-        return ImmutableMap.of(1L, 0);
+    public List<String> getStats() {
+        return hz.hz().getCluster().getMembers().stream().map(Member::getSocketAddress).map(InetSocketAddress::toString).collect(toList());
     }
 
     @POST

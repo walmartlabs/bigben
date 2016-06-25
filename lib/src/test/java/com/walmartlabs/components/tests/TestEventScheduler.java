@@ -35,6 +35,7 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
     static {
         System.setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.model");
         System.setProperty("com.walmart.platform.config.runOnEnv", "dev");
+        System.setProperty("event.shard.size", "10");
     }
 
     @Autowired
@@ -65,12 +66,12 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
     public void testEventScheduler() throws Exception {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now();
-        final int delay = 4;
+        final int delay = 2;
         final long from = bucketize(now.plusMinutes(delay).toInstant().toEpochMilli(), scanInterval);
         final long to = bucketize(now.plusMinutes(delay + 1).toInstant().toEpochMilli(), scanInterval);
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
         final String t2 = ofInstant(ofEpochMilli(to), UTC).toString();
-        System.out.println(eventService.generateEvents(t1, t2, 1000000, "0"));
+        System.out.println(eventService.generateEvents(t1, t2, 100, "0"));
         new CountDownLatch(1).await();
     }
 }
