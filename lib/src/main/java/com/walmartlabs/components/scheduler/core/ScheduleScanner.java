@@ -133,7 +133,8 @@ public class ScheduleScanner implements Service {
             });
             L.debug(format("%s, buckets to be scheduled: %s ", currentBucketId, bucketIds));
             L.debug(format("%s, calculating scan for buckets: %s", bucket, bucketIds.stream().sorted().map(b -> utc(b).toString()).collect(toList())));
-            transformAsync(calculateTaskDistribution(bucket, bucketIds), (Multimap<Integer, Pair<Long, Integer>> distribution) -> {
+            final ListenableFuture<Multimap<Integer, Pair<Long, Integer>>> dist = calculateTaskDistribution(bucket, bucketIds);
+            transformAsync(dist, distribution -> {
                 if (distribution.isEmpty()) {
                     L.debug(format("%s, nothing to schedule for bucketIds: %s", bucket, bucketIds));
                     return NO_OP;
