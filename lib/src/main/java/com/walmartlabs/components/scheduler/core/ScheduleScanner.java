@@ -2,11 +2,11 @@ package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Multimap;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
-import com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmartlabs.components.scheduler.model.Bucket;
@@ -30,6 +30,7 @@ import static com.google.common.collect.Iterators.cycle;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.util.concurrent.Futures.*;
+import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
@@ -150,8 +151,7 @@ public class ScheduleScanner implements Service {
                 final Map<Integer, Collection<Pair<Long, Integer>>> map = distribution.asMap();
 
                 final ListenableFuture<List<List<ShardStatus>>> f = successfulAsList(map.entrySet().stream().map(e -> taskExecutor.async(() -> () ->
-                                transform(ListenableFutureAdapter.adapt(executorService.submitToMember(
-                                        new BulkShardTask(e.getValue()), iterator.next())), ShardStatusList::getList),
+                                transform(submitShards(executorService, iterator.next(), e.getValue(), bucket), ShardStatusList::getList),
                         "event-submit", submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList()));
                 return transformAsync(f, ll -> {
                     final Map<Long, BucketStatus> m = new HashMap<>();
@@ -163,6 +163,7 @@ public class ScheduleScanner implements Service {
                             m.put(bucketId, s.getStatus());
                         }
                     });
+                    L.info(format("%s, execution results: %s", bucket, m));
                     processedBuckets.putAll(m);
                     return transform(successfulAsList(m.entrySet().stream().map(e -> {
                         final Bucket b = entity(Bucket.class, e.getKey());
@@ -177,6 +178,24 @@ public class ScheduleScanner implements Service {
         } catch (Exception e) {
             L.error(format("%s, schedule scan failed", bucket), getRootCause(e));
         }
+    }
+
+    private ListenableFuture<ShardStatusList> submitShards(IExecutorService executorService, Member member, Collection<Pair<Long, Integer>> shardsData, String bucket) {
+        L.info(format("%s, submitting  for execution to member %s, shards: %s", bucket, member, shardsData));
+        final ListenableFuture<ShardStatusList> f = adapt(executorService.submitToMember(new BulkShardTask(shardsData), member));
+        addCallback(f, new FutureCallback<ShardStatusList>() {
+            @Override
+            public void onSuccess(ShardStatusList result) {
+                L.info(format("%s, member %s reported success for shards: %s", bucket, member, result));
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                L.error(format("%s, member %s reported error for shards: %s", bucket, member, shardsData), t);
+            }
+        });
+        return catching(f, Throwable.class, t -> new ShardStatusList(
+                shardsData.stream().map(p -> new ShardStatus(p.getLeft(), p.getRight(), ERROR)).collect(toList())));
     }
 
     private final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(Exception.class));

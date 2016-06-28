@@ -7,6 +7,7 @@ import com.walmartlabs.components.scheduler.core.EventReceiver;
 import com.walmartlabs.components.scheduler.model.Bucket;
 import com.walmartlabs.components.scheduler.model.Event;
 import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.services.BulkEventGeneration;
 import com.walmartlabs.components.scheduler.services.EventService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
@@ -29,7 +30,7 @@ import static java.time.ZonedDateTime.ofInstant;
 /**
  * Created by smalik3 on 3/9/16
  */
-@ContextConfiguration(locations = {"/test-scheduler.xml", "/cluster.xml"})
+@ContextConfiguration(locations = {"/test-scheduler.xml"/*, "/cluster.xml"*/})
 public class TestEventScheduler extends AbstractTestNGSpringContextTests implements EventProcessor<Event> {
 
     static {
@@ -66,12 +67,10 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
     public void testEventScheduler() throws Exception {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now();
-        final int delay = 2;
+        final int delay = 1;
         final long from = bucketize(now.plusMinutes(delay).toInstant().toEpochMilli(), scanInterval);
-        final long to = bucketize(now.plusMinutes(delay + 1).toInstant().toEpochMilli(), scanInterval);
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
-        final String t2 = ofInstant(ofEpochMilli(to), UTC).toString();
-        System.out.println(eventService.generateEvents(t1, t2, 100, "0"));
+        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, 100, "0")));
         new CountDownLatch(1).await();
     }
 }

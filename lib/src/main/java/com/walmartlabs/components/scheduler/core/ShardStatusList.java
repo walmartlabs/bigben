@@ -55,4 +55,9 @@ public class ShardStatusList implements IdentifiedDataSerializable {
             list.add(in.readObject());
         }
     }
+
+    @Override
+    public String toString() {
+        return list.toString();
+    }
 }

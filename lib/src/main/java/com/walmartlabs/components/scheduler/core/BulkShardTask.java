@@ -1,6 +1,6 @@
 package com.walmartlabs.components.scheduler.core;
 
-import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.HazelcastInstanceAware;
@@ -19,11 +19,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-import static com.google.common.util.concurrent.Futures.immediateFuture;
-import static com.google.common.util.concurrent.Futures.successfulAsList;
+import static com.google.common.util.concurrent.Futures.*;
+import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.core.ObjectFactory.OBJECT_ID.BULK_EVENT_TASK;
+import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.ERROR;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
@@ -74,11 +75,29 @@ public class BulkShardTask implements Runnable, Callable<ShardStatusList>, Ident
         final DataManager<?, ?> dm = spring().getBean(DataManager.class);
         @SuppressWarnings("unchecked")
         final EventProcessor<Event> ep = spring().getBean(ProcessorRegistry.class);
-        return successfulAsList(shards.stream().map(p -> {
+        final int maxEvents = PROPS.getInteger("event.max.events.in.memory", 10000);
+        final int fetchSizeHint = maxEvents / shards.size();
+        return allAsList(shards.stream().map(p -> {
             try {
-                return new ShardTask(p.getLeft(), p.getRight(), dm, ep).call();
+                final ListenableFuture<ShardStatus> f = new ShardTask(p.getLeft(), p.getRight(), dm, ep, fetchSizeHint).call();
+                addCallback(f, new FutureCallback<ShardStatus>() {
+                    @Override
+                    public void onSuccess(ShardStatus result) {
+                        L.info(format("%s, shard processed, bucket: %d, shard: %d", utc(p.getLeft()), p.getLeft(), p.getRight()));
+                    }
+
+                    @Override
+                    public void onFailure(Throwable t) {
+                        L.error(format("%s, error in executing shard: bucket: %d, shard: %d", utc(p.getLeft()), p.getLeft(), p.getRight()), t);
+                    }
+                });
+                return catching(f, Throwable.class, t -> {
+                    L.error(format("%s, error in executing shard, returning a ERROR status bucket: %d, shard: %d", utc(p.getLeft()), p.getLeft(), p.getRight()), t);
+                    return new ShardStatus(p.getLeft(), p.getRight(), ERROR);
+                });
             } catch (Exception ex) {
-                return Futures.<ShardStatus>immediateFailedFuture(ex);
+                L.error(format("%s, error in submitting shard for execution: bucket: %d, shard: %d", utc(p.getLeft()), p.getLeft(), p.getRight()), ex);
+                return immediateFuture(new ShardStatus(p.getLeft(), p.getRight(), ERROR));
             }
         }).collect(toList()));
     }

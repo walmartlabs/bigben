@@ -14,6 +14,7 @@ import com.walmartlabs.components.scheduler.core.ScheduleScanner;
 import com.walmartlabs.components.scheduler.model.EventRequest;
 import com.walmartlabs.components.scheduler.model.EventResponse;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.ws.rs.*;
@@ -53,6 +54,8 @@ import static org.apache.commons.lang3.tuple.Pair.of;
 @Produces(APPLICATION_JSON)
 public class EventService {
 
+    private static final Logger L = Logger.getLogger(EventService.class);
+
     @Autowired
     private EventReceiver eventReceiver;
 
@@ -73,18 +76,18 @@ public class EventService {
 
     @POST
     @Path("/generate")
-    public Map<Long, Integer> generateEvents(@QueryParam("from") String fromTime, @QueryParam("to") String toTime,
-                                             @QueryParam("number") int numEvents, @QueryParam("tenant") String tenant) throws Exception {
+    public Map<Long, Integer> generateEvents(BulkEventGeneration bEG) throws Exception {
         final ThreadLocalRandom random = ThreadLocalRandom.current();
-        final ZonedDateTime t1 = ZonedDateTime.parse(fromTime);
-        final ZonedDateTime t2 = ZonedDateTime.parse(toTime);
+        final ZonedDateTime t1 = ZonedDateTime.parse(bEG.getStartTime());
+        final ZonedDateTime t2 = t1.plusMinutes(bEG.getPeriod());
+        L.info(String.format("creating %d events between %s and %s for tenant: %s", bEG.getNumEvents(), t1, t2, bEG.getTenantId()));
         long delta = MILLIS.between(t1, t2);
         final Map<Long, Integer> map = new HashMap<>();
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        Futures.transform(successfulAsList(nCopies(numEvents, 0).stream().map($ -> {
+        Futures.transform(successfulAsList(nCopies(bEG.getNumEvents(), 0).stream().map($ -> {
             final EventRequest eventRequest = new EventRequest();
             final ZonedDateTime t = t1.plus(random.nextLong(delta), MILLIS);
-            eventRequest.setTenant(tenant);
+            eventRequest.setTenant(bEG.getTenantId());
             eventRequest.setUtc(t.toInstant().toEpochMilli());
             return eventReceiver.addEvent(eventRequest);
         }).collect(toList())), (Function<List<EventResponse>, Object>) l -> {
