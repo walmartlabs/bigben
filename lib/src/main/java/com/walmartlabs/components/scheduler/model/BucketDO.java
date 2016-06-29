@@ -2,21 +2,15 @@ package com.walmartlabs.components.scheduler.model;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
-import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
 import info.archinnov.achilles.annotations.Column;
 import info.archinnov.achilles.annotations.Entity;
 import info.archinnov.achilles.annotations.Id;
 import info.archinnov.achilles.annotations.PartitionKey;
-import org.codehaus.jackson.type.TypeReference;
 
-import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Date;
 
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
-import static com.walmart.services.common.util.JsonUtil.convertToObject;
-import static com.walmart.services.common.util.JsonUtil.convertToString;
 import static java.lang.Long.parseLong;
 
 /**
@@ -37,8 +31,8 @@ public class BucketDO implements Bucket, MutableEntity<Long>, Serializable {
     @Column
     private long count;
 
-    @Column(name = "failed_events")
-    private String _failedEvents;
+    @Column(name = "processed_at")
+    private Date processedAt;
 
     public Long getId() {
         return id;
@@ -69,30 +63,13 @@ public class BucketDO implements Bucket, MutableEntity<Long>, Serializable {
     }
 
     @Override
-    public void setFailedEvents(List<EventKey> failedEvents) {
-        try {
-            this._failedEvents = convertToString(failedEvents);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    public Date getProcessedAt() {
+        return processedAt;
     }
 
     @Override
-    public List<EventKey> getFailedEvents() {
-        try {
-            return _failedEvents == null ? new ArrayList<>() : convertToObject(_failedEvents, new TypeReference<List<EventKey>>() {
-            });
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public String get_failedEvents() {
-        return _failedEvents;
-    }
-
-    public void set_failedEvents(String _failedEvents) {
-        this._failedEvents = _failedEvents;
+    public void setProcessedAt(Date processedAt) {
+        this.processedAt = processedAt;
     }
 
     @Override
@@ -121,7 +98,7 @@ public class BucketDO implements Bucket, MutableEntity<Long>, Serializable {
                 "id=" + id +
                 ", status='" + status + '\'' +
                 ", count=" + count +
-                ", failedEvents='" + _failedEvents + '\'' +
+                ", processedAt=" + processedAt +
                 '}';
     }
 }

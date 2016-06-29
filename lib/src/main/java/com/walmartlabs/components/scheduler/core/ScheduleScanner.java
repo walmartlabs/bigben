@@ -168,6 +168,7 @@ public class ScheduleScanner implements Service {
                     return transform(successfulAsList(m.entrySet().stream().map(e -> {
                         final Bucket b = entity(Bucket.class, e.getKey());
                         b.setStatus(e.getValue().name());
+                        b.setProcessedAt(new Date());
                         return transform(dataManager.saveAsync(b), (Function<Bucket, Bucket>) DataManager::raw);
                     }).collect(toList())), (Function<List<Bucket>, List<Bucket>>) l1 -> {
                         L.info(format("%s, buckets processed: " + l1, bucket));
