@@ -18,4 +18,6 @@
         <constructor-arg index="0" value="file://processors.json"/>
         <constructor-arg index="1" value="false"/>
     </bean>
+
+    <bean id="testEventProcessor" class="com.walmartlabs.components.tests.TestEventScheduler$TestEventProcessor"/>
 </beans>

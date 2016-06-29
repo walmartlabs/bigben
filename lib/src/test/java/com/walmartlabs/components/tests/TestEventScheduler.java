@@ -18,6 +18,7 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
@@ -26,12 +27,13 @@ import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.time.ZonedDateTime.ofInstant;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 /**
  * Created by smalik3 on 3/9/16
  */
 @ContextConfiguration(locations = {"/test-scheduler.xml"/*, "/cluster.xml"*/})
-public class TestEventScheduler extends AbstractTestNGSpringContextTests implements EventProcessor<Event> {
+public class TestEventScheduler extends AbstractTestNGSpringContextTests {
 
     static {
         System.setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.model");
@@ -52,26 +54,37 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
     @Autowired
     private EventService eventService;
 
-    @Override
-    public ListenableFuture<Event> process(Event event) {
-        System.out.println("processing event: " + event);
-        events.remove(event.id().toString());
-        if (events.size() == 0) {
-            System.out.println("test done");
+    public static class TestEventProcessor implements EventProcessor<Event> {
+
+        @Override
+        public ListenableFuture<Event> process(Event event) {
+            System.out.println("processing event: " + event);
+            if (counts.decrementAndGet() == 0) {
+                System.out.println("test done");
+                latch.countDown();
+            }
+            return immediateFuture(event);
         }
-        return immediateFuture(event);
     }
 
     private static final Map<String, Boolean> events = new ConcurrentHashMap<>();
+    private static final CountDownLatch latch = new CountDownLatch(1);
+    private static final AtomicInteger counts = new AtomicInteger();
 
-    @Test(enabled = false)
+    @Test
     public void testEventScheduler() throws Exception {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now();
         final int delay = 1;
         final long from = bucketize(now.plusMinutes(delay).toInstant().toEpochMilli(), scanInterval);
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
-        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, 100, "0")));
-        new CountDownLatch(1).await();
+        final int numEvents = 100;
+        counts.set(numEvents);
+        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, numEvents, "0")));
+        try {
+            latch.await(2, MINUTES);
+        } catch (InterruptedException e) {
+            throw new AssertionError("test timed out");
+        }
     }
 }

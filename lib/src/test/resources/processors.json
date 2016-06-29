@@ -1,9 +1,9 @@
 [
   {
     "tenant": "0",
-    "type": "CUSTOM_CLASS",
+    "type": "CUSTOM_BEAN",
     "properties": {
-      "eventProcessorClass": "com.walmartlabs.components.scheduler.processors.DefaultEventProcessor"
+      "eventProcessorBeanName": "testEventProcessor"
     }
   }
 ]
