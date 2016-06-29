@@ -9,6 +9,7 @@ import java.io.IOException;
 
 import static com.walmartlabs.components.scheduler.core.ObjectFactory.OBJECT_ID.SHARD_STATUS;
 import static com.walmartlabs.components.scheduler.core.ObjectFactory.SCHEDULER_FACTORY_ID;
+import static java.lang.String.format;
 
 /**
  * Created by smalik3 on 6/24/16
@@ -74,5 +75,10 @@ public class ShardStatus implements IdentifiedDataSerializable {
         bucketId = in.readLong();
         shard = in.readInt();
         status = BucketStatus.values()[in.readByte()];
+    }
+
+    @Override
+    public String toString() {
+        return format("%d[%d]=%s", bucketId, shard, status);
     }
 }

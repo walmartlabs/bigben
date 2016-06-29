@@ -27,8 +27,8 @@
         <appender-ref ref="console"/>
     </logger>
 
-    <logger name="com.datastax.driver.core">
+    <!--<logger name="com.datastax.driver.core">
         <level value="DEBUG" />
-    </logger>
+    </logger>-->
 
 </log4j:configuration>

@@ -35,8 +35,9 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests impleme
 
     static {
         System.setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.model");
-        System.setProperty("com.walmart.platform.config.runOnEnv", "dev");
+        System.setProperty("com.walmart.platform.config.runOnEnv", "prod");
         System.setProperty("event.shard.size", "10");
+        System.setProperty("hazelcast.slow.operation.detector.stacktrace.logging.enabled", "true");
     }
 
     @Autowired

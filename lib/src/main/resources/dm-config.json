@@ -2,9 +2,11 @@
   "primaryConfigs": {
     "V1": {
       "type": "DB",
-      "ccmPath": "partner-data-receiver-app/databaseConfig/feed"
+      "ccmPath": "gmp-solr-consumer/bigben_cassandra/cassandra"
     }
   },
   "secondaryConfigs": {},
-  "entityPackages": ["com.walmartlabs.components.scheduler.model"]
+  "entityPackages": [
+    "com.walmartlabs.components.scheduler.model"
+  ]
 }
