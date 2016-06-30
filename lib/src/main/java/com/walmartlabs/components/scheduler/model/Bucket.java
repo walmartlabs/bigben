@@ -9,7 +9,7 @@ import java.util.Date;
  */
 public interface Bucket extends Entity<Long> {
 
-    enum BucketStatus {PROCESSED, ERROR, UN_PROCESSED}
+    enum BucketStatus {PROCESSED, ERROR, UN_PROCESSED, PROCESSING, TIMED_OUT}
 
     String getStatus();
 
