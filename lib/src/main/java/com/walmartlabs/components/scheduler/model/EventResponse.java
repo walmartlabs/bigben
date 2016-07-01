@@ -66,7 +66,7 @@ public class EventResponse extends EventRequest {
         eventResponse.setXrefId(e.id().getEventId());
         eventResponse.setProcessedUtc(currentTimeMillis());
         eventResponse.setTenant(e.getTenant());
-        eventResponse.setUtc(e.id().getEventTime());
+        eventResponse.setUtc(e.id().getEventTime().toInstant().toEpochMilli());
         eventResponse.setPayload(e.getPayload());
         final Error error = new Error("000", "unknown", e.getError(), e.getError(), ERROR, SYSTEM);
         final List<Error> errors = Collections.singletonList(error);

@@ -69,7 +69,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
     @Override
     public ListenableFuture<Event> process(Event event) {
         try {
-            event.setProcessedAt(now(UTC).toInstant().toEpochMilli());
+            event.setProcessedAt(now(UTC));
             return catchingAsync(taskExecutor.async(() -> {
                         return getOrCreate(event.getTenant()).process(event);
                     }, "event-processor",

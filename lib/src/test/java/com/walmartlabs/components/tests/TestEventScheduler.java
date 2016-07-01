@@ -15,8 +15,6 @@ import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
 
 import java.time.ZonedDateTime;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -46,7 +44,7 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
     private DataManager<EventKey, Event> dataManager;
 
     @Autowired
-    private DataManager<Long, Bucket> bucketDM;
+    private DataManager<ZonedDateTime, Bucket> bucketDM;
 
     @Autowired
     private EventReceiver eventReceiver;
@@ -58,31 +56,30 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
 
         @Override
         public ListenableFuture<Event> process(Event event) {
-            System.out.println("processing event: " + event);
+            //System.out.println("processing event: " + event);
             if (counts.decrementAndGet() == 0) {
                 System.out.println("test done");
-                latch.countDown();
+                //latch.countDown();
             }
             return immediateFuture(event);
         }
     }
 
-    private static final Map<String, Boolean> events = new ConcurrentHashMap<>();
     private static final CountDownLatch latch = new CountDownLatch(1);
     private static final AtomicInteger counts = new AtomicInteger();
 
-    @Test
+    @Test(enabled = false)
     public void testEventScheduler() throws Exception {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        final ZonedDateTime now = now();
+        final ZonedDateTime now = now(UTC);
         final int delay = 1;
         final long from = bucketize(now.plusMinutes(delay).toInstant().toEpochMilli(), scanInterval);
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
-        final int numEvents = 100;
+        final int numEvents = 1000;
         counts.set(numEvents);
-        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, numEvents, "0")));
+        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 10, numEvents, "0")));
         try {
-            latch.await(2, MINUTES);
+            latch.await(11, MINUTES);
         } catch (InterruptedException e) {
             throw new AssertionError("test timed out");
         }

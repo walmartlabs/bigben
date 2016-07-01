@@ -4,6 +4,8 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
 import info.archinnov.achilles.annotations.*;
 
+import java.time.ZonedDateTime;
+
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 
 /**
@@ -17,16 +19,17 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
     private EventLookupKey id;
 
     @Column(name = "bucket_id")
-    private long bucketId;
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    private ZonedDateTime bucketId;
 
     @Column
     private int shard;
 
-    public long getBucketId() {
+    public ZonedDateTime getBucketId() {
         return bucketId;
     }
 
-    public void setBucketId(long bucketId) {
+    public void setBucketId(ZonedDateTime bucketId) {
         this.bucketId = bucketId;
     }
 

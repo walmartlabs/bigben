@@ -21,6 +21,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.collect.Iterables.concat;
@@ -59,7 +60,7 @@ public class ScheduleScanner implements Service {
     }
 
     @Autowired
-    private transient DataManager<Long, Bucket> dataManager;
+    private transient DataManager<ZonedDateTime, Bucket> dataManager;
 
     @Autowired
     private Hz hz;
@@ -84,7 +85,9 @@ public class ScheduleScanner implements Service {
         L.info("initing the event scheduler");
         lookbackRange = PROPS.getInteger("events.backlog.check.limit", 2);
         bucketWidth = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        bucketManager = new BucketManager(lookbackRange, 2 * bucketWidth * 60, dataManager);
+        final int checkpointInterval = PROPS.getInteger("event.bucket.manager.checkpoint.interval", 1);
+        final TimeUnit checkpointIntervalUnits = TimeUnit.valueOf(PROPS.getProperty("event.bucket.manager.checkpoint.interval.units", MINUTES.name()));
+        bucketManager = new BucketManager(lookbackRange, 2 * bucketWidth * 60, dataManager, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits);
     }
 
     @Override
@@ -113,28 +116,25 @@ public class ScheduleScanner implements Service {
             L.info("system is shutdown, no more schedules will be processed");
             return;
         }
-        final ZonedDateTime now = now(UTC);
-        final long currentBucketId = bucketize(now.toInstant().toEpochMilli(), bucketWidth);
-        final String bucket = utc(currentBucketId).toString();
-        L.debug(format("%s, scanning the schedule(s)", bucket));
+        final ZonedDateTime currentBucketId = utc(bucketize(now(UTC).toInstant().toEpochMilli(), bucketWidth));
+        L.info(format("scanning the schedule(s) for bucket: %s", currentBucketId));
         try {
-            L.debug(format("%s, starting scan for bucketId: %d, now: %s ", bucket, currentBucketId, now));
-            transformAsync(bucketManager.getProcessableShardsForOrBefore(currentBucketId, lookbackRange),
+            catching(transformAsync(bucketManager.getProcessableShardsForOrBefore(currentBucketId, lookbackRange),
                     shards -> {
                         if (shards.isEmpty()) {
-                            L.info("nothing to schedule for bucket: " + bucket);
+                            L.info("nothing to schedule for bucket: " + currentBucketId);
                             return NO_OP;
                         }
-                        L.info(format("%s, shards to be processed: => %s", bucket, shards));
+                        L.info(format("%s, shards to be processed: => %s", currentBucketId, shards));
                         final List<Member> members = newArrayList(hz.hz().getCluster().getMembers());
-                        final List<Entry<Long, Integer>> entries = newArrayList(shards.entries());
-                        final Multimap<String, Pair<Long, Integer>> distro = TreeMultimap.create();
+                        final List<Entry<ZonedDateTime, Integer>> entries = newArrayList(shards.entries());
+                        final Multimap<String, Pair<ZonedDateTime, Integer>> distro = TreeMultimap.create();
                         final int size = members.size();
                         for (int i = 0; i < entries.size(); i++) {
-                            final Entry<Long, Integer> e = entries.get(i);
+                            final Entry<ZonedDateTime, Integer> e = entries.get(i);
                             distro.put(members.get(i % size).getSocketAddress().getAddress().toString(), of(e.getKey(), e.getValue()));
                         }
-                        L.info(format("%s, schedule distribution: => " + distro, bucket));
+                        L.info(format("%s, schedule distribution: => " + distro, currentBucketId));
 
                         final int submitRetries = PROPS.getInteger("event.submit.max.retries", 10);
                         final int submitInitialDelay = PROPS.getInteger("event.submit.initial.delay", 1);
@@ -142,33 +142,36 @@ public class ScheduleScanner implements Service {
 
                         final IExecutorService executorService = hz.hz().getExecutorService(EVENT_SCHEDULER);
                         final Iterator<Member> iterator = cycle(hz.hz().getCluster().getMembers());
-                        final Map<String, Collection<Pair<Long, Integer>>> map = distro.asMap();
+                        final Map<String, Collection<Pair<ZonedDateTime, Integer>>> map = distro.asMap();
 
                         final ListenableFuture<List<List<ShardStatus>>> future = successfulAsList(map.entrySet().stream().map(e -> taskExecutor.async(() -> () ->
-                                        transform(submitShards(executorService, iterator.next(), e.getValue(), bucket), ShardStatusList::getList),
+                                        transform(submitShards(executorService, iterator.next(), e.getValue(), currentBucketId), ShardStatusList::getList),
                                 "event-submit", submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList()));
                         addCallback(future,
                                 new FutureCallback<List<List<ShardStatus>>>() {
                                     @Override
                                     public void onSuccess(List<List<ShardStatus>> result) {
-                                        L.info(format("schedule for bucket %s finished successfully => %s", bucket, result));
+                                        L.info(format("schedule for bucket %s finished successfully => %s", currentBucketId, result));
                                     }
 
                                     @Override
                                     public void onFailure(Throwable t) {
-                                        L.error(format("schedule for bucket %s finished with error", bucket), t);
+                                        L.error(format("schedule for bucket %s finished with error", currentBucketId), t);
                                     }
                                 });
                         return transform(future, (Function<List<List<ShardStatus>>, List<ShardStatus>>) ll -> newArrayList(concat(ll)));
-                    });
+                    }), Exception.class, (Function<Exception, List<ShardStatus>>) ex -> {
+                L.error("error in processing bucket: " + currentBucketId, ex);
+                return newArrayList();
+            });
         } catch (Exception e) {
-            L.error(format("%s, schedule scan failed", bucket), getRootCause(e));
+            L.error(format("%s, schedule scan failed", currentBucketId), getRootCause(e));
         }
     }
 
-    private ListenableFuture<ShardStatusList> submitShards(IExecutorService executorService, Member member, Collection<Pair<Long, Integer>> shardsData, String bucket) {
-        L.info(format("%s, submitting  for execution to member %s, shards: %s", bucket, member, shardsData));
-        for (Pair<Long, Integer> p : shardsData) {
+    private ListenableFuture<ShardStatusList> submitShards(IExecutorService executorService, Member member, Collection<Pair<ZonedDateTime, Integer>> shardsData, ZonedDateTime bucket) {
+        L.info(format("%s, submitting  for execution to member %s, shards: %s", bucket, member.getAddress(), shardsData));
+        for (Pair<ZonedDateTime, Integer> p : shardsData) {
             bucketManager.registerForProcessing(p.getLeft(), p.getRight());
         }
         final ListenableFuture<ShardStatusList> f = adapt(executorService.submitToMember(new BulkShardTask(shardsData), member));
@@ -184,7 +187,7 @@ public class ScheduleScanner implements Service {
             @Override
             public void onFailure(Throwable t) {
                 L.error(format("%s, member %s reported error for shards: %s", bucket, member.getSocketAddress().getAddress(), shardsData), t);
-                for (Pair<Long, Integer> pair : shardsData) {
+                for (Pair<ZonedDateTime, Integer> pair : shardsData) {
                     bucketManager.shardDone(pair.getLeft(), pair.getRight(), ERROR);
                 }
             }

@@ -1,9 +1,6 @@
 package com.walmartlabs.components.scheduler.core;
 
-import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Table;
+import com.google.common.collect.*;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
@@ -13,26 +10,29 @@ import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
 import com.walmartlabs.components.scheduler.model.Event;
 import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
 import org.apache.log4j.Logger;
-import org.codehaus.jackson.type.TypeReference;
 
-import java.io.IOException;
+import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.beust.jcommander.internal.Lists.newArrayList;
+import static com.google.common.base.Splitter.on;
 import static com.google.common.collect.Lists.reverse;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
-import static com.walmart.services.common.util.JsonUtil.convertToObject;
-import static com.walmart.services.common.util.JsonUtil.convertToString;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.*;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.epoch;
+import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
+import static java.time.ZoneOffset.UTC;
+import static java.time.ZonedDateTime.now;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
-import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.stream.Collectors.joining;
 
 /**
  * Created by smalik3 on 6/29/16
@@ -44,35 +44,40 @@ public class BucketManager {
     private final int maxBuckets;
     private final int maxProcessingTime;
     private final ListeningScheduledExecutorService service;
-    private final DataManager<Long, Bucket> dataManager;
+    private final DataManager<ZonedDateTime, Bucket> dataManager;
     private final DataManager<EventKey, Event> dm;
     private final AtomicBoolean modified = new AtomicBoolean(false);
-    private final Table<Long, Integer, BucketStatus> shards = HashBasedTable.create();
+    private final Table<ZonedDateTime, Integer, BucketStatus> shards = HashBasedTable.create();
     private final int bucketWidth;
 
     @SuppressWarnings("unchecked")
-    public BucketManager(int maxBuckets, int maxProcessingTime, DataManager<?, ?> dm) {
+    public BucketManager(int maxBuckets, int maxProcessingTime, DataManager<?, ?> dm, int bucketWidth, int checkpointInterval, TimeUnit checkpointUnit) {
         this.maxBuckets = maxBuckets;
         this.maxProcessingTime = maxProcessingTime;
-        this.dataManager = (DataManager<Long, Bucket>) dm;
+        this.dataManager = (DataManager<ZonedDateTime, Bucket>) dm;
         this.dm = (DataManager<EventKey, Event>) dm;
         service = listeningDecorator(newScheduledThreadPool(1));
-        final Integer checkpointInterval = PROPS.getInteger("event.bucket.manager.checkpoint.interval", 1);
-        this.bucketWidth = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        service.scheduleAtFixedRate(this::saveCheckpoint, checkpointInterval, checkpointInterval, MINUTES);
+        this.bucketWidth = bucketWidth;
+        L.info(format("scheduling save checkpoint task every %d %s", checkpointInterval, checkpointInterval));
+        service.scheduleAtFixedRate(this::saveCheckpoint, checkpointInterval, checkpointInterval, checkpointUnit);
         try {
             L.info("loading the previously saved checkpoint, if any");
             loadCheckpoint().get();
+            truncateIfNeeded();
         } catch (Exception e) {
             L.error("could not load previous checkpoint", e);
         }
+        getRuntime().addShutdownHook(new Thread(() -> {
+            L.info("saving checkpoint during shutdown");
+            saveCheckpoint();
+        }));
     }
 
-    public ListenableFuture<Multimap<Long, Integer>> getProcessableShardsForOrBefore(long bucketId, int lookbackRange) {
-        final Multimap<Long, Integer> processableShards = HashMultimap.create();
+    public synchronized ListenableFuture<Multimap<ZonedDateTime, Integer>> getProcessableShardsForOrBefore(ZonedDateTime bucketId, int lookbackRange) {
+        final Multimap<ZonedDateTime, Integer> processableShards = HashMultimap.create();
         final List<ListenableFuture<Bucket>> futures = new ArrayList<>();
         for (long i = 0; i <= lookbackRange; i++) {
-            final long bId = bucketId - i * bucketWidth * 60 * 1000;
+            final ZonedDateTime bId = bucketId.minusSeconds(i * bucketWidth);
             if (!shards.containsRow(bId)) {
                 futures.add(dataManager.getAsync(bId, fullSelector(bId)));
             } else {
@@ -82,7 +87,7 @@ public class BucketManager {
                 });
             }
         }
-        return transform(successfulAsList(futures), (com.google.common.base.Function<List<Bucket>, Multimap<Long, Integer>>) l -> {
+        return catching(transform(successfulAsList(futures), (com.google.common.base.Function<List<Bucket>, Multimap<ZonedDateTime, Integer>>) l -> {
             l.forEach(b -> {
                 if (b != null && b.getCount() > 0 && !PROCESSED.name().equals(b.getStatus())) {
                     int shardSize = PROPS.getInteger("event.shard.size", 1000);
@@ -93,74 +98,28 @@ public class BucketManager {
                     }
                 }
             });
-            L.info(format("processable shards at bucket: %d, are => %s", bucketId, processableShards));
+            L.info(format("processable shards at bucket: %s, are => %s", bucketId, processableShards));
             return processableShards;
+        }), Exception.class, ex -> {
+            L.error("unexpected error in getting shards", ex);
+            return HashMultimap.create();
         });
     }
 
-    public ListenableFuture<Event> saveCheckpoint() {
-        try {
-            L.info("saving checkpoint for shards table");
-            return syncShard(-1, -1, -1, "", PROCESSING, convertToString(shards.rowMap()));
-        } catch (IOException e) {
-            return immediateFailedFuture(e);
-        }
-    }
-
-    private ListenableFuture<?> loadCheckpoint() {
-        final EventKey key = EventKey.of(-1, -1, -1, "");
-        final ListenableFuture<Event> f = dm.getAsync(key, fullSelector(key));
-        addCallback(f,
-                new FutureCallback<Event>() {
-                    @Override
-                    public void onSuccess(Event result) {
-                        if (result == null)
-                            L.info("no checkpoint to load");
-                        else if (result.getPayload() != null) {
-                            try {
-                                final Map<Long, Map<Integer, BucketStatus>> map = convertToObject(result.getPayload(),
-                                        new TypeReference<Map<Long, Map<Integer, BucketStatus>>>() {
-                                        });
-                                map.forEach((k, v) -> v.forEach((s, b) -> shards.put(k, s, b)));
-                                L.info("loaded the checkpoint: " + shards);
-                            } catch (IOException e) {
-                                L.error("could not load the previously saved checkpoint: " + result.getPayload(), e);
-                            }
-                        }
-                    }
-
-                    @Override
-                    public void onFailure(Throwable t) {
-                        L.error("could not load the previously saved bucket status data", t);
-                    }
-                });
-        return f;
-    }
-
-    /*public Multimap<Long, Integer> pendingShards() {
-        shards.cellSet().stream().filter(c -> c.getValue() == UN_PROCESSED || c.getValue() == ERROR).
-                collect(groupingBy(new Function<Cell<Long, Integer, BucketStatus>, Long>() {
-                    @Override
-                    public Long apply(Cell<Long, Integer, BucketStatus> longIntegerBucketStatusCell) {
-                        return null;
-                    }
-                }, ));
-    }*/
-
-    public void registerForProcessing(Long bucketId, Integer shard) {
+    public synchronized void registerForProcessing(ZonedDateTime bucketId, Integer shard) {
         modified.set(true);
-        purgeShardsIfNeeded();
+        truncateIfNeeded();
         shards.put(bucketId, shard, PROCESSING);
         service.schedule(() -> {
             final BucketStatus bucketStatus = this.shards.get(bucketId, shard);
             if (bucketStatus != null && bucketStatus == PROCESSING) {
                 shards.put(bucketId, shard, UN_PROCESSED);
-                syncShard(bucketId, shard, -1, "", TIMED_OUT, null);
+                syncShard(bucketId, shard, epoch(), "", UN_PROCESSED, null);
             }
         }, maxProcessingTime, SECONDS);
     }
 
-    public void shardDone(long bucketId, int shard, BucketStatus shardStatus) {
+    public synchronized void shardDone(ZonedDateTime bucketId, Integer shard, BucketStatus shardStatus) {
         modified.set(true);
         switch (shardStatus) {
             case PROCESSED:
@@ -168,22 +127,23 @@ public class BucketManager {
                 if (!shards.containsRow(bucketId)) {
                     syncBucket(bucketId, PROCESSED);
                 }
+                shards.put(bucketId, -1, PROCESSED);
                 break;
             case ERROR:
                 shards.put(bucketId, shard, ERROR);
                 break;
             default:
-                throw new IllegalArgumentException(format("bucket: %d, shard: %d, status: %s", bucketId, shard, shardStatus.name()));
+                throw new IllegalArgumentException(format("bucket: %s, shard: %d, status: %s", bucketId, shard, shardStatus.name()));
         }
     }
 
-    private void purgeShardsIfNeeded() {
-        final List<Long> bucketIds = reverse(newArrayList(new TreeSet<>(shards.rowKeySet())));
+    private void truncateIfNeeded() {
+        final List<ZonedDateTime> bucketIds = reverse(newArrayList(new TreeSet<>(shards.rowKeySet())));
         if (bucketIds.size() > maxBuckets) {
             for (int i = maxBuckets; i < bucketIds.size(); i++) {
-                final Long bucketId = bucketIds.get(i);
+                final ZonedDateTime bucketId = bucketIds.get(i);
                 final Map<Integer, BucketStatus> statusByShard = shards.row(bucketId);
-                L.info(format("purging the following shards for bucket %d, => %s", bucketId, statusByShard));
+                L.info(format("purging the following shards for bucket %s, => %s", bucketId, statusByShard));
                 final Set<BucketStatus> statuses = new HashSet<>(statusByShard.values());
                 if (statuses.contains(ERROR)) {
                     syncBucket(bucketId, ERROR);
@@ -199,46 +159,79 @@ public class BucketManager {
         }
     }
 
-    private ListenableFuture<Bucket> syncBucket(final long bucketId, BucketStatus bucketStatus) {
+    private ListenableFuture<Bucket> syncBucket(ZonedDateTime bucketId, BucketStatus bucketStatus) {
         final Bucket entity = entity(Bucket.class, bucketId);
-        entity.setProcessedAt(new Date());
+        entity.setProcessedAt(now(UTC));
         entity.setStatus(bucketStatus.name());
-        L.info(format("bucket %d is done, syncing status as %s", bucketId, bucketStatus));
+        L.info(format("bucket %s is done, syncing status as %s", bucketId, bucketStatus));
         final ListenableFuture<Bucket> f = dataManager.saveAsync(entity);
         addCallback(f,
                 new FutureCallback<Bucket>() {
                     @Override
                     public void onSuccess(Bucket result) {
-                        L.info(format("bucket %d is successfully synced as %s", bucketId, bucketStatus));
+                        L.info(format("bucket %s is successfully synced as %s", bucketId, bucketStatus));
                     }
 
                     @Override
                     public void onFailure(Throwable t) {
-                        L.error(format("bucket %d could not be synced as %s, after multiple retries", bucketId, bucketStatus), t);
+                        L.error(format("bucket %s could not be synced as %s, after multiple retries", bucketId, bucketStatus), t);
                     }
                 });
         return f;
     }
 
-    private ListenableFuture<Event> syncShard(long bucketId, int shard, long eventTime, String eventId, BucketStatus bucketStatus, String payload) {
+    private ListenableFuture<Event> syncShard(ZonedDateTime bucketId, int shard, ZonedDateTime eventTime, String eventId, BucketStatus bucketStatus, String payload) {
         final Event entity = entity(Event.class, EventKey.of(bucketId, shard, eventTime, eventId));
         entity.setStatus(TIMED_OUT.name());
         if (payload != null)
             entity.setPayload(payload);
-        L.info(format("shard %d[%d] is done, syncing status as %s", bucketId, shard, bucketStatus));
+        L.info(format("shard %s[%d] is done, syncing status as %s", bucketId, shard, bucketStatus));
         final ListenableFuture<Event> f = dm.saveAsync(entity);
         addCallback(f,
                 new FutureCallback<Event>() {
                     @Override
                     public void onSuccess(Event result) {
-                        L.info(format("shard %d[%d] is successfully synced as %s", bucketId, shard, bucketStatus));
+                        L.info(format("shard %s[%d] is successfully synced as %s", bucketId, shard, bucketStatus));
                     }
 
                     @Override
                     public void onFailure(Throwable t) {
-                        L.error(format("shard %d[%d] could not be synced as %s, after multiple retries", bucketId, shard, bucketStatus), t);
+                        L.error(format("shard %s[%d] could not be synced as %s, after multiple retries", bucketId, shard, bucketStatus), t);
                     }
                 });
+        return f;
+    }
+
+    public synchronized ListenableFuture<Event> saveCheckpoint() {
+        L.info("saving checkpoint for shards: " + shards);
+        return syncShard(epoch(), -1, epoch(), "", PROCESSING, shards.cellSet().stream().sorted((o1, o2) -> {
+            final int i = o1.getRowKey().compareTo(o2.getRowKey());
+            return i != 0 ? i : o1.getColumnKey().compareTo(o2.getColumnKey());
+        }).map(c -> format("%s/%s/%s", c.getRowKey(), c.getColumnKey(), c.getValue())).collect(joining(",")));
+    }
+
+    private ListenableFuture<?> loadCheckpoint() {
+        final EventKey key = EventKey.of(epoch(), -1, epoch(), "");
+        final ListenableFuture<Event> f = dm.getAsync(key, fullSelector(key));
+        addCallback(f, new FutureCallback<Event>() {
+            @Override
+            public void onSuccess(Event result) {
+                if (result == null)
+                    L.info("no checkpoint to load");
+                else if (result.getPayload() != null) {
+                    on(",").split(result.getPayload()).forEach(s -> {
+                        final List<String> split = Lists.newArrayList(on("/").split(s));
+                        shards.put(ZonedDateTime.parse(split.get(0)), Integer.parseInt(split.get(1)), BucketStatus.valueOf(split.get(2)));
+                    });
+                    L.info("loaded the checkpoint: " + shards);
+                }
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                L.error("could not load the previously saved bucket status checkpoint", t);
+            }
+        });
         return f;
     }
 }

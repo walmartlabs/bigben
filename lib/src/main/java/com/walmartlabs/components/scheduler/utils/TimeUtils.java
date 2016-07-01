@@ -2,7 +2,9 @@ package com.walmartlabs.components.scheduler.utils;
 
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.Date;
 
+import static java.time.Instant.EPOCH;
 import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.ofInstant;
@@ -34,5 +36,19 @@ public class TimeUtils {
 
     public static ZonedDateTime utc(long millis) {
         return ofInstant(ofEpochMilli(millis), UTC);
+    }
+
+    private static final ZonedDateTime EPOCH_ZDT = ofInstant(EPOCH, UTC);
+
+    public static ZonedDateTime epoch() {
+        return EPOCH_ZDT;
+    }
+
+    public static Date toDate(ZonedDateTime zonedDateTime) {
+        return new Date(zonedDateTime.toInstant().toEpochMilli());
+    }
+
+    public static ZonedDateTime fromDate(Date d) {
+        return utc(d.getTime());
     }
 }

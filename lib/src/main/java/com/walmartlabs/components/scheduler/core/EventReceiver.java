@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.cache.processor.EntryProcessorException;
 import java.io.IOException;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map.Entry;
 
@@ -31,6 +32,7 @@ import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getEr
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.UN_PROCESSED;
 import static com.walmartlabs.components.scheduler.model.EventResponse.fromRequest;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.lang.String.format;
 import static java.util.UUID.randomUUID;
 
@@ -54,11 +56,11 @@ public class EventReceiver {
 
     public ListenableFuture<EventResponse> addEvent(EventRequest entity) {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        final long bucketId = bucketize(entity.getUtc(), scanInterval);
-        final EventKey eventKey = EventKey.of(bucketId, 0, entity.getUtc(), UUIDUtil.toString(randomUUID()));
-        L.debug(format("%s, event-time: %d -> bucket-id: %d", eventKey, eventKey.getEventTime(), bucketId));
+        final ZonedDateTime bucketId = utc(bucketize(entity.getUtc(), scanInterval));
+        final EventKey eventKey = EventKey.of(bucketId, 0, utc(entity.getUtc()), UUIDUtil.toString(randomUUID()));
+        L.debug(format("%s, event-time: %s -> bucket-id: %s", eventKey, eventKey.getEventTime(), bucketId));
         L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, entity));
-        final IMap<Long, Bucket> cache = hz.hz().getMap(ScheduleScanner.BUCKET_CACHE);
+        final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(ScheduleScanner.BUCKET_CACHE);
         return catching(transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, EventResponse>) count -> {
             eventKey.setShard((int) (count / PROPS.getInteger("event.shard.size", 1000)));
             L.debug(format("%s, add-event: event-table: insert", eventKey));
@@ -83,13 +85,13 @@ public class EventReceiver {
         });
     }
 
-    private static class CountIncrementer extends AbstractIDSGMPEntryProcessor<Long, Bucket> {
+    private static class CountIncrementer extends AbstractIDSGMPEntryProcessor<ZonedDateTime, Bucket> {
         @Override
-        public Long process(Entry<Long, Bucket> entry) throws EntryProcessorException {
+        public Long process(Entry<ZonedDateTime, Bucket> entry) throws EntryProcessorException {
             final Bucket b = entry.getValue() == null ? new BucketDO() : entry.getValue();
             b.setCount(b.getCount() + 1);
             entry.setValue(b);
-            L.debug(format("bucket-id: %d, old-count: %d, new-count: %d ", entry.getKey(), b.getCount() - 1, b.getCount()));
+            L.debug(format("bucket-id: %s, old-count: %d, new-count: %d ", entry.getKey(), b.getCount() - 1, b.getCount()));
             return b.getCount();
         }
 

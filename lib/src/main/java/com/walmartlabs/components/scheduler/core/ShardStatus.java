@@ -6,21 +6,25 @@ import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
 
 import java.io.IOException;
+import java.time.ZonedDateTime;
 
 import static com.walmartlabs.components.scheduler.core.ObjectFactory.OBJECT_ID.SHARD_STATUS;
 import static com.walmartlabs.components.scheduler.core.ObjectFactory.SCHEDULER_FACTORY_ID;
 import static java.lang.String.format;
+import static java.time.Instant.ofEpochMilli;
+import static java.time.ZoneOffset.UTC;
+import static java.time.ZonedDateTime.ofInstant;
 
 /**
  * Created by smalik3 on 6/24/16
  */
 public class ShardStatus implements IdentifiedDataSerializable {
 
-    private long bucketId;
+    private ZonedDateTime bucketId;
     private int shard;
     private BucketStatus status;
 
-    public ShardStatus(long bucketId, int shard, BucketStatus status) {
+    public ShardStatus(ZonedDateTime bucketId, int shard, BucketStatus status) {
         this.bucketId = bucketId;
         this.shard = shard;
         this.status = status;
@@ -29,11 +33,11 @@ public class ShardStatus implements IdentifiedDataSerializable {
     public ShardStatus() {
     }
 
-    public long getBucketId() {
+    public ZonedDateTime getBucketId() {
         return bucketId;
     }
 
-    public void setBucketId(long bucketId) {
+    public void setBucketId(ZonedDateTime bucketId) {
         this.bucketId = bucketId;
     }
 
@@ -65,20 +69,20 @@ public class ShardStatus implements IdentifiedDataSerializable {
 
     @Override
     public void writeData(ObjectDataOutput out) throws IOException {
-        out.writeLong(bucketId);
+        out.writeLong(bucketId.toInstant().toEpochMilli());
         out.writeInt(shard);
         out.writeByte(status.ordinal());
     }
 
     @Override
     public void readData(ObjectDataInput in) throws IOException {
-        bucketId = in.readLong();
+        bucketId = ofInstant(ofEpochMilli(in.readLong()), UTC);
         shard = in.readInt();
         status = BucketStatus.values()[in.readByte()];
     }
 
     @Override
     public String toString() {
-        return format("%d[%d]=%s", bucketId, shard, status);
+        return format("%s[%d]=%s", bucketId, shard, status);
     }
 }

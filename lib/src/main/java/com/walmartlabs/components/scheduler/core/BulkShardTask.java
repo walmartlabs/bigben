@@ -14,6 +14,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -25,8 +26,10 @@ import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.sp
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.core.ObjectFactory.OBJECT_ID.BULK_EVENT_TASK;
 import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.ERROR;
-import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.lang.String.format;
+import static java.time.Instant.ofEpochMilli;
+import static java.time.ZoneOffset.UTC;
+import static java.time.ZonedDateTime.ofInstant;
 import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.tuple.Pair.of;
 
@@ -37,9 +40,9 @@ public class BulkShardTask implements Runnable, Callable<ShardStatusList>, Ident
 
     private static final Logger L = Logger.getLogger(BulkShardTask.class);
 
-    private Collection<Pair<Long, Integer>> shards;
+    private Collection<Pair<ZonedDateTime, Integer>> shards;
 
-    public BulkShardTask(Collection<Pair<Long, Integer>> shards) {
+    public BulkShardTask(Collection<Pair<ZonedDateTime, Integer>> shards) {
         this.shards = shards;
     }
 
@@ -70,7 +73,7 @@ public class BulkShardTask implements Runnable, Callable<ShardStatusList>, Ident
         if (shards == null || shards.isEmpty()) {
             return NO_OP;
         }
-        final List<String> buckets = shards.stream().map(p -> utc(p.getLeft()).toString() + "/" + p.getRight()).collect(toList());
+        final List<String> buckets = shards.stream().map(p -> p.getLeft() + "/" + p.getRight()).collect(toList());
         L.debug(format("%s, executing bulk event task for buckets/shards on node: %s", buckets, hz.getCluster().getLocalMember().getSocketAddress()));
         final DataManager<?, ?> dm = spring().getBean(DataManager.class);
         @SuppressWarnings("unchecked")
@@ -83,20 +86,20 @@ public class BulkShardTask implements Runnable, Callable<ShardStatusList>, Ident
                 addCallback(f, new FutureCallback<ShardStatus>() {
                     @Override
                     public void onSuccess(ShardStatus result) {
-                        L.info(format("%s, shard processed, bucket: %d, shard: %d", utc(p.getLeft()), p.getLeft(), p.getRight()));
+                        L.info(format("shard processed, bucket: %s, shard: %d", p.getLeft(), p.getRight()));
                     }
 
                     @Override
                     public void onFailure(Throwable t) {
-                        L.error(format("%s, error in executing shard: bucket: %d, shard: %d", utc(p.getLeft()), p.getLeft(), p.getRight()), t);
+                        L.error(format("error in executing shard: bucket: %s, shard: %d", p.getLeft(), p.getRight()), t);
                     }
                 });
                 return catching(f, Throwable.class, t -> {
-                    L.error(format("%s, error in executing shard, returning a ERROR status bucket: %d, shard: %d", utc(p.getLeft()), p.getLeft(), p.getRight()), t);
+                    L.error(format("error in executing shard, returning a ERROR status bucket: %s, shard: %d", p.getLeft(), p.getRight()), t);
                     return new ShardStatus(p.getLeft(), p.getRight(), ERROR);
                 });
             } catch (Exception ex) {
-                L.error(format("%s, error in submitting shard for execution: bucket: %d, shard: %d", utc(p.getLeft()), p.getLeft(), p.getRight()), ex);
+                L.error(format("error in submitting shard for execution: bucket: %s, shard: %d", p.getLeft(), p.getRight()), ex);
                 return immediateFuture(new ShardStatus(p.getLeft(), p.getRight(), ERROR));
             }
         }).collect(toList()));
@@ -122,7 +125,7 @@ public class BulkShardTask implements Runnable, Callable<ShardStatusList>, Ident
         out.writeInt(shards.size());
         shards.forEach(i -> {
             try {
-                out.writeLong(i.getLeft());
+                out.writeLong(i.getLeft().toInstant().toEpochMilli());
                 out.writeInt(i.getRight());
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -135,7 +138,7 @@ public class BulkShardTask implements Runnable, Callable<ShardStatusList>, Ident
         int size = in.readInt();
         shards = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            shards.add(of(in.readLong(), in.readInt()));
+            shards.add(of(ofInstant(ofEpochMilli(in.readLong()), UTC), in.readInt()));
         }
     }
 }

@@ -37,6 +37,7 @@ import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getSt
 import static com.walmartlabs.components.scheduler.core.ObjectFactory.SCHEDULER_FACTORY_ID;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.EVENT_SCHEDULER;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.time.temporal.ChronoUnit.MILLIS;
 import static java.util.Collections.nCopies;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -76,13 +77,13 @@ public class EventService {
 
     @POST
     @Path("/generate")
-    public Map<Long, Integer> generateEvents(BulkEventGeneration bEG) throws Exception {
+    public Map<ZonedDateTime, Integer> generateEvents(BulkEventGeneration bEG) throws Exception {
         final ThreadLocalRandom random = ThreadLocalRandom.current();
         final ZonedDateTime t1 = ZonedDateTime.parse(bEG.getStartTime());
         final ZonedDateTime t2 = t1.plusMinutes(bEG.getPeriod());
         L.info(String.format("creating %d events between %s and %s for tenant: %s", bEG.getNumEvents(), t1, t2, bEG.getTenantId()));
         long delta = MILLIS.between(t1, t2);
-        final Map<Long, Integer> map = new HashMap<>();
+        final Map<ZonedDateTime, Integer> map = new HashMap<>();
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         Futures.transform(successfulAsList(nCopies(bEG.getNumEvents(), 0).stream().map($ -> {
             final EventRequest eventRequest = new EventRequest();
@@ -92,7 +93,7 @@ public class EventService {
             return eventReceiver.addEvent(eventRequest);
         }).collect(toList())), (Function<List<EventResponse>, Object>) l -> {
             l.forEach(e -> {
-                final long bucketId = bucketize(e.getUtc(), scanInterval);
+                final ZonedDateTime bucketId = utc(bucketize(e.getUtc(), scanInterval));
                 if (!map.containsKey(bucketId))
                     map.put(bucketId, 0);
                 map.put(bucketId, map.get(bucketId) + 1);

@@ -2,28 +2,25 @@ package com.walmartlabs.components.scheduler.model;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
-import info.archinnov.achilles.annotations.Column;
-import info.archinnov.achilles.annotations.Entity;
-import info.archinnov.achilles.annotations.Id;
-import info.archinnov.achilles.annotations.PartitionKey;
+import info.archinnov.achilles.annotations.*;
 
 import java.io.Serializable;
-import java.util.Date;
+import java.time.ZonedDateTime;
 
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
-import static java.lang.Long.parseLong;
 
 /**
  * Created by smalik3 on 3/18/16
  */
 @Entity(table = "event_buckets")
 @KeyMapping(keyClass = Long.class, entityClass = Bucket.class, version = V1)
-public class BucketDO implements Bucket, MutableEntity<Long>, Serializable {
+public class BucketDO implements Bucket, MutableEntity<ZonedDateTime>, Serializable {
 
     @PartitionKey
     @Id(name = "id")
     @Column(name = "id")
-    private Long id;
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    private ZonedDateTime id;
 
     @Column
     private String status;
@@ -32,13 +29,14 @@ public class BucketDO implements Bucket, MutableEntity<Long>, Serializable {
     private long count;
 
     @Column(name = "processed_at")
-    private Date processedAt;
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    private ZonedDateTime processedAt;
 
-    public Long getId() {
+    public ZonedDateTime getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(ZonedDateTime id) {
         this.id = id;
     }
 
@@ -63,17 +61,17 @@ public class BucketDO implements Bucket, MutableEntity<Long>, Serializable {
     }
 
     @Override
-    public Date getProcessedAt() {
+    public ZonedDateTime getProcessedAt() {
         return processedAt;
     }
 
     @Override
-    public void setProcessedAt(Date processedAt) {
+    public void setProcessedAt(ZonedDateTime processedAt) {
         this.processedAt = processedAt;
     }
 
     @Override
-    public Long id() {
+    public ZonedDateTime id() {
         return id;
     }
 
@@ -83,13 +81,13 @@ public class BucketDO implements Bucket, MutableEntity<Long>, Serializable {
     }
 
     @Override
-    public void id(Long aLong) {
-        this.id = aLong;
+    public void id(ZonedDateTime id) {
+        this.id = id;
     }
 
     @Override
     public void key(Object o) {
-        this.id = parseLong(String.valueOf(o));
+        this.id = (ZonedDateTime) o;
     }
 
     @Override

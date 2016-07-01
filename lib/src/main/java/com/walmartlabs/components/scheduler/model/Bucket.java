@@ -2,12 +2,13 @@ package com.walmartlabs.components.scheduler.model;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 
-import java.util.Date;
+import java.time.ZonedDateTime;
+
 
 /**
  * Created by smalik3 on 3/18/16
  */
-public interface Bucket extends Entity<Long> {
+public interface Bucket extends Entity<ZonedDateTime> {
 
     enum BucketStatus {PROCESSED, ERROR, UN_PROCESSED, PROCESSING, TIMED_OUT}
 
@@ -19,7 +20,7 @@ public interface Bucket extends Entity<Long> {
 
     void setCount(long count);
 
-    void setProcessedAt(Date date);
+    void setProcessedAt(ZonedDateTime date);
 
-    Date getProcessedAt();
+    ZonedDateTime getProcessedAt();
 }

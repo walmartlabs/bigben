@@ -4,6 +4,8 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
 import info.archinnov.achilles.annotations.*;
 
+import java.time.ZonedDateTime;
+
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static java.lang.String.format;
 
@@ -31,6 +33,10 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
 
     @Column
     private String payload;
+
+    @Column(name = "processed_at")
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    private ZonedDateTime processedAt;
 
     public String getStatus() {
         return status;
@@ -104,22 +110,21 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
         this.payload = payload;
     }
 
-    private long millis;
-
     @Override
-    public void setProcessedAt(long millis) {
-        this.millis = millis;
+    public ZonedDateTime getProcessedAt() {
+        return processedAt;
     }
 
     @Override
-    public long getProcessedAt() {
-        return millis;
+    public void setProcessedAt(ZonedDateTime processedAt) {
+        this.processedAt = processedAt;
     }
 
     public static class EventKey {
         @PartitionKey
         @Column(name = "bucket_id")
-        private long bucketId;
+        @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+        private ZonedDateTime bucketId;
 
         @PartitionKey(2)
         @Column(name = "shard")
@@ -127,13 +132,14 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
 
         @ClusteringColumn
         @Column(name = "event_time")
-        private long eventTime;
+        @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+        private ZonedDateTime eventTime;
 
         @ClusteringColumn(2)
         @Column(name = "event_id")
         private String eventId;
 
-        public static EventKey of(long bucketId, int shard, long eventTime, String eventId) {
+        public static EventKey of(ZonedDateTime bucketId, int shard, ZonedDateTime eventTime, String eventId) {
             final EventKey eventKey = new EventKey();
             eventKey.bucketId = bucketId;
             eventKey.eventTime = eventTime;
@@ -142,11 +148,11 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
             return eventKey;
         }
 
-        public long getBucketId() {
+        public ZonedDateTime getBucketId() {
             return bucketId;
         }
 
-        public void setBucketId(long bucketId) {
+        public void setBucketId(ZonedDateTime bucketId) {
             this.bucketId = bucketId;
         }
 
@@ -158,11 +164,11 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
             this.eventId = eventId;
         }
 
-        public long getEventTime() {
+        public ZonedDateTime getEventTime() {
             return eventTime;
         }
 
-        public void setEventTime(long eventTime) {
+        public void setEventTime(ZonedDateTime eventTime) {
             this.eventTime = eventTime;
         }
 
@@ -176,7 +182,7 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
 
         @Override
         public String toString() {
-            return format("Event[%d/%d/%d/%s]", bucketId, shard, eventTime, eventId);
+            return format("Event[%s/%d/%s/%s]", bucketId, shard, eventTime, eventId);
         }
     }
 
@@ -189,7 +195,7 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
                 ", tenant='" + tenant + '\'' +
                 ", xrefId='" + xrefId + '\'' +
                 ", payload='" + payload + '\'' +
-                ", millis=" + millis +
+                ", processedAt=" + getProcessedAt() +
                 '}';
     }
 }
