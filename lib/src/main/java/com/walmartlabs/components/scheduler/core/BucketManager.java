@@ -111,10 +111,14 @@ public class BucketManager {
         truncateIfNeeded();
         shards.put(bucketId, shard, PROCESSING);
         service.schedule(() -> {
-            final BucketStatus bucketStatus = this.shards.get(bucketId, shard);
-            if (bucketStatus != null && bucketStatus == PROCESSING) {
-                shards.put(bucketId, shard, UN_PROCESSED);
-                syncShard(bucketId, shard, epoch(), "", UN_PROCESSED, null);
+            try {
+                final BucketStatus bucketStatus = this.shards.get(bucketId, shard);
+                if (bucketStatus != null && bucketStatus == PROCESSING) {
+                    shards.put(bucketId, shard, UN_PROCESSED);
+                    syncShard(bucketId, shard, epoch(), "", UN_PROCESSED, null);
+                }
+            } catch (Exception e) {
+                L.error(format("error in timing out the shard for processing, bucket: %s, shard: %d", bucketId, shard));
             }
         }, maxProcessingTime, SECONDS);
     }
@@ -123,18 +127,31 @@ public class BucketManager {
         modified.set(true);
         switch (shardStatus) {
             case PROCESSED:
+                L.info(format("shard: %s[%s] finished successfully", bucketId, shard));
                 shards.remove(bucketId, shard);
                 if (!shards.containsRow(bucketId)) {
+                    L.info(format("no more shards to be processed for bucket: %s, marking it PROCESSED", bucketId));
                     syncBucket(bucketId, PROCESSED);
+                    shards.put(bucketId, -1, PROCESSED);
                 }
-                shards.put(bucketId, -1, PROCESSED);
                 break;
             case ERROR:
+                L.info(format("shard: %s[%s] finished with error", bucketId, shard));
                 shards.put(bucketId, shard, ERROR);
                 break;
             default:
                 throw new IllegalArgumentException(format("bucket: %s, shard: %d, status: %s", bucketId, shard, shardStatus.name()));
         }
+    }
+
+    public synchronized void bucketDone(ZonedDateTime bucketId, BucketStatus bucketStatus) {
+        shards.rowKeySet().stream().filter(z -> z.equals(bucketId)).forEach(z -> {
+            final Map<Integer, BucketStatus> row = new HashMap<>(shards.row(z));
+            for (Integer shard : row.keySet()) {
+                shards.remove(z, shard);
+            }
+        });
+        syncBucket(bucketId, bucketStatus);
     }
 
     private void truncateIfNeeded() {
@@ -182,7 +199,7 @@ public class BucketManager {
 
     private ListenableFuture<Event> syncShard(ZonedDateTime bucketId, int shard, ZonedDateTime eventTime, String eventId, BucketStatus bucketStatus, String payload) {
         final Event entity = entity(Event.class, EventKey.of(bucketId, shard, eventTime, eventId));
-        entity.setStatus(TIMED_OUT.name());
+        entity.setStatus(bucketStatus.name());
         if (payload != null)
             entity.setPayload(payload);
         L.info(format("shard %s[%d] is done, syncing status as %s", bucketId, shard, bucketStatus));
@@ -202,12 +219,19 @@ public class BucketManager {
         return f;
     }
 
+    private static final ListenableFuture<Event> SUCCESS = immediateFuture(null);
+
     public synchronized ListenableFuture<Event> saveCheckpoint() {
-        L.info("saving checkpoint for shards: " + shards);
-        return syncShard(epoch(), -1, epoch(), "", PROCESSING, shards.cellSet().stream().sorted((o1, o2) -> {
-            final int i = o1.getRowKey().compareTo(o2.getRowKey());
-            return i != 0 ? i : o1.getColumnKey().compareTo(o2.getColumnKey());
-        }).map(c -> format("%s/%s/%s", c.getRowKey(), c.getColumnKey(), c.getValue())).collect(joining(",")));
+        try {
+            L.info("saving checkpoint for shards: " + shards);
+            return syncShard(epoch(), -1, epoch(), "", PROCESSING, shards.cellSet().stream().sorted((o1, o2) -> {
+                final int i = o1.getRowKey().compareTo(o2.getRowKey());
+                return i != 0 ? i : o1.getColumnKey().compareTo(o2.getColumnKey());
+            }).map(c -> format("%s/%s/%s", c.getRowKey(), c.getColumnKey(), c.getValue())).collect(joining(",")));
+        } catch (Exception e) {
+            L.error("error in saving the checkpoint: shards: " + shards, e);
+            return SUCCESS; // we do not want to suppress further executions of this timer
+        }
     }
 
     private ListenableFuture<?> loadCheckpoint() {
