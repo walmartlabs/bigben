@@ -1,6 +1,7 @@
 package com.walmartlabs.components.scheduler.services;
 
 import com.google.common.base.Function;
+import com.google.common.io.Files;
 import com.google.common.util.concurrent.Futures;
 import com.hazelcast.core.Member;
 import com.hazelcast.nio.ObjectDataInput;
@@ -11,20 +12,23 @@ import com.walmart.gmp.ingestion.platform.framework.core.Props;
 import com.walmartlabs.components.scheduler.core.EventReceiver;
 import com.walmartlabs.components.scheduler.core.ObjectFactory;
 import com.walmartlabs.components.scheduler.core.ScheduleScanner;
+import com.walmartlabs.components.scheduler.core.Service;
 import com.walmartlabs.components.scheduler.model.EventRequest;
 import com.walmartlabs.components.scheduler.model.EventResponse;
+import com.walmartlabs.components.scheduler.tasks.StatusTask;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.ws.rs.*;
+import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.time.ZoneOffset;
+import java.nio.charset.Charset;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
@@ -63,10 +67,22 @@ public class EventService {
     @Autowired
     private Hz hz;
 
+    @Autowired
+    private Service service;
+
     @GET
     @Path("/stats")
-    public List<String> getStats() {
-        return hz.hz().getCluster().getMembers().stream().map(Member::getSocketAddress).map(InetSocketAddress::toString).collect(toList());
+    public Map<String, String> getStats() {
+        final Map<Member, Future<String>> results = hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(new StatusTask(service.name()));
+        final Map<String, String> map = new HashMap<>();
+        for (Map.Entry<Member, Future<String>> entry : results.entrySet()) {
+            try {
+                map.put(entry.getKey().getSocketAddress().getAddress().toString(), entry.getValue().get());
+            } catch (Exception e) {
+                map.put(entry.getKey().getSocketAddress().getAddress().toString(), "Error: " + getStackTraceString(getRootCause(e)));
+            }
+        }
+        return map;
     }
 
     @POST
@@ -156,7 +172,22 @@ public class EventService {
 
     }
 
-    public static void main(String[] args) {
-        System.out.println(ZonedDateTime.now(ZoneOffset.UTC));
+    public static void main(String[] args) throws IOException {
+        Random random = new Random();
+        String[] category = "electronics,clothing,toys,garden,general,paint,electrical,motors,screws,lumber,cement,coal,footwear".split(",");
+        String[] brands = "sears,macys,adidas,nike,jcpenny,walmart,kmart,quick_stop,food_mart,old_navy,calvin,micheal_kors".split(",");
+        for (int i = 0; i < 10000; i++) {
+            String insert = "INSERT INTO public.products(" +
+                    "product_id, title, category, brand, price, shipping_charges, " +
+                    "is_selleable, pick_up_today, length, width, height)" +
+                    " VALUES (%d, '%s', '%s', '%s', %.2f, %.2f, " +
+                    "'%s', '%s', %.2f, %.2f, %.2f);\n";
+            final String insertStmt = String.format(insert, (i + 1), "title_" + i, category[random.nextInt(category.length)],
+                    brands[random.nextInt(brands.length)], 100 * random.nextDouble() + 1, 20 * random.nextDouble() + 1,
+                    random.nextBoolean() ? 'Y' : 'N', random.nextBoolean() ? 'Y' : 'N', 50 * random.nextDouble() + 10,
+                    30 * random.nextDouble() + 5, 20 * random.nextDouble() + 3);
+            Files.append(insertStmt, new File("/Users/smalik3/products.sql"), Charset.defaultCharset());
+
+        }
     }
 }

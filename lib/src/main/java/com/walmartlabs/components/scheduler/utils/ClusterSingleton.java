@@ -9,6 +9,7 @@ import org.apache.log4j.Logger;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.google.common.collect.Sets.newConcurrentHashSet;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.hazelcast.core.LifecycleEvent.LifecycleState.SHUTDOWN;
 import static com.hazelcast.core.LifecycleEvent.LifecycleState.SHUTTING_DOWN;
@@ -32,6 +33,7 @@ public class ClusterSingleton {
     private final Hz hz;
     private final TaskExecutor taskExecutor;
     private final AtomicReference<String> listenerId = new AtomicReference<>();
+    public static final Set<String> ACTIVE_SERVICES = newConcurrentHashSet();
 
     public ClusterSingleton(Service service, Hz hz) {
         this.service = service;
@@ -55,7 +57,8 @@ public class ClusterSingleton {
                 final ILock clusterSingletonLock = hz.hz().getLock(service.name() + "_lock");
                 clusterSingletonLock.lock();
                 try {
-                    L.info(format("cluster singleton ownership claimed, '%s' is the new owner: " + service.name(), currentThread().getName()));
+                    L.info(format("cluster singleton ownership claimed, '%s[%s]' is the new owner: %s",
+                            hz.hz().getCluster().getLocalMember(), currentThread().getName(), service.name()));
                     if (listenerId.get() != null) {
                         L.info("Adding the shutdown hook for cluster singleton: " + service.name());
                         listenerId.set(hz.hz().getLifecycleService().addLifecycleListener(event -> {
@@ -63,6 +66,7 @@ public class ClusterSingleton {
                                 L.info("node is shutting down, destroying the service: " + service.name());
                                 try {
                                     service.destroy();
+                                    ACTIVE_SERVICES.remove(service.name());
                                 } catch (Exception e) {
                                     L.error("error in destroying the service: " + service.name(), e);
                                 }
@@ -71,6 +75,7 @@ public class ClusterSingleton {
                     }
                     L.info("starting the cluster singleton service: " + service.name());
                     service.init();
+                    ACTIVE_SERVICES.add(service.name());
                     taskExecutor.async(() -> {
                                 L.info("executing the cluster singleton service: " + service.name());
                                 service.execute();

@@ -9,6 +9,7 @@ import com.walmartlabs.components.scheduler.model.Bucket;
 import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
 import com.walmartlabs.components.scheduler.model.Event;
 import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 
 import java.time.ZonedDateTime;
@@ -33,6 +34,7 @@ import static java.time.ZonedDateTime.now;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.joining;
+import static org.apache.commons.lang3.tuple.Pair.of;
 
 /**
  * Created by smalik3 on 6/29/16
@@ -156,6 +158,8 @@ public class BucketManager {
 
     private void truncateIfNeeded() {
         final List<ZonedDateTime> bucketIds = reverse(newArrayList(new TreeSet<>(shards.rowKeySet())));
+        final List<Pair<ZonedDateTime, Integer>> purged = new ArrayList<>();
+        L.info("checking buckets for purging");
         if (bucketIds.size() > maxBuckets) {
             for (int i = maxBuckets; i < bucketIds.size(); i++) {
                 final ZonedDateTime bucketId = bucketIds.get(i);
@@ -171,9 +175,13 @@ public class BucketManager {
                 }
                 for (Integer shard : statusByShard.keySet()) {
                     shards.remove(bucketId, shard);
+                    purged.add(of(bucketId, shard));
                 }
             }
         }
+        if (!purged.isEmpty())
+            L.info("purged shards: " + purged);
+        else L.info("nothing to purge");
     }
 
     private ListenableFuture<Bucket> syncBucket(ZonedDateTime bucketId, BucketStatus bucketStatus) {
