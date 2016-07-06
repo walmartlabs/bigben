@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.tasks;
 
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -8,8 +8,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.walmartlabs.components.scheduler.core.ObjectFactory.OBJECT_ID.SHARD_STATUS_LIST;
-import static com.walmartlabs.components.scheduler.core.ObjectFactory.SCHEDULER_FACTORY_ID;
+import static com.walmartlabs.components.scheduler.entities.ObjectFactory.OBJECT_ID.SHARD_STATUS_LIST;
+import static com.walmartlabs.components.scheduler.entities.ObjectFactory.SCHEDULER_FACTORY_ID;
 
 /**
  * Created by smalik3 on 6/25/16

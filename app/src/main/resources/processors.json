@@ -5,5 +5,12 @@
     "properties": {
       "eventProcessorClass": "com.walmartlabs.components.scheduler.processors.DefaultEventProcessor"
     }
+  },
+  {
+    "tenant": "1",
+    "type": "HTTP",
+    "properties": {
+      "url": "http://localhost:8080/services/events/_receive_"
+    }
   }
 ]

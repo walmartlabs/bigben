@@ -2,8 +2,7 @@ package com.walmartlabs.components.scheduler.processors;
 
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.walmartlabs.components.scheduler.core.EventProcessor;
-import com.walmartlabs.components.scheduler.model.Event;
+import com.walmartlabs.components.scheduler.entities.Event;
 import org.apache.log4j.Logger;
 
 /**

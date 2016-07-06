@@ -5,7 +5,7 @@
   },
   "map": {
     "store": {
-      "fqcn": "com.walmartlabs.components.scheduler.core.BucketStore",
+      "fqcn": "com.walmartlabs.components.scheduler.entities.BucketStore",
       "dmConfigPath": "file://dm-config.json"
     }
   }

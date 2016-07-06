@@ -69,6 +69,6 @@
         <property name="configuration" ref="igniteConfiguration"/>
     </bean>
 
-    <bean class="com.walmartlabs.components.scheduler.core.EventReceiver"/>
+    <bean class="com.walmartlabs.components.scheduler.input.EventReceiver"/>
 
 </beans>

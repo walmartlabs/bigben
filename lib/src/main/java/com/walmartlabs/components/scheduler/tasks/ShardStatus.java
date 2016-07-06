@@ -1,15 +1,15 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.tasks;
 
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
-import com.walmartlabs.components.scheduler.model.Bucket.BucketStatus;
+import com.walmartlabs.components.scheduler.entities.Bucket.Status;
 
 import java.io.IOException;
 import java.time.ZonedDateTime;
 
-import static com.walmartlabs.components.scheduler.core.ObjectFactory.OBJECT_ID.SHARD_STATUS;
-import static com.walmartlabs.components.scheduler.core.ObjectFactory.SCHEDULER_FACTORY_ID;
+import static com.walmartlabs.components.scheduler.entities.ObjectFactory.OBJECT_ID.SHARD_STATUS;
+import static com.walmartlabs.components.scheduler.entities.ObjectFactory.SCHEDULER_FACTORY_ID;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;
@@ -22,9 +22,9 @@ public class ShardStatus implements IdentifiedDataSerializable {
 
     private ZonedDateTime bucketId;
     private int shard;
-    private BucketStatus status;
+    private Status status;
 
-    public ShardStatus(ZonedDateTime bucketId, int shard, BucketStatus status) {
+    public ShardStatus(ZonedDateTime bucketId, int shard, Status status) {
         this.bucketId = bucketId;
         this.shard = shard;
         this.status = status;
@@ -49,11 +49,11 @@ public class ShardStatus implements IdentifiedDataSerializable {
         this.shard = shard;
     }
 
-    public BucketStatus getStatus() {
+    public Status getStatus() {
         return status;
     }
 
-    public void setStatus(BucketStatus status) {
+    public void setStatus(Status status) {
         this.status = status;
     }
 
@@ -78,7 +78,7 @@ public class ShardStatus implements IdentifiedDataSerializable {
     public void readData(ObjectDataInput in) throws IOException {
         bucketId = ofInstant(ofEpochMilli(in.readLong()), UTC);
         shard = in.readInt();
-        status = BucketStatus.values()[in.readByte()];
+        status = Status.values()[in.readByte()];
     }
 
     @Override

@@ -1,9 +1,12 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.entities;
 
 import com.hazelcast.nio.serialization.DataSerializableFactory;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
+import com.walmartlabs.components.scheduler.tasks.BulkShardTask;
+import com.walmartlabs.components.scheduler.tasks.ShardStatus;
+import com.walmartlabs.components.scheduler.tasks.ShardStatusList;
 
-import static com.walmartlabs.components.scheduler.core.EventReceiver.CACHED_PROCESSOR;
+import static com.walmartlabs.components.scheduler.input.EventReceiver.CACHED_PROCESSOR;
 import static com.walmartlabs.components.scheduler.services.EventService.SHUTDOWN_TASK;
 
 /**

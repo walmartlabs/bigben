@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.model;
+package com.walmartlabs.components.scheduler.entities;
 
 /**
  * Created by smalik3 on 6/22/16

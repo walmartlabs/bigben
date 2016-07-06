@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.model;
+package com.walmartlabs.components.scheduler.entities;
 
 import info.archinnov.achilles.codec.Codec;
 import info.archinnov.achilles.exception.AchillesTranscodingException;

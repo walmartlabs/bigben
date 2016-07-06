@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.model;
+package com.walmartlabs.components.scheduler.entities;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 
@@ -10,7 +10,7 @@ import java.time.ZonedDateTime;
  */
 public interface Bucket extends Entity<ZonedDateTime> {
 
-    enum BucketStatus {PROCESSED, ERROR, UN_PROCESSED, PROCESSING, TIMED_OUT}
+    enum Status {PROCESSED, ERROR, UN_PROCESSED, PROCESSING, TIMED_OUT}
 
     String getStatus();
 

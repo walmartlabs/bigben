@@ -11,12 +11,10 @@ import com.ning.http.client.Response;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePublisher;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
-import com.walmartlabs.components.scheduler.core.EventProcessor;
-import com.walmartlabs.components.scheduler.model.Event;
-import com.walmartlabs.components.scheduler.model.EventResponse;
+import com.walmartlabs.components.scheduler.entities.Event;
+import com.walmartlabs.components.scheduler.entities.EventResponse;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -24,6 +22,8 @@ import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Sets.newHashSet;
+import static com.google.common.net.HttpHeaders.ACCEPT;
+import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static com.google.common.util.concurrent.SettableFuture.create;
@@ -32,11 +32,12 @@ import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.sp
 import static com.walmart.gmp.ingestion.platform.framework.utils.ConfigParser.parse;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.services.common.util.JsonUtil.convertToString;
-import static com.walmartlabs.components.scheduler.model.EventResponse.toResponse;
+import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
 import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.function.Function.identity;
+import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 
 /**
  * Created by smalik3 on 6/21/16
@@ -62,7 +63,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
         } else L.info("processors will be created when required");
     }
 
-    private final Cache<String, EventProcessor<Event>> producerCache = CacheBuilder.newBuilder().build();
+    private final Cache<String, EventProcessor<Event>> processorCache = CacheBuilder.newBuilder().build();
 
     private final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(Exception.class));
 
@@ -94,21 +95,26 @@ public class ProcessorRegistry implements EventProcessor<Event> {
             checkArgument(processorConfig != null, "no config for tenant: " + tenant);
             switch (processorConfig.getType()) {
                 case KAFKA:
-                    return producerCache.get(tenant, () -> {
+                    return processorCache.get(tenant, () -> {
                         final MessagePublisher<String, EventResponse, EventResponse> publisher =
-                                new PublisherFactory(processorConfig.getProperties().get("topic").toString(), processorConfig.getConfig()).create();
+                                new PublisherFactory(processorConfig.getProperties().get("topic").toString(),
+                                        processorConfig.getProperties().get("configPath").toString()).create();
                         return e -> transform(publisher.publish(e.id().getEventId(), toResponse(e)), (Function<EventResponse, Event>) $ -> e);
                     });
                 case HTTP:
-                    producerCache.get(tenant, () -> e -> {
+                    processorCache.get(tenant, () -> e -> {
+                        final SettableFuture<Event> future = create();
                         try {
                             final com.ning.http.client.ListenableFuture<Response> f = ASYNC_HTTP_CLIENT.
-                                    preparePost(processorConfig.getProperties().get("url").toString()).setBody(convertToString(toResponse(e))).execute();
-                            final SettableFuture<Event> future = create();
+                                    preparePost(processorConfig.getProperties().get("url").toString())
+                                    .setBody(convertToString(toResponse(e)))
+                                    .setHeader(ACCEPT, APPLICATION_JSON)
+                                    .setHeader(CONTENT_TYPE, APPLICATION_JSON)
+                                    .execute();
                             f.addListener(() -> {
                                 try {
                                     final Response response = f.get();
-                                    if (response.getStatusCode() == 200) {
+                                    if (response.getStatusCode() == 200 || response.getStatusCode() == 204) {
                                         future.set(e);
                                     } else {
                                         future.setException(new RuntimeException(response.getResponseBody()));
@@ -118,12 +124,13 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                                 }
                             }, directExecutor());
                             return future;
-                        } catch (IOException ioe) {
-                            return immediateFailedFuture(getRootCause(ioe));
+                        } catch (Exception ex) {
+                            future.setException(getRootCause(ex));
                         }
+                        return future;
                     });
                 case CUSTOM_CLASS:
-                    producerCache.get(tenant, () -> {
+                    processorCache.get(tenant, () -> {
                         try {
                             @SuppressWarnings("unchecked")
                             final Class<EventProcessor<Event>> eventProcessorClass =
@@ -134,7 +141,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                         }
                     });
                 case CUSTOM_BEAN:
-                    return producerCache.get(tenant, () -> {
+                    return processorCache.get(tenant, () -> {
                         @SuppressWarnings("unchecked")
                         final EventProcessor<Event> eventProcessor = spring().getBean(processorConfig.getProperties().get("eventProcessorBeanName").toString(), EventProcessor.class);
                         return eventProcessor;
@@ -147,7 +154,14 @@ public class ProcessorRegistry implements EventProcessor<Event> {
         }
     }
 
-    public void register(ProcessorConfig config) {
-
+    public ProcessorConfig register(ProcessorConfig config) {
+        checkArgument(config != null, "null processor config");
+        checkArgument(config.getTenant() != null && config.getTenant().trim().length() > 0, "null or empty tenantId");
+        checkArgument(config.getType() != null, "null processor type");
+        checkArgument(config.getProperties() == null || config.getProperties().isEmpty(), "null or empty properties");
+        L.info("registering new processor");
+        final ProcessorConfig previous = configs.put(config.getTenant(), config);
+        processorCache.invalidate(config.getTenant());
+        return previous;
     }
 }

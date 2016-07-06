@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.entities;
 
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -6,7 +6,6 @@ import com.hazelcast.core.MapStore;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManagerConfig;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
-import com.walmartlabs.components.scheduler.model.Bucket;
 import com.walmartlabs.components.scheduler.utils.HackedDataManager;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +16,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Function;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableMap.of;
@@ -114,7 +112,7 @@ public class BucketStore implements MapStore<ZonedDateTime, Bucket> {
         try {
             return allAsList(newArrayList(keys).stream().map(this::load0).
                     collect(toList())).get(30, SECONDS).stream().filter(e -> e != null).collect(
-                    toMap((Function<Bucket, ZonedDateTime>) Entity::id, identity()));
+                    toMap(Entity::id, identity()));
         } catch (Exception e) {
             L.error("error in loading the keys: " + keys, e);
             return new HashMap<>();
@@ -123,7 +121,7 @@ public class BucketStore implements MapStore<ZonedDateTime, Bucket> {
 
     private ListenableFuture<Bucket> load0(ZonedDateTime key) throws CacheLoaderException {
         L.debug("loading data for key " + key);
-        return transform(dataManager.getAsync(key, fullSelector(key)), //TODO: dont use full selector, no need to load the error
+        return transform(dataManager.getAsync(key, fullSelector(key)), //TODO: don't use full selector, no need to load the error
                 (com.google.common.base.Function<Bucket, Bucket>) DataManager::raw);
     }
 

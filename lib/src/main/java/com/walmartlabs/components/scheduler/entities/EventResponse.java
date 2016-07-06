@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.model;
+package com.walmartlabs.components.scheduler.entities;
 
 import com.walmart.platform.kernel.exception.error.Error;
 

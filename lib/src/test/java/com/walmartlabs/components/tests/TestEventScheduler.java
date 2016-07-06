@@ -2,12 +2,11 @@ package com.walmartlabs.components.tests;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmartlabs.components.scheduler.core.EventProcessor;
-import com.walmartlabs.components.scheduler.core.EventReceiver;
-import com.walmartlabs.components.scheduler.model.Bucket;
-import com.walmartlabs.components.scheduler.model.Event;
-import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
-import com.walmartlabs.components.scheduler.services.BulkEventGeneration;
+import com.walmartlabs.components.scheduler.processors.EventProcessor;
+import com.walmartlabs.components.scheduler.input.EventReceiver;
+import com.walmartlabs.components.scheduler.entities.Bucket;
+import com.walmartlabs.components.scheduler.entities.Event;
+import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.services.EventService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
@@ -75,11 +74,11 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
         final int delay = 1;
         final long from = bucketize(now.plusMinutes(delay).toInstant().toEpochMilli(), scanInterval);
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
-        final int numEvents = 1000;
+        final int numEvents = 20;
         counts.set(numEvents);
-        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 10, numEvents, "0")));
+        //System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, numEvents, "0")));
         try {
-            latch.await(11, MINUTES);
+            latch.await(2, MINUTES);
         } catch (InterruptedException e) {
             throw new AssertionError("test timed out");
         }

@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.services;
 
 /**
  * Created by smalik3 on 4/1/16

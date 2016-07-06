@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.tasks;
 
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -8,7 +8,9 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmartlabs.components.scheduler.model.Event;
+import com.walmartlabs.components.scheduler.processors.EventProcessor;
+import com.walmartlabs.components.scheduler.entities.ObjectFactory;
+import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
@@ -24,8 +26,8 @@ import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
-import static com.walmartlabs.components.scheduler.core.ObjectFactory.OBJECT_ID.BULK_EVENT_TASK;
-import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.ERROR;
+import static com.walmartlabs.components.scheduler.entities.ObjectFactory.OBJECT_ID.BULK_EVENT_TASK;
+import static com.walmartlabs.components.scheduler.entities.Bucket.Status.ERROR;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;

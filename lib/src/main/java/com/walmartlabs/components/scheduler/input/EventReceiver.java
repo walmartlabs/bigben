@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.input;
 
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.AsyncFunction;
@@ -12,9 +12,10 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.platform.kernel.exception.error.Error;
 import com.walmart.services.common.util.UUIDUtil;
-import com.walmartlabs.components.scheduler.model.*;
-import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
-import com.walmartlabs.components.scheduler.model.EventLookupDO.EventLookupKey;
+import com.walmartlabs.components.scheduler.entities.ObjectFactory;
+import com.walmartlabs.components.scheduler.entities.*;
+import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -29,8 +30,9 @@ import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFuture
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getErrorAtServer;
-import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.UN_PROCESSED;
-import static com.walmartlabs.components.scheduler.model.EventResponse.fromRequest;
+import static com.walmartlabs.components.scheduler.core.ScheduleScanner.BUCKET_CACHE;
+import static com.walmartlabs.components.scheduler.entities.Bucket.Status.UN_PROCESSED;
+import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.lang.String.format;
@@ -52,7 +54,7 @@ public class EventReceiver {
     @Autowired
     private DataManager<EventLookupKey, EventLookup> lookupDataManager;
 
-    static final CountIncrementer CACHED_PROCESSOR = new CountIncrementer();
+    public static final CountIncrementer CACHED_PROCESSOR = new CountIncrementer();
 
     public ListenableFuture<EventResponse> addEvent(EventRequest entity) {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
@@ -60,7 +62,7 @@ public class EventReceiver {
         final EventKey eventKey = EventKey.of(bucketId, 0, utc(entity.getUtc()), UUIDUtil.toString(randomUUID()));
         L.debug(format("%s, event-time: %s -> bucket-id: %s", eventKey, eventKey.getEventTime(), bucketId));
         L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, entity));
-        final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(ScheduleScanner.BUCKET_CACHE);
+        final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(BUCKET_CACHE);
         return catching(transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, EventResponse>) count -> {
             eventKey.setShard((int) (count / PROPS.getInteger("event.shard.size", 1000)));
             L.debug(format("%s, add-event: event-table: insert", eventKey));

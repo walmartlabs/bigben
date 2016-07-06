@@ -1,7 +1,7 @@
-package com.walmartlabs.components.scheduler.model;
+package com.walmartlabs.components.scheduler.entities;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
-import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 
 import java.time.ZonedDateTime;
 

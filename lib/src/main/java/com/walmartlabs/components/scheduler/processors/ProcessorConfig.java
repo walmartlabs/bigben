@@ -10,7 +10,6 @@ public class ProcessorConfig {
     public enum Type {KAFKA, HTTP, CUSTOM_BEAN, CUSTOM_CLASS}
 
     private String tenant;
-    private String config;
     private Type type;
     private Map<String, Object> properties;
 
@@ -21,14 +20,6 @@ public class ProcessorConfig {
 
     public void setTenant(String tenant) {
         this.tenant = tenant;
-    }
-
-    public String getConfig() {
-        return config;
-    }
-
-    public void setConfig(String config) {
-        this.config = config;
     }
 
     public Type getType() {
@@ -51,7 +42,6 @@ public class ProcessorConfig {
     public String toString() {
         return "ProcessorConfig{" +
                 "tenant='" + tenant + '\'' +
-                ", config='" + config + '\'' +
                 ", type=" + type +
                 ", properties=" + properties +
                 '}';

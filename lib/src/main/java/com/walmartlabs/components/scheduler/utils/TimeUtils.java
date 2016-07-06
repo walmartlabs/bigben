@@ -7,6 +7,7 @@ import java.util.Date;
 import static java.time.Instant.EPOCH;
 import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;
+import static java.time.ZonedDateTime.now;
 import static java.time.ZonedDateTime.ofInstant;
 import static java.time.temporal.ChronoField.MILLI_OF_SECOND;
 import static java.time.temporal.ChronoField.MINUTE_OF_HOUR;
@@ -50,5 +51,9 @@ public class TimeUtils {
 
     public static ZonedDateTime fromDate(Date d) {
         return utc(d.getTime());
+    }
+
+    public static ZonedDateTime nowUTC() {
+        return now(UTC);
     }
 }

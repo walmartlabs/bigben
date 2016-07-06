@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.processors;
 
 import com.google.common.util.concurrent.ListenableFuture;
 

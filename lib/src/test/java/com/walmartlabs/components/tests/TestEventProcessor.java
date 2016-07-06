@@ -2,8 +2,8 @@ package com.walmartlabs.components.tests;
 
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.walmartlabs.components.scheduler.core.EventProcessor;
-import com.walmartlabs.components.scheduler.model.EventDO;
+import com.walmartlabs.components.scheduler.processors.EventProcessor;
+import com.walmartlabs.components.scheduler.entities.EventDO;
 
 /**
  * Created by smalik3 on 3/8/16

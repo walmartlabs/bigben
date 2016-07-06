@@ -7,6 +7,6 @@
   },
   "secondaryConfigs": {},
   "entityPackages": [
-    "com.walmartlabs.components.scheduler.model"
+    "com.walmartlabs.components.scheduler.entities"
   ]
 }

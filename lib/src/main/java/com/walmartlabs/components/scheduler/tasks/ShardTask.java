@@ -1,4 +1,4 @@
-package com.walmartlabs.components.scheduler.core;
+package com.walmartlabs.components.scheduler.tasks;
 
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -6,9 +6,10 @@ import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.services.nosql.data.CqlDAO;
-import com.walmartlabs.components.scheduler.model.Event;
-import com.walmartlabs.components.scheduler.model.EventDO;
-import com.walmartlabs.components.scheduler.model.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.processors.EventProcessor;
+import com.walmartlabs.components.scheduler.entities.Event;
+import com.walmartlabs.components.scheduler.entities.EventDO;
+import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import info.archinnov.achilles.persistence.AsyncManager;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.type.TypeReference;
@@ -32,8 +33,8 @@ import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRo
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static com.walmart.services.common.util.JsonUtil.convertToObject;
 import static com.walmart.services.common.util.JsonUtil.convertToString;
-import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.ERROR;
-import static com.walmartlabs.components.scheduler.model.Bucket.BucketStatus.PROCESSED;
+import static com.walmartlabs.components.scheduler.entities.Bucket.Status.ERROR;
+import static com.walmartlabs.components.scheduler.entities.Bucket.Status.PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.epoch;
 import static java.lang.Integer.getInteger;
 import static java.lang.Integer.max;
@@ -76,7 +77,7 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
         L.info(format("%s, processing shard with fetch size: %d", executionKey, fetchSize));
         final EventKey errorKey = EventKey.of(bucketId, shard, epoch(), "");
         return catching(transformAsync(eventDM.getAsync(errorKey, fullSelector(errorKey)), evt -> {
-            if (evt == null) {
+            if (evt == null || evt.getError() == null || evt.getError().trim().length() == 0) {
                 L.info(format("%s, processing shard from beginning", executionKey));
                 return transformAsync(loadAndProcess(fetchSize, getAsyncManager(), epoch(), ""), this::calculateShardStatus);
             } else {
@@ -85,7 +86,7 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
                 }).stream().map(this::schedule).collect(toList())), this::calculateShardStatus);
             }
         }), Exception.class, ex -> {
-            L.error(format("%s, error in processing shard", executionKey));
+            L.error(format("%s, error in processing shard", executionKey), ex);
             return new ShardStatus(bucketId, shard, ERROR);
         });
     }

@@ -27,7 +27,7 @@
         <appender-ref ref="console"/>
     </logger>
 
-    <!--<logger name="com.walmartlabs.components.scheduler.core.BulkShardTask" additivity="false">
+    <!--<logger name="com.walmartlabs.components.scheduler.tasks.BulkShardTask" additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
     </logger>-->

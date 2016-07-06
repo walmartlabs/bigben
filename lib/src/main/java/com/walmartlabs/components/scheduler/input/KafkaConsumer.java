@@ -2,8 +2,7 @@ package com.walmartlabs.components.scheduler.input;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
-import com.walmartlabs.components.scheduler.core.EventReceiver;
-import com.walmartlabs.components.scheduler.model.EventRequest;
+import com.walmartlabs.components.scheduler.entities.EventRequest;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
