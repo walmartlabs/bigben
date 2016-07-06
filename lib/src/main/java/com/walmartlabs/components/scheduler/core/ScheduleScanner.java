@@ -121,46 +121,61 @@ public class ScheduleScanner implements Service {
         final ZonedDateTime currentBucketId = utc(bucketize(now(UTC).toInstant().toEpochMilli(), bucketWidth));
         L.info(format("scanning the schedule(s) for bucket: %s", currentBucketId));
         try {
-            final Multimap<ZonedDateTime, Integer> shards = bucketManager.getProcessableShardsForOrBefore(currentBucketId);
-            if (shards.isEmpty()) {
-                L.info("nothing to schedule for bucket: " + currentBucketId);
-                return;
-            }
-            L.info(format("%s, shards to be processed: => %s", currentBucketId, shards));
-            final List<Member> members = newArrayList(hz.hz().getCluster().getMembers());
-            final List<Entry<ZonedDateTime, Integer>> entries = newArrayList(shards.entries());
-            final Multimap<String, Pair<ZonedDateTime, Integer>> distro = TreeMultimap.create();
-            final int size = members.size();
-            for (int i = 0; i < entries.size(); i++) {
-                final Entry<ZonedDateTime, Integer> e = entries.get(i);
-                distro.put(members.get(i % size).getSocketAddress().toString(), of(e.getKey(), e.getValue()));
-            }
-            L.info(format("%s, schedule distribution: => " + distro, currentBucketId));
-
-            final int submitRetries = PROPS.getInteger("event.submit.max.retries", 10);
-            final int submitInitialDelay = PROPS.getInteger("event.submit.initial.delay", 1);
-            final int submitBackoff = PROPS.getInteger("event.submit.backoff.multiplier", 1);
-
-            final IExecutorService executorService = hz.hz().getExecutorService(EVENT_SCHEDULER);
-            final Iterator<Member> iterator = cycle(hz.hz().getCluster().getMembers());
-            final Map<String, Collection<Pair<ZonedDateTime, Integer>>> map = distro.asMap();
-
-            final ListenableFuture<List<List<ShardStatus>>> future = successfulAsList(map.entrySet().stream().map(e -> taskExecutor.async(() -> () ->
-                            transform(submitShards(executorService, iterator.next(), e.getValue(), currentBucketId), ShardStatusList::getList),
-                    "shards-submit", submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList()));
-            addCallback(future,
-                    new FutureCallback<List<List<ShardStatus>>>() {
+            addCallback(bucketManager.getProcessableShardsForOrBefore(currentBucketId),
+                    new FutureCallback<Multimap<ZonedDateTime, Integer>>() {
                         @Override
-                        public void onSuccess(List<List<ShardStatus>> result) {
-                            L.info(format("schedule for bucket %s finished successfully => %s", currentBucketId, result));
-                            bucketManager.bucketProcessed(currentBucketId);
+                        public void onSuccess(Multimap<ZonedDateTime, Integer> shards) {
+                            try {
+                                if (shards.isEmpty()) {
+                                    L.info("nothing to schedule for bucket: " + currentBucketId);
+                                    return;
+                                }
+                                L.info(format("%s, shards to be processed: => %s", currentBucketId, shards));
+                                final List<Member> members = newArrayList(hz.hz().getCluster().getMembers());
+                                final List<Entry<ZonedDateTime, Integer>> entries = newArrayList(shards.entries());
+                                final Multimap<String, Pair<ZonedDateTime, Integer>> distro = TreeMultimap.create();
+                                final int size = members.size();
+                                for (int i = 0; i < entries.size(); i++) {
+                                    final Entry<ZonedDateTime, Integer> e = entries.get(i);
+                                    distro.put(members.get(i % size).getSocketAddress().toString(), of(e.getKey(), e.getValue()));
+                                }
+                                L.info(format("%s, schedule distribution: => " + distro, currentBucketId));
+
+                                final int submitRetries = PROPS.getInteger("event.submit.max.retries", 10);
+                                final int submitInitialDelay = PROPS.getInteger("event.submit.initial.delay", 1);
+                                final int submitBackoff = PROPS.getInteger("event.submit.backoff.multiplier", 1);
+
+                                final IExecutorService executorService = hz.hz().getExecutorService(EVENT_SCHEDULER);
+                                final Iterator<Member> iterator = cycle(hz.hz().getCluster().getMembers());
+                                final Map<String, Collection<Pair<ZonedDateTime, Integer>>> map = distro.asMap();
+
+                                final ListenableFuture<List<List<ShardStatus>>> future = successfulAsList(map.entrySet().stream().map(e -> taskExecutor.async(() -> () ->
+                                                transform(submitShards(executorService, iterator.next(), e.getValue(), currentBucketId), ShardStatusList::getList),
+                                        "shards-submit", submitRetries, submitInitialDelay, submitBackoff, SECONDS)).collect(toList()));
+                                addCallback(future,
+                                        new FutureCallback<List<List<ShardStatus>>>() {
+                                            @Override
+                                            public void onSuccess(List<List<ShardStatus>> result) {
+                                                L.info(format("schedule for bucket %s finished successfully => %s", currentBucketId, result));
+                                                bucketManager.bucketProcessed(currentBucketId);
+                                            }
+
+                                            @Override
+                                            public void onFailure(Throwable t) {
+                                                L.error(format("schedule for bucket %s finished with error", currentBucketId), t);
+                                            }
+                                        });
+                            } catch (Exception e) {
+                                L.error("error in processing bucket: " + currentBucketId, getRootCause(e));
+                            }
                         }
 
                         @Override
                         public void onFailure(Throwable t) {
-                            L.error(format("schedule for bucket %s finished with error", currentBucketId), t);
+                            L.error("error in processing bucket: " + currentBucketId, getRootCause(t));
                         }
                     });
+
         } catch (Exception e) {
             L.error("error in processing bucket: " + currentBucketId, getRootCause(e));
         }

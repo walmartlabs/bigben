@@ -2,11 +2,12 @@ package com.walmartlabs.components.tests;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmartlabs.components.scheduler.processors.EventProcessor;
-import com.walmartlabs.components.scheduler.input.EventReceiver;
 import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.input.EventReceiver;
+import com.walmartlabs.components.scheduler.processors.EventProcessor;
+import com.walmartlabs.components.scheduler.services.BulkEventGeneration;
 import com.walmartlabs.components.scheduler.services.EventService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
@@ -33,7 +34,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 public class TestEventScheduler extends AbstractTestNGSpringContextTests {
 
     static {
-        System.setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.model");
+        System.setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.entities");
         System.setProperty("com.walmart.platform.config.runOnEnv", "prod");
         System.setProperty("event.shard.size", "10");
         System.setProperty("hazelcast.slow.operation.detector.stacktrace.logging.enabled", "true");
@@ -76,9 +77,9 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
         final int numEvents = 20;
         counts.set(numEvents);
-        //System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, numEvents, "0")));
+        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, numEvents, "0")));
         try {
-            latch.await(2, MINUTES);
+            latch.await(4, MINUTES);
         } catch (InterruptedException e) {
             throw new AssertionError("test timed out");
         }

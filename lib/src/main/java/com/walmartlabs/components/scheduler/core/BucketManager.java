@@ -1,13 +1,16 @@
 package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.base.Function;
-import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
+import com.google.common.collect.TreeBasedTable;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableScheduledFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
+import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.Bucket.Status;
 import com.walmartlabs.components.scheduler.entities.Event;
@@ -19,14 +22,18 @@ import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.reverse;
+import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.google.common.util.concurrent.Futures.transform;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmartlabs.components.scheduler.entities.Bucket.Status.*;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.epoch;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.nowUTC;
 import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
@@ -47,9 +54,9 @@ public class BucketManager {
     private final DataManager<ZonedDateTime, Bucket> dataManager;
     private final DataManager<EventKey, Event> eventDataManager;
     private final int lookbackRange;
-    private final Table<ZonedDateTime, Integer, Status> shards = HashBasedTable.create();
+    private final Table<ZonedDateTime, Integer, Status> shards = TreeBasedTable.create();
     private final int bucketWidth;
-    private volatile BackgroundBucketsLoader backgroundBucketsLoader;
+    private volatile BucketsLoader bucketsLoader;
     private final StatusSyncer statusSyncer;
     private final CheckpointHelper checkpointHelper;
 
@@ -66,6 +73,7 @@ public class BucketManager {
                 (r) -> new Thread(r, "BucketManagerInternalScheduler#" + index.getAndIncrement())));
         this.bucketWidth = bucketWidth;
         checkpointHelper = new CheckpointHelper(this);
+        statusSyncer = new StatusSyncer(dataManager, eventDataManager);
         L.info(format("saving checkpoint every %d %s", checkpointInterval, checkpointUnit));
         service.scheduleAtFixedRate(this::saveCheckpoint, checkpointInterval, checkpointInterval, checkpointUnit);
         try {
@@ -81,39 +89,62 @@ public class BucketManager {
             L.info("saving checkpoint during shutdown");
             saveCheckpoint();
         }));
-        statusSyncer = new StatusSyncer(dataManager, eventDataManager);
     }
 
-    synchronized Multimap<ZonedDateTime, Integer> getProcessableShardsForOrBefore(ZonedDateTime bucketId) {
-        if (backgroundBucketsLoader == null) {
+    private final Consumer<List<Bucket>> consumer = l -> {
+        synchronized (BucketManager.this) {
+            l.forEach(b -> {
+                if (b != null && !shards.containsRow(b.id())) {
+                    if (b.getCount() == 0) {
+                        shards.put(b.id(), -1, EMPTY);
+                    } else if (b.getCount() > 0 && PROCESSED.name().equals(b.getStatus())) {
+                        shards.put(b.id(), -1, PROCESSED);
+                    } else if (b.getCount() > 0 && !PROCESSED.name().equals(b.getStatus())) {
+                        int shardSize = PROPS.getInteger("event.shard.size", 1000);
+                        final int count = (int) b.getCount();
+                        final int numShards = count % shardSize == 0 ? count / shardSize : count / shardSize + 1;
+                        for (int i = 0; i < numShards; i++) {
+                            if (!shards.contains(b.id(), i))
+                                shards.put(b.id(), i, UN_PROCESSED);
+                        }
+                    }
+                }
+            });
+        }
+    };
+
+    private static final Selector<ZonedDateTime, Bucket> selector = fullSelector(nowUTC());
+
+    synchronized ListenableFuture<Multimap<ZonedDateTime, Integer>> getProcessableShardsForOrBefore(ZonedDateTime bucketId) {
+        if (bucketsLoader == null) {
             L.info("starting the background load of previous buckets");
             final Integer fetchSize = PROPS.getInteger("buckets.background.load.fetch.size", 10);
-            backgroundBucketsLoader = new BackgroundBucketsLoader(lookbackRange, fetchSize, l -> {
-                synchronized (BucketManager.this) {
-                    l.forEach(b -> {
-                        if (b != null && b.getCount() > 0 && !PROCESSED.name().equals(b.getStatus())) {
-                            int shardSize = PROPS.getInteger("event.shard.size", 1000);
-                            final int count = (int) b.getCount();
-                            final int numShards = count % shardSize == 0 ? count / shardSize : count / shardSize + 1;
-                            for (int i = 0; i < numShards; i++) {
-                                if (!shards.contains(b.id(), i))
-                                    shards.put(b.id(), i, UN_PROCESSED);
-                            }
-                        }
-                    });
-                }
-            }, shards::containsRow, bucketWidth, dataManager, bucketId, service);
-            backgroundBucketsLoader.start();
+            bucketsLoader = new BucketsLoader(lookbackRange, fetchSize, consumer, shards::containsRow, bucketWidth, dataManager, bucketId, service);
+            bucketsLoader.start();
         }
+
+        final ListenableFuture<Bucket> f = dataManager.getAsync(bucketId, selector);
         final Multimap<ZonedDateTime, Integer> processableShards = HashMultimap.create();
-        shards.cellSet().stream().filter(cell -> cell.getValue() != PROCESSED || cell.getValue() != PROCESSING).forEach(cell ->
-                processableShards.put(cell.getRowKey(), cell.getColumnKey()));
-        L.info(format("processable shards at bucket: %s, are => %s", bucketId, processableShards));
-        if (!processableShards.containsKey(bucketId)) {
-            L.info(format("no events in the bucket: %s, marking it %s", bucketId, PROCESSED));
-            shards.put(bucketId, -1, PROCESSED);
-        }
-        return processableShards;
+        addCallback(f, new FutureCallback<Bucket>() {
+            @Override
+            public void onSuccess(Bucket bucket) {
+                consumer.accept(newArrayList(bucket));
+                shards.cellSet().stream().
+                        filter(cell -> cell.getValue() != EMPTY && cell.getValue() != PROCESSED && cell.getValue() != PROCESSING).
+                        forEach(cell -> processableShards.put(cell.getRowKey(), cell.getColumnKey()));
+                L.info(format("processable shards at bucket: %s, are => %s", bucketId, processableShards));
+                if (!processableShards.containsKey(bucketId)) {
+                    L.info(format("no events in the bucket: %s, marking it %s", bucketId, EMPTY));
+                    shards.put(bucketId, -1, EMPTY);
+                }
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                L.info(format("error in loading bucket: %s, will be retried again during next scan", bucketId), t);
+            }
+        });
+        return transform(f, (Function<Bucket, Multimap<ZonedDateTime, Integer>>) $ -> processableShards);
     }
 
     synchronized void registerForProcessing(Collection<Pair<ZonedDateTime, Integer>> pairs) {
@@ -125,7 +156,7 @@ public class BucketManager {
     }
 
     ListenableScheduledFuture<?> startShardsTimer(Collection<Pair<ZonedDateTime, Integer>> pairs) {
-        final List<String> shards = pairs.stream().map(p -> p.getLeft() + "[" + p.getRight() + "]").collect(toList());
+        final List<String> shards = pairs.stream().sorted().map(p -> p.getLeft() + "[" + p.getRight() + "]").collect(toList());
         L.info(format("starting bulk timer for shards: %s", shards));
         return service.schedule(() -> checkShardsStatus(pairs, shards), maxProcessingTime, SECONDS);
     }
@@ -214,7 +245,8 @@ public class BucketManager {
         }
     }
 
-    void saveCheckpoint() {
+    synchronized void saveCheckpoint() {
+        purgeIfNeeded();
         checkpointHelper.saveCheckpoint(shards);
     }
 
