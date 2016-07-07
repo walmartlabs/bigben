@@ -1,22 +1,21 @@
 package com.walmartlabs.components.scheduler.entities;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.walmart.platform.kernel.exception.error.Error;
 
-import java.util.Collections;
 import java.util.List;
 
-import static com.walmart.platform.kernel.exception.error.ErrorCategory.SYSTEM;
-import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
-import static java.lang.System.currentTimeMillis;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY;
 
 /**
  * Created by smalik3 on 6/22/16
  */
+@JsonInclude(NON_EMPTY)
 public class EventResponse extends EventRequest {
 
     private List<Error> errors;
-    private long processedUtc;
-    private String xrefId;
+    private String processedAt;
+    private String eventId;
 
     public List<Error> getErrors() {
         return errors;
@@ -26,20 +25,20 @@ public class EventResponse extends EventRequest {
         this.errors = errors;
     }
 
-    public long getProcessedUtc() {
-        return processedUtc;
+    public String getProcessedAt() {
+        return processedAt;
     }
 
-    public void setProcessedUtc(long processedUtc) {
-        this.processedUtc = processedUtc;
+    public void setProcessedAt(String processedAt) {
+        this.processedAt = processedAt;
     }
 
-    public String getXrefId() {
-        return xrefId;
+    public String getEventId() {
+        return eventId;
     }
 
-    public void setXrefId(String xrefId) {
-        this.xrefId = xrefId;
+    public void setEventId(String eventId) {
+        this.eventId = eventId;
     }
 
     public static EventResponse fromRequest(EventRequest eventRequest) {
@@ -55,22 +54,19 @@ public class EventResponse extends EventRequest {
     public String toString() {
         return "EventResponse{" +
                 "errors=" + errors +
-                ", processedUtc=" + processedUtc +
-                ", xrefId='" + xrefId + '\'' +
+                ", processedAt=" + processedAt +
+                ", eventId='" + eventId + '\'' +
                 "} " + super.toString();
     }
 
     public static EventResponse toResponse(Event e) {
         EventResponse eventResponse = new EventResponse();
         eventResponse.setId(e.getXrefId());
-        eventResponse.setXrefId(e.id().getEventId());
-        eventResponse.setProcessedUtc(currentTimeMillis());
+        eventResponse.setEventId(e.id().getEventId());
+        eventResponse.setProcessedAt(e.getProcessedAt() == null ? null : e.getProcessedAt().toString());
         eventResponse.setTenant(e.getTenant());
         eventResponse.setUtc(e.id().getEventTime().toInstant().toEpochMilli());
         eventResponse.setPayload(e.getPayload());
-        final Error error = new Error("000", "unknown", e.getError(), e.getError(), ERROR, SYSTEM);
-        final List<Error> errors = Collections.singletonList(error);
-        eventResponse.setErrors(errors);
         return eventResponse;
     }
 }

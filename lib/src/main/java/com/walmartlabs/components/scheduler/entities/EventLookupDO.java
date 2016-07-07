@@ -2,7 +2,12 @@ package com.walmartlabs.components.scheduler.entities;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
-import info.archinnov.achilles.annotations.*;
+import com.walmartlabs.components.scheduler.entities.codecs.EventLookupKeyToString;
+import com.walmartlabs.components.scheduler.entities.codecs.ZonedDateTimeToDate;
+import info.archinnov.achilles.annotations.Column;
+import info.archinnov.achilles.annotations.Entity;
+import info.archinnov.achilles.annotations.Id;
+import info.archinnov.achilles.annotations.TypeTransformer;
 
 import java.time.ZonedDateTime;
 
@@ -15,7 +20,8 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersi
 @KeyMapping(keyClass = EventLookupDO.EventLookupKey.class, entityClass = EventLookup.class, version = V1)
 public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.EventLookupKey> {
 
-    @EmbeddedId
+    @Id(name = "xref_id")
+    @TypeTransformer(valueCodecClass = EventLookupKeyToString.class)
     private EventLookupKey id;
 
     @Column(name = "bucket_id")
@@ -24,6 +30,13 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
 
     @Column
     private int shard;
+
+    @Column(name = "event_time")
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    private ZonedDateTime eventTime;
+
+    @Column(name = "event_id")
+    private String eventId;
 
     public ZonedDateTime getBucketId() {
         return bucketId;
@@ -71,14 +84,28 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
         this.id = id;
     }
 
-    public static class EventLookupKey {
-        @PartitionKey
-        @Column(name = "xref_id")
-        private String xrefId;
+    @Override
+    public ZonedDateTime getEventTime() {
+        return eventTime;
+    }
 
-        @ClusteringColumn
-        @Column(name = "event_id")
-        private String eventId;
+    @Override
+    public void setEventTime(ZonedDateTime eventTime) {
+        this.eventTime = eventTime;
+    }
+
+    @Override
+    public String getEventId() {
+        return eventId;
+    }
+
+    @Override
+    public void setEventId(String eventId) {
+        this.eventId = eventId;
+    }
+
+    public static class EventLookupKey {
+        private String xrefId;
 
         public String getXrefId() {
             return xrefId;
@@ -88,17 +115,8 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
             this.xrefId = xrefId;
         }
 
-        public String getEventId() {
-            return eventId;
-        }
-
-        public void setEventId(String eventId) {
-            this.eventId = eventId;
-        }
-
-        public EventLookupKey(String xrefId, String eventId) {
+        public EventLookupKey(String xrefId) {
             this.xrefId = xrefId;
-            this.eventId = eventId;
         }
 
         public EventLookupKey() {
@@ -108,7 +126,6 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
         public String toString() {
             return "EventLookupKey{" +
                     "xrefId='" + xrefId + '\'' +
-                    ", eventId='" + eventId + '\'' +
                     '}';
         }
     }
@@ -116,9 +133,11 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
     @Override
     public String toString() {
         return "EventLookupDO{" +
-                "id='" + id + '\'' +
+                "id=" + id +
                 ", bucketId=" + bucketId +
                 ", shard=" + shard +
+                ", eventTime=" + eventTime +
+                ", eventId='" + eventId + '\'' +
                 '}';
     }
 }

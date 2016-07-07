@@ -17,4 +17,11 @@ public interface EventLookup extends Entity<EventLookupDO.EventLookupKey> {
 
     void setShard(int shard);
 
+    ZonedDateTime getEventTime();
+
+    void setEventTime(ZonedDateTime eventTime);
+
+    String getEventId();
+
+    void setEventId(String eventId);
 }

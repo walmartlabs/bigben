@@ -2,6 +2,7 @@ package com.walmartlabs.components.scheduler.entities;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
+import com.walmartlabs.components.scheduler.entities.codecs.ZonedDateTimeToDate;
 import info.archinnov.achilles.annotations.*;
 
 import java.io.Serializable;

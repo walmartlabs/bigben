@@ -2,14 +2,14 @@ package com.walmartlabs.components.scheduler.services;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.util.concurrent.Futures;
 import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
-import com.walmart.gmp.ingestion.platform.framework.core.Props;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
+import com.walmart.platform.kernel.exception.error.Error;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.entities.EventLookup;
+import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
 import com.walmartlabs.components.scheduler.entities.EventRequest;
 import com.walmartlabs.components.scheduler.entities.EventResponse;
 import com.walmartlabs.components.scheduler.input.EventReceiver;
@@ -22,6 +22,7 @@ import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.ws.rs.*;
+import javax.ws.rs.core.Response;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -29,11 +30,17 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.successfulAsList;
+import static com.google.common.util.concurrent.Futures.transform;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICATION;
+import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.EVENT_SCHEDULER;
+import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
+import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.time.temporal.ChronoUnit.MILLIS;
@@ -43,6 +50,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
+import static javax.ws.rs.core.Response.Status.*;
+import static javax.ws.rs.core.Response.ok;
+import static javax.ws.rs.core.Response.status;
 import static org.apache.commons.lang3.tuple.Pair.of;
 
 /**
@@ -65,7 +75,7 @@ public class EventService {
     private Service service;
 
     @GET
-    @Path("/stats")
+    @Path("/cluster")
     public Map<String, String> getStats() {
         final Map<Member, Future<String>> results = hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(new StatusTask(service.name()));
         final Map<String, String> map = new HashMap<>();
@@ -81,8 +91,23 @@ public class EventService {
 
     @POST
     @Path("/add")
-    public EventResponse addEvent(EventRequest eventRequest) throws Exception {
-        return eventReceiver.addEvent(eventRequest).get(Props.PROPS.getInteger("event.service.add.max.wait.time", 60), SECONDS);
+    public Response addEvent(EventRequest eventRequest) throws Exception {
+        try {
+            return ok(eventReceiver.addEvent(eventRequest).get(PROPS.getInteger("event.service.add.max.wait.time", 60), SECONDS)).build();
+        } catch (Exception e) {
+            final EventResponse eventResponse = fromRequest(eventRequest);
+            final Throwable rootCause = getRootCause(e);
+            eventResponse.setErrors(newArrayList(new Error("500", "add-event", getStackTraceString(rootCause), rootCause.getMessage(), ERROR, APPLICATION)));
+            return status(INTERNAL_SERVER_ERROR).entity(eventResponse).build();
+        }
+    }
+
+    @POST
+    @Path("/bulk/add")
+    public Response addEvents(List<EventRequest> eventRequests) throws Exception {
+        final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
+                e -> eventReceiver.addEvent(e)).collect(toList())).get(PROPS.getInteger("event.service.add.max.wait.time", 60), SECONDS);
+        return ok().entity(eventResponses).build();
     }
 
     @POST
@@ -95,7 +120,7 @@ public class EventService {
         long delta = MILLIS.between(t1, t2);
         final Map<ZonedDateTime, Integer> map = new HashMap<>();
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        Futures.transform(successfulAsList(nCopies(bEG.getNumEvents(), 0).stream().map($ -> {
+        transform(successfulAsList(nCopies(bEG.getNumEvents(), 0).stream().map($ -> {
             final EventRequest eventRequest = new EventRequest();
             final ZonedDateTime t = t1.plus(random.nextLong(delta), MILLIS);
             eventRequest.setTenant(bEG.getTenantId());
@@ -134,29 +159,59 @@ public class EventService {
 
     @POST
     @Path("/processors/register")
-    public Map<String, Object> registerProcessor(ProcessorConfig config) {
+    public Response registerProcessor(ProcessorConfig config) {
         try {
             final ProcessorConfig previous = processorRegistry.register(config);
-            return ImmutableMap.of("status", "SUCCESS", "previous", previous, "current", config);
+            return ok(ImmutableMap.of("status", "SUCCESS", "previous", previous, "current", config)).build();
         } catch (Exception e) {
             L.error("error in registering processor: " + config, e);
-            return ImmutableMap.of("status", "FAIL", "error", getRootCause(e).getStackTrace());
+            return status(INTERNAL_SERVER_ERROR).entity(ImmutableMap.of("status", "FAIL", "error", getRootCause(e).getStackTrace())).build();
         }
     }
 
-    /*@Autowired
-    private DataManager<EventKey, Event> dm;
+    @Autowired
+    private DataManager<EventKey, Event> eventDM;
 
     @Autowired
-    private DataManager<String, EventLookup> dm;
+    private DataManager<EventLookupKey, EventLookup> lookUpDM;
+
+    @GET
+    @Path("/{id}")
+    public Response find(@PathParam("id") String id) {
+        return find(id, false);
+    }
 
     @POST
-    @Path("/dryrun")
-    public EventResponse dryrun(@QueryParam("id") String id, @QueryParam("xrefId") String xrefId) {
-        if (id != null && id.trim().length() > 0) {
+    @Path("/dryrun/{id}")
+    public Response dryrun(@PathParam("id") String id) {
+        return find(id, true);
+    }
 
+    private Response find(String id, boolean fire) {
+        final EventResponse eventResponse = new EventResponse();
+        if (id != null && id.trim().length() > 0) {
+            final EventLookupKey eventLookupKey = new EventLookupKey(id);
+            final EventLookup eventLookup = lookUpDM.get(eventLookupKey);
+            if (eventLookup == null) {
+                eventResponse.setId(id);
+                return status(NOT_FOUND).entity(eventResponse).build();
+            } else {
+                final Event event = eventDM.get(EventKey.of(eventLookup.getBucketId(), eventLookup.getShard(), eventLookup.getEventTime(), eventLookup.getEventId()));
+                if (event == null) {
+                    eventResponse.setEventId(eventLookup.getEventId());
+                    eventResponse.setUtc(eventLookup.getEventTime().toInstant().toEpochMilli());
+                    return status(NOT_FOUND).entity(eventResponse).build();
+                } else {
+                    if (fire)
+                        processorRegistry.getOrCreate(event.getTenant()).process(event);
+                    return status(OK).entity(toResponse(event)).build();
+                }
+            }
+        } else {
+            eventResponse.setErrors(newArrayList(new Error("400.BIGBEN", id, "id null", "id null")));
+            return status(BAD_REQUEST).entity(eventResponse).build();
         }
-    }*/
+    }
 
     @POST
     @Path("/_receive_")
@@ -165,7 +220,12 @@ public class EventService {
         return ImmutableMap.of("status", "received");
     }
 
-    public void removeEvent(long time, String id) {
-
+    @DELETE
+    @Path("/delete/{id}")
+    public Response removeEvent(@PathParam("id") String id) {
+        final boolean status = eventReceiver.removeEvent(id);
+        if (!status)
+            return status(NOT_FOUND).entity(ImmutableMap.of("found", false, "deleted", false)).build();
+        else return ok().entity(ImmutableMap.of("found", true, "deleted", true)).build();
     }
 }

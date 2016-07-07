@@ -12,7 +12,7 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.platform.kernel.exception.error.Error;
 import com.walmart.services.common.util.UUIDUtil;
-import com.walmartlabs.components.scheduler.entities.ObjectFactory;
+import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.entities.*;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
@@ -28,7 +28,9 @@ import java.util.Map.Entry;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.AbstractDAO.implClass;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getErrorAtServer;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.BUCKET_CACHE;
 import static com.walmartlabs.components.scheduler.entities.Bucket.Status.UN_PROCESSED;
@@ -72,9 +74,11 @@ public class EventReceiver {
             e.setXrefId(entity.getId());
             e.setPayload(entity.getPayload());
             L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
-            final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(entity.getId() == null ? eventKey.getEventId() : entity.getId(), eventKey.getEventId()));
+            final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(entity.getId() == null ? eventKey.getEventId() : entity.getId()));
             lookupEntity.setBucketId(eventKey.getBucketId());
             lookupEntity.setShard(eventKey.getShard());
+            lookupEntity.setEventTime(eventKey.getEventTime());
+            lookupEntity.setEventId(eventKey.getEventId());
             return transform(allAsList(dataManager.insertAsync(e), lookupDataManager.insertAsync(lookupEntity)), (Function<List<Entity<?>>, EventResponse>) $ -> {
                 L.debug(format("%s, add-event: successful", eventKey));
                 return fromRequest(entity);
@@ -116,21 +120,20 @@ public class EventReceiver {
         }
     }
 
-    public void removeEvent(Event entity) {
-        /*@SuppressWarnings("unchecked")
-        final CqlDAO<EventLookupKey, EventLookup> cqlDAO = (CqlDAO<EventLookupKey, EventLookup>) dataManager.getPrimaryDAO(V1).unwrap();
-        final EventLookupKey id = EventLookupKey.of(entity.id().getEventTime(), entity.id().getEventId());
-
-        final EventLookup e = lookupDataManager.get(id);
-        L.debug(format("%s, delete-event: event-lookup-table", entity.id()));
-        cqlDAO.removeById(implClass(V1, EventLookupKey.class), id);
-
-        if (e != null) {
-            @SuppressWarnings("unchecked")
-            final CqlDAO<EventKey, Event> cqlDAO1 = (CqlDAO<EventKey, Event>) dataManager.getPrimaryDAO(V1).unwrap();
-            L.debug(format("%s, delete-event: event-table", entity.id()));
-            cqlDAO1.removeById(implClass(V1, EventKey.class), e.id());
+    public boolean removeEvent(String id) {
+        final EventLookup eventLookup = lookupDataManager.get(new EventLookupKey(id));
+        if (eventLookup == null) {
+            return false;
         }
-        L.debug(format("%s, delete-event: successful", entity.id()));*/
+        @SuppressWarnings("unchecked")
+        final CqlDAO<EventKey, Event> evtCqlDAO = (CqlDAO<EventKey, Event>) dataManager.getPrimaryDAO(V1).unwrap();
+        final EventKey eventKey = EventKey.of(eventLookup.getBucketId(), eventLookup.getShard(), eventLookup.getEventTime(), eventLookup.getEventId());
+        L.info("removing event: " + eventKey);
+        evtCqlDAO.removeById(implClass(V1, EventKey.class), eventKey);
+        @SuppressWarnings("unchecked")
+        final CqlDAO<EventLookupKey, EventLookup> cqlDAO = (CqlDAO<EventLookupKey, EventLookup>) dataManager.getPrimaryDAO(V1).unwrap();
+        L.info("removing event look up: " + eventLookup);
+        cqlDAO.removeById(implClass(V1, EventLookup.class), eventLookup.id());
+        return true;
     }
 }
