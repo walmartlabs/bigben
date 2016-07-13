@@ -6,6 +6,7 @@ import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.platform.kernel.exception.error.Error;
+import com.walmartlabs.components.core.services.Service;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.entities.EventLookup;
@@ -73,6 +74,12 @@ public class EventService {
 
     @Autowired
     private Service service;
+
+    @GET
+    @Path("/ping")
+    public Map<String, String> ping() {
+        return ImmutableMap.of("status", "OK");
+    }
 
     @GET
     @Path("/cluster")

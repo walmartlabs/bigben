@@ -2,7 +2,7 @@ package com.walmartlabs.components.scheduler.tasks;
 
 import com.walmart.gmp.ingestion.platform.framework.jobs.SerializableCallable;
 
-import static com.walmartlabs.components.scheduler.utils.ClusterSingleton.ACTIVE_SERVICES;
+import static com.walmartlabs.components.core.services.ClusterSingleton.ACTIVE_SERVICES;
 
 /**
  * Created by smalik3 on 7/5/16

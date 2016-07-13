@@ -29,7 +29,7 @@
 
     <bean id="testService" class="com.walmartlabs.components.tests.TestClusterSingleton$TestService"/>
 
-    <bean class="com.walmartlabs.components.scheduler.utils.ClusterSingleton">
+    <bean class="com.walmartlabs.components.core.services.ClusterSingleton">
         <constructor-arg index="0" ref="testService"/>
         <constructor-arg index="1" ref="hz"/>
     </bean>
