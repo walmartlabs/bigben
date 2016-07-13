@@ -1,0 +1,12 @@
+{
+  "hz": {
+    "members": "127.0.0.1",
+    "autoIncrement": true
+  },
+  "map": {
+    "store": {
+      "fqcn": "com.walmartlabs.components.scheduler.entities.BucketStore",
+      "dmConfigPath": "file://dm-config.json"
+    }
+  }
+}
