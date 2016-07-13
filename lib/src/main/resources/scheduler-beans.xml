@@ -29,11 +29,11 @@
         <constructor-arg index="1" ref="hz"/>
     </bean>
 
-    <!--<bean id="eventProcessor" class="com.walmartlabs.components.scheduler.input.MessageProcessor"/>
+    <bean id="eventProcessor" class="com.walmartlabs.components.scheduler.input.MessageProcessor"/>
     <bean id="kafkaConsumer"
           class="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean">
         <constructor-arg index="0" value="bigben_kafka"/>
         <constructor-arg index="1" ref="eventProcessor"/>
-    </bean>-->
+    </bean>
 
 </beans>
