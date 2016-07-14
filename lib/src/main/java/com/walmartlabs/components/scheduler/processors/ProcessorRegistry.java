@@ -100,7 +100,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                     return processorCache.get(tenant, () -> {
                         final MessagePublisher<String, EventResponse, RecordMetadata> publisher =
                                 new PublisherFactory(processorConfig.getProperties().get("topic").toString(),
-                                        processorConfig.getProperties().get("configPath").toString()).create();
+                                        processorConfig.getProperties().get("configPath").toString(), true).create();
                         return e -> transform(publisher.publish(e.id().getEventId(), toResponse(e)),
                                 new Function<RecordMetadata, Event>() {
                                     @Override
