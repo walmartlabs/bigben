@@ -1,9 +1,17 @@
 [
   {
-    "tenant": "0",
+    "tenant": "$$TEST$$",
     "type": "CUSTOM_BEAN",
     "properties": {
       "eventProcessorBeanName": "testEventProcessor"
+    }
+  },
+  {
+    "tenant": "PROMO/STG",
+    "type": "KAFKA",
+    "properties": {
+      "topic": "promo_bigben_outbound",
+      "configPath": "bigben_promo_kafka"
     }
   }
 ]

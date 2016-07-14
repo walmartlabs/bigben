@@ -13,6 +13,7 @@ import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePubli
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventResponse;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.log4j.Logger;
 
 import java.util.List;
@@ -33,6 +34,7 @@ import static com.walmart.gmp.ingestion.platform.framework.utils.ConfigParser.pa
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.services.common.util.JsonUtil.convertToString;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
+import static java.lang.String.format;
 import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -79,7 +81,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                     PROPS.getInteger("event.processor.backoff.multiplier", 2),
                     SECONDS
             ), Exception.class, ex -> {
-                L.error("error in event processor, this error will be IGNORED. event-id:" + event.id(), ex);
+                L.error("error in event processor after multiple retries, this failure will be IGNORED and event is marked PROCESSED. event-id:" + event.id(), ex);
                 return immediateFuture(event);
             });
         } catch (Exception e) {
@@ -96,10 +98,19 @@ public class ProcessorRegistry implements EventProcessor<Event> {
             switch (processorConfig.getType()) {
                 case KAFKA:
                     return processorCache.get(tenant, () -> {
-                        final MessagePublisher<String, EventResponse, EventResponse> publisher =
+                        final MessagePublisher<String, EventResponse, RecordMetadata> publisher =
                                 new PublisherFactory(processorConfig.getProperties().get("topic").toString(),
                                         processorConfig.getProperties().get("configPath").toString()).create();
-                        return e -> transform(publisher.publish(e.id().getEventId(), toResponse(e)), (Function<EventResponse, Event>) $ -> e);
+                        return e -> transform(publisher.publish(e.id().getEventId(), toResponse(e)),
+                                new Function<RecordMetadata, Event>() {
+                                    @Override
+                                    public Event apply(RecordMetadata r) {
+                                        if (L.isDebugEnabled())
+                                            L.debug(format("event processed successfully, topic: %s, partition: %d, " +
+                                                    "offset: %d, event: %s", r.topic(), r.partition(), r.offset(), e));
+                                        return e;
+                                    }
+                                });
                     });
                 case HTTP:
                     processorCache.get(tenant, () -> e -> {
@@ -115,6 +126,10 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                                 try {
                                     final Response response = f.get();
                                     if (response.getStatusCode() == 200 || response.getStatusCode() == 204) {
+                                        if (L.isDebugEnabled()) {
+                                            L.debug(format("event processed successfully, response code: %d," +
+                                                    response.getStatusCode(), e));
+                                        }
                                         future.set(e);
                                     } else {
                                         future.setException(new RuntimeException(response.getResponseBody()));

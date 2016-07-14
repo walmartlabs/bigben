@@ -44,7 +44,7 @@ public class EventResponse extends EventRequest {
     public static EventResponse fromRequest(EventRequest eventRequest) {
         final EventResponse eventResponse = new EventResponse();
         eventResponse.setTenant(eventRequest.getTenant());
-        eventResponse.setUtc(eventRequest.getUtc());
+        eventResponse.setEventTime(eventRequest.getEventTime());
         eventResponse.setId(eventRequest.getId());
         eventResponse.setPayload(eventRequest.getPayload());
         return eventResponse;
@@ -65,7 +65,7 @@ public class EventResponse extends EventRequest {
         eventResponse.setEventId(e.id().getEventId());
         eventResponse.setProcessedAt(e.getProcessedAt() == null ? null : e.getProcessedAt().toString());
         eventResponse.setTenant(e.getTenant());
-        eventResponse.setUtc(e.id().getEventTime().toInstant().toEpochMilli());
+        eventResponse.setEventTime(e.id().getEventTime().toString());
         eventResponse.setPayload(e.getPayload());
         return eventResponse;
     }

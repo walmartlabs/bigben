@@ -44,6 +44,7 @@ import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRe
 import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
+import static java.time.ZonedDateTime.parse;
 import static java.time.temporal.ChronoUnit.MILLIS;
 import static java.util.Collections.nCopies;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -83,7 +84,7 @@ public class EventService {
 
     @GET
     @Path("/cluster")
-    public Map<String, String> getStats() {
+    public Map<String, String> cluster() {
         final Map<Member, Future<String>> results = hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(new StatusTask(service.name()));
         final Map<String, String> map = new HashMap<>();
         for (Map.Entry<Member, Future<String>> entry : results.entrySet()) {
@@ -100,7 +101,7 @@ public class EventService {
     @Path("/add")
     public Response addEvent(EventRequest eventRequest) throws Exception {
         try {
-            return ok(eventReceiver.addEvent(eventRequest).get(PROPS.getInteger("event.service.add.max.wait.time", 60), SECONDS)).build();
+            return ok(eventReceiver.addEvent(eventRequest).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS)).build();
         } catch (Exception e) {
             final EventResponse eventResponse = fromRequest(eventRequest);
             final Throwable rootCause = getRootCause(e);
@@ -113,7 +114,7 @@ public class EventService {
     @Path("/bulk/add")
     public Response addEvents(List<EventRequest> eventRequests) throws Exception {
         final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
-                e -> eventReceiver.addEvent(e)).collect(toList())).get(PROPS.getInteger("event.service.add.max.wait.time", 60), SECONDS);
+                e -> eventReceiver.addEvent(e)).collect(toList())).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
         return ok().entity(eventResponses).build();
     }
 
@@ -121,7 +122,7 @@ public class EventService {
     @Path("/generate")
     public Map<ZonedDateTime, Integer> generateEvents(BulkEventGeneration bEG) throws Exception {
         final ThreadLocalRandom random = ThreadLocalRandom.current();
-        final ZonedDateTime t1 = ZonedDateTime.parse(bEG.getStartTime());
+        final ZonedDateTime t1 = parse(bEG.getStartTime());
         final ZonedDateTime t2 = t1.plusMinutes(bEG.getPeriod());
         L.info(String.format("creating %d events between %s and %s for tenant: %s", bEG.getNumEvents(), t1, t2, bEG.getTenantId()));
         long delta = MILLIS.between(t1, t2);
@@ -131,11 +132,11 @@ public class EventService {
             final EventRequest eventRequest = new EventRequest();
             final ZonedDateTime t = t1.plus(random.nextLong(delta), MILLIS);
             eventRequest.setTenant(bEG.getTenantId());
-            eventRequest.setUtc(t.toInstant().toEpochMilli());
+            eventRequest.setEventTime(t.toString());
             return eventReceiver.addEvent(eventRequest);
         }).collect(toList())), (Function<List<EventResponse>, Object>) l -> {
             l.forEach(e -> {
-                final ZonedDateTime bucketId = utc(bucketize(e.getUtc(), scanInterval));
+                final ZonedDateTime bucketId = utc(bucketize(parse(e.getEventTime()).toInstant().toEpochMilli(), scanInterval));
                 if (!map.containsKey(bucketId))
                     map.put(bucketId, 0);
                 map.put(bucketId, map.get(bucketId) + 1);
@@ -206,7 +207,7 @@ public class EventService {
                 final Event event = eventDM.get(EventKey.of(eventLookup.getBucketId(), eventLookup.getShard(), eventLookup.getEventTime(), eventLookup.getEventId()));
                 if (event == null) {
                     eventResponse.setEventId(eventLookup.getEventId());
-                    eventResponse.setUtc(eventLookup.getEventTime().toInstant().toEpochMilli());
+                    eventResponse.setEventTime(eventLookup.getEventTime().toString());
                     return status(NOT_FOUND).entity(eventResponse).build();
                 } else {
                     if (fire)
@@ -227,12 +228,39 @@ public class EventService {
         return ImmutableMap.of("status", "received");
     }
 
-    @DELETE
+    @POST
     @Path("/delete/{id}")
     public Response removeEvent(@PathParam("id") String id) {
-        final boolean status = eventReceiver.removeEvent(id);
-        if (!status)
-            return status(NOT_FOUND).entity(ImmutableMap.of("found", false, "deleted", false)).build();
-        else return ok().entity(ImmutableMap.of("found", true, "deleted", true)).build();
+        try {
+            final EventResponse eventResponse = eventReceiver.removeEvent(id).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
+            if (eventResponse.getEventId() == null) {
+                return status(NOT_FOUND).entity(eventResponse).build();
+            } else {
+                return ok().entity(eventResponse).build();
+            }
+        } catch (Exception e) {
+            final Throwable rootCause = getRootCause(e);
+            final EventResponse eventResponse = new EventResponse();
+            eventResponse.setId(id);
+            eventResponse.setErrors(newArrayList(new Error("500", id, getStackTraceString(rootCause), rootCause.getMessage(), ERROR, APPLICATION)));
+            return status(INTERNAL_SERVER_ERROR).entity(eventResponse).build();
+        }
+    }
+
+    @POST
+    @Path("/bulk/delete")
+    public Response removeEvent(List<String> ids) {
+        try {
+            return status(OK).entity(successfulAsList(ids.stream().map(id -> eventReceiver.removeEvent(id)).collect(toList())).
+                    get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS)).build();
+        } catch (Exception e) {
+            return status(INTERNAL_SERVER_ERROR).entity(ids.stream().map(id -> {
+                final EventResponse eventResponse = new EventResponse();
+                eventResponse.setId(id);
+                final Throwable rootCause = getRootCause(e);
+                eventResponse.setErrors(newArrayList(new Error("500", id, getStackTraceString(rootCause), rootCause.getMessage(), ERROR, APPLICATION)));
+                return eventResponse;
+            }).collect(toList())).build();
+        }
     }
 }

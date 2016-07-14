@@ -10,12 +10,15 @@ import com.walmart.gmp.ingestion.platform.framework.core.AbstractIDSGMPEntryProc
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
+import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.platform.kernel.exception.error.Error;
 import com.walmart.services.common.util.UUIDUtil;
 import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.entities.*;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
+import info.archinnov.achilles.persistence.AsyncManager;
+import info.archinnov.achilles.type.Empty;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -25,19 +28,24 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map.Entry;
 
+import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.AbstractDAO.implClass;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
-import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getErrorAtServer;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
+import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICATION;
+import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
+import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.*;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.BUCKET_CACHE;
 import static com.walmartlabs.components.scheduler.entities.Bucket.Status.UN_PROCESSED;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.lang.String.format;
+import static java.time.ZonedDateTime.parse;
 import static java.util.UUID.randomUUID;
 
 /**
@@ -60,8 +68,9 @@ public class EventReceiver {
 
     public ListenableFuture<EventResponse> addEvent(EventRequest entity) {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        final ZonedDateTime bucketId = utc(bucketize(entity.getUtc(), scanInterval));
-        final EventKey eventKey = EventKey.of(bucketId, 0, utc(entity.getUtc()), UUIDUtil.toString(randomUUID()));
+        final long millis = parse(entity.getEventTime()).toInstant().toEpochMilli();
+        final ZonedDateTime bucketId = utc(bucketize(millis, scanInterval));
+        final EventKey eventKey = EventKey.of(bucketId, 0, utc(millis), UUIDUtil.toString(randomUUID()));
         L.debug(format("%s, event-time: %s -> bucket-id: %s", eventKey, eventKey.getEventTime(), bucketId));
         L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, entity));
         final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(BUCKET_CACHE);
@@ -120,20 +129,37 @@ public class EventReceiver {
         }
     }
 
-    public boolean removeEvent(String id) {
-        final EventLookup eventLookup = lookupDataManager.get(new EventLookupKey(id));
-        if (eventLookup == null) {
-            return false;
-        }
-        @SuppressWarnings("unchecked")
-        final CqlDAO<EventKey, Event> evtCqlDAO = (CqlDAO<EventKey, Event>) dataManager.getPrimaryDAO(V1).unwrap();
-        final EventKey eventKey = EventKey.of(eventLookup.getBucketId(), eventLookup.getShard(), eventLookup.getEventTime(), eventLookup.getEventId());
-        L.info("removing event: " + eventKey);
-        evtCqlDAO.removeById(implClass(V1, EventKey.class), eventKey);
-        @SuppressWarnings("unchecked")
-        final CqlDAO<EventLookupKey, EventLookup> cqlDAO = (CqlDAO<EventLookupKey, EventLookup>) dataManager.getPrimaryDAO(V1).unwrap();
-        L.info("removing event look up: " + eventLookup);
-        cqlDAO.removeById(implClass(V1, EventLookup.class), eventLookup.id());
-        return true;
+    private static final Selector<EventLookupKey, EventLookup> FULL_SELECTOR = fullSelector(new EventLookupKey(""));
+
+    public ListenableFuture<EventResponse> removeEvent(String id) {
+        final EventResponse eventResponse = new EventResponse();
+        eventResponse.setId(id);
+        return catching(transformAsync(lookupDataManager.getAsync(new EventLookupKey(id), FULL_SELECTOR), eventLookup -> {
+            if (eventLookup == null) {
+                return immediateFuture(eventResponse);
+            }
+            @SuppressWarnings("unchecked")
+            final CqlDAO<EventKey, Event> evtCqlDAO = (CqlDAO<EventKey, Event>) dataManager.getPrimaryDAO(V1).unwrap();
+            final AsyncManager am = evtCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
+            final EventKey eventKey = EventKey.of(eventLookup.getBucketId(), eventLookup.getShard(), eventLookup.getEventTime(), eventLookup.getEventId());
+            L.info("removing event: " + eventKey);
+            return transformAsync(am.deleteById(implClass(V1, EventKey.class), eventKey), $ -> {
+                L.info("removing event look up: " + eventLookup);
+                return transform(am.deleteById(implClass(V1, EventLookup.class), eventLookup.id()), new Function<Empty, EventResponse>() {
+                    @Override
+                    public EventResponse apply(Empty $) {
+                        L.debug("event removed successfully : " + id);
+                        eventResponse.setEventId(eventKey.getEventId());
+                        eventResponse.setEventTime(eventKey.getEventTime().toString());
+                        return eventResponse;
+                    }
+                });
+            });
+        }), Exception.class, ex -> {
+            final Throwable cause = getRootCause(ex);
+            L.error("error in removing the event: " + id, cause);
+            eventResponse.setErrors(newArrayList(new Error("BB_001", id, cause.getMessage(), getStackTraceString(cause), ERROR, APPLICATION)));
+            return eventResponse;
+        });
     }
 }
