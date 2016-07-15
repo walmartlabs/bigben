@@ -45,7 +45,7 @@ public class CheckpointHelper {
 
     synchronized ListenableFuture<Event> saveCheckpoint(Table<ZonedDateTime, Integer, Status> shards) {
         try {
-            L.info("saving checkpoint for shards: " + shards);
+            L.debug("saving checkpoint for shards: " + shards);
             return bucketManager.getStatusSyncer().syncShard(epoch(), -1, epoch(), "", PROCESSING, shards.cellSet().stream().sorted((o1, o2) -> {
                 final int i = o1.getRowKey().compareTo(o2.getRowKey());
                 return i != 0 ? i : o1.getColumnKey().compareTo(o2.getColumnKey());
@@ -80,6 +80,7 @@ public class CheckpointHelper {
                         } else
                             shards.put(bucketId, shard, status);
                         if (!pairs.isEmpty()) {
+                            L.info("starting processing timer for shards: " + pairs);
                             bucketManager.startShardsTimer(pairs);
                         }
                     });

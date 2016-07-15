@@ -1,0 +1,27 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <context:property-placeholder
+            location="classpath*:/environmentConfig/default/*.properties,classpath*:/environmentConfig/${com.walmart.platform.config.runOnEnv}/*.properties"/>
+
+    <context:property-placeholder
+            location="classpath*:/environmentConfig/default/*.properties,classpath*:/environmentConfig/${com.walmart.platform.config.runOnEnv}/*.properties"/>
+
+    <import resource="classpath*:platform-minimal.xml"/>
+
+    <bean id="dataManager" class="com.walmartlabs.components.scheduler.utils.HackedDataManager">
+        <constructor-arg index="0" value="file://dm-config.json"/>
+    </bean>
+
+    <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
+        <constructor-arg index="0" value="simulationCodes.json"/>
+    </bean>
+
+    <bean id="processRegistry" class="com.walmartlabs.components.scheduler.processors.ProcessorRegistry">
+        <constructor-arg index="0" value="file://processors.json"/>
+        <constructor-arg index="1" value="false"/>
+    </bean>
+</beans>
