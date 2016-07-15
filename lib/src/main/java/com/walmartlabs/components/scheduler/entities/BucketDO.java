@@ -33,6 +33,10 @@ public class BucketDO implements Bucket, MutableEntity<ZonedDateTime>, Serializa
     @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
     private ZonedDateTime processedAt;
 
+    @Column(name = "last_updated_at")
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    private ZonedDateTime updatedAt;
+
     public ZonedDateTime getId() {
         return id;
     }
@@ -69,6 +73,16 @@ public class BucketDO implements Bucket, MutableEntity<ZonedDateTime>, Serializa
     @Override
     public void setProcessedAt(ZonedDateTime processedAt) {
         this.processedAt = processedAt;
+    }
+
+    @Override
+    public ZonedDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    @Override
+    public void setUpdatedAt(ZonedDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 
     @Override

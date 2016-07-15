@@ -16,6 +16,7 @@ public class EventResponse extends EventRequest {
     private List<Error> errors;
     private String processedAt;
     private String eventId;
+    private String status;
 
     public List<Error> getErrors() {
         return errors;
@@ -41,6 +42,14 @@ public class EventResponse extends EventRequest {
         this.eventId = eventId;
     }
 
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
     public static EventResponse fromRequest(EventRequest eventRequest) {
         final EventResponse eventResponse = new EventResponse();
         eventResponse.setTenant(eventRequest.getTenant());
@@ -54,8 +63,9 @@ public class EventResponse extends EventRequest {
     public String toString() {
         return "EventResponse{" +
                 "errors=" + errors +
-                ", processedAt=" + processedAt +
+                ", processedAt='" + processedAt + '\'' +
                 ", eventId='" + eventId + '\'' +
+                ", status='" + status + '\'' +
                 "} " + super.toString();
     }
 
@@ -67,6 +77,7 @@ public class EventResponse extends EventRequest {
         eventResponse.setTenant(e.getTenant());
         eventResponse.setEventTime(e.id().getEventTime().toString());
         eventResponse.setPayload(e.getPayload());
+        eventResponse.setStatus(e.getStatus());
         return eventResponse;
     }
 }

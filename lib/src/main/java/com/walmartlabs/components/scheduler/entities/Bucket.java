@@ -23,4 +23,8 @@ public interface Bucket extends Entity<ZonedDateTime> {
     void setProcessedAt(ZonedDateTime date);
 
     ZonedDateTime getProcessedAt();
+
+    ZonedDateTime getUpdatedAt();
+
+    void setUpdatedAt(ZonedDateTime updatedAt);
 }

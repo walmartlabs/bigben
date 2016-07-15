@@ -47,6 +47,7 @@ import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.time.ZonedDateTime.parse;
 import static java.time.temporal.ChronoUnit.MILLIS;
 import static java.util.Collections.nCopies;
+import static java.util.UUID.randomUUID;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
@@ -133,6 +134,7 @@ public class EventService {
             final ZonedDateTime t = t1.plus(random.nextLong(delta), MILLIS);
             eventRequest.setTenant(bEG.getTenantId());
             eventRequest.setEventTime(t.toString());
+            eventRequest.setId(randomUUID().toString());
             return eventReceiver.addEvent(eventRequest);
         }).collect(toList())), (Function<List<EventResponse>, Object>) l -> {
             l.forEach(e -> {

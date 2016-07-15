@@ -36,14 +36,14 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.AbstractDAO
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.selector;
 import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICATION;
 import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.*;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.BUCKET_CACHE;
 import static com.walmartlabs.components.scheduler.entities.Bucket.Status.UN_PROCESSED;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
-import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
-import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
 import static java.time.ZonedDateTime.parse;
 import static java.util.UUID.randomUUID;
@@ -65,37 +65,58 @@ public class EventReceiver {
     private DataManager<EventLookupKey, EventLookup> lookupDataManager;
 
     public static final CountIncrementer CACHED_PROCESSOR = new CountIncrementer();
+    private static final Selector<EventLookupKey, EventLookup> LOOKUP_SELECTOR = selector(EventLookup.class, EventLookup::getBucketId);
 
-    public ListenableFuture<EventResponse> addEvent(EventRequest entity) {
+    public ListenableFuture<EventResponse> addEvent(EventRequest eventRequest) {
+        if (eventRequest.getId() == null) {
+            final EventResponse eventResponse = fromRequest(eventRequest);
+            eventResponse.setStatus("REJECTED");
+            eventResponse.setErrors(newArrayList(new Error("400", "id", "", "event id not present")));
+            L.error("event rejected, event id missing, " + eventRequest);
+            return immediateFuture(eventResponse);
+        }
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
-        final long millis = parse(entity.getEventTime()).toInstant().toEpochMilli();
-        final ZonedDateTime bucketId = utc(bucketize(millis, scanInterval));
-        final EventKey eventKey = EventKey.of(bucketId, 0, utc(millis), UUIDUtil.toString(randomUUID()));
+        final long eventTimeMillis = parse(eventRequest.getEventTime()).toInstant().toEpochMilli();
+        final ZonedDateTime bucketId = utc(bucketize(eventTimeMillis, scanInterval));
+        final EventKey eventKey = EventKey.of(bucketId, 0, utc(eventTimeMillis), UUIDUtil.toString(randomUUID()));
         L.debug(format("%s, event-time: %s -> bucket-id: %s", eventKey, eventKey.getEventTime(), bucketId));
-        L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, entity));
-        final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(BUCKET_CACHE);
-        return catching(transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, EventResponse>) count -> {
-            eventKey.setShard((int) (count / PROPS.getInteger("event.shard.size", 1000)));
-            L.debug(format("%s, add-event: event-table: insert", eventKey));
-            final Event e = entity(Event.class, eventKey);
-            e.setStatus(UN_PROCESSED.name());
-            e.setTenant(entity.getTenant());
-            e.setXrefId(entity.getId());
-            e.setPayload(entity.getPayload());
-            L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
-            final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(entity.getId() == null ? eventKey.getEventId() : entity.getId()));
-            lookupEntity.setBucketId(eventKey.getBucketId());
-            lookupEntity.setShard(eventKey.getShard());
-            lookupEntity.setEventTime(eventKey.getEventTime());
-            lookupEntity.setEventId(eventKey.getEventId());
-            return transform(allAsList(dataManager.insertAsync(e), lookupDataManager.insertAsync(lookupEntity)), (Function<List<Entity<?>>, EventResponse>) $ -> {
-                L.debug(format("%s, add-event: successful", eventKey));
-                return fromRequest(entity);
-            });
+        L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, eventRequest));
+
+        return catching(transformAsync(lookupDataManager.getAsync(new EventLookupKey(eventRequest.getId()), LOOKUP_SELECTOR), el -> {
+            if (el != null) {
+                final EventResponse eventResponse = fromRequest(eventRequest);
+                eventResponse.setStatus("REJECTED_DUPLICATE");
+                eventResponse.setErrors(newArrayList(new Error("400", "id", "", "event with id " + eventRequest.getId() + " already exists")));
+                return immediateFuture(eventResponse);
+            } else {
+                final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(BUCKET_CACHE);
+                return transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, EventResponse>) count -> {
+                    eventKey.setShard((int) ((count - 1) / PROPS.getInteger("event.shard.size", 1000)));
+                    L.debug(format("%s, add-event: event-table: insert", eventKey));
+                    final Event e = entity(Event.class, eventKey);
+                    e.setStatus(UN_PROCESSED.name());
+                    e.setTenant(eventRequest.getTenant());
+                    e.setXrefId(eventRequest.getId());
+                    e.setPayload(eventRequest.getPayload());
+                    L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
+                    final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(eventRequest.getId() == null ? eventKey.getEventId() : eventRequest.getId()));
+                    lookupEntity.setBucketId(eventKey.getBucketId());
+                    lookupEntity.setShard(eventKey.getShard());
+                    lookupEntity.setEventTime(eventKey.getEventTime());
+                    lookupEntity.setEventId(eventKey.getEventId());
+                    return transform(allAsList(dataManager.insertAsync(e), lookupDataManager.insertAsync(lookupEntity)), (Function<List<Entity<?>>, EventResponse>) $ -> {
+                        L.debug(format("%s, add-event: successful", eventKey));
+                        final EventResponse eventResponse = fromRequest(eventRequest);
+                        eventResponse.setStatus("ACCEPTED");
+                        return eventResponse;
+                    });
+                });
+            }
         }), Exception.class, ex -> {
             final List<Error> errors = getErrorAtServer(ex);
-            final EventResponse eventResponse = fromRequest(entity);
+            final EventResponse eventResponse = fromRequest(eventRequest);
             eventResponse.setErrors(errors);
+            eventResponse.setStatus(ERROR.name());
             return eventResponse;
         });
     }
@@ -105,6 +126,7 @@ public class EventReceiver {
         public Long process(Entry<ZonedDateTime, Bucket> entry) throws EntryProcessorException {
             final Bucket b = entry.getValue() == null ? new BucketDO() : entry.getValue();
             b.setCount(b.getCount() + 1);
+            b.setUpdatedAt(nowUTC());
             entry.setValue(b);
             L.debug(format("bucket-id: %s, old-count: %d, new-count: %d ", entry.getKey(), b.getCount() - 1, b.getCount()));
             return b.getCount();

@@ -74,8 +74,8 @@ public class BucketStore implements MapStore<ZonedDateTime, Bucket> {
         }
         L.debug(format("syncing key: %s, value: %s", key, value));
         final Bucket entity = DataManager.entity(Bucket.class, key);
-        entity.setStatus(value.getStatus());
         entity.setCount(value.getCount());
+        entity.setUpdatedAt(value.getUpdatedAt());
         final ListenableFuture<Bucket> f = dataManager.saveAsync(entity);
         addCallback(f, new FutureCallback<Bucket>() {
             @Override
