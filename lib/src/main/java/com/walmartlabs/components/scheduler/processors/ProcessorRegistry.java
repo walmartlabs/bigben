@@ -13,6 +13,7 @@ import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePubli
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventResponse;
+import com.walmartlabs.components.scheduler.entities.EventResponseMixin;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.log4j.Logger;
 
@@ -47,6 +48,7 @@ import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 public class ProcessorRegistry implements EventProcessor<Event> {
 
     private static final Logger L = Logger.getLogger(ProcessorRegistry.class);
+    private static final DevNullProcessor devNull = new DevNullProcessor();
 
     private final Map<String, ProcessorConfig> configs;
 
@@ -94,14 +96,15 @@ public class ProcessorRegistry implements EventProcessor<Event> {
     public EventProcessor<Event> getOrCreate(String tenant) {
         try {
             final ProcessorConfig processorConfig = configs.get(tenant);
-            checkArgument(processorConfig != null, "no config for tenant: " + tenant);
+            if (processorConfig == null)
+                return devNull;
             switch (processorConfig.getType()) {
                 case KAFKA:
                     return processorCache.get(tenant, () -> {
                         final MessagePublisher<String, EventResponse, RecordMetadata> publisher =
                                 new PublisherFactory(processorConfig.getProperties().get("topic").toString(),
                                         processorConfig.getProperties().get("configPath").toString(), true).create();
-                        return e -> transform(publisher.publish(e.id().getEventId(), toResponse(e)),
+                        return e -> transform(publisher.publish(e.id().getEventId(), getEventResponse(e)),
                                 new Function<RecordMetadata, Event>() {
                                     @Override
                                     public Event apply(RecordMetadata r) {
@@ -118,7 +121,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                         try {
                             final com.ning.http.client.ListenableFuture<Response> f = ASYNC_HTTP_CLIENT.
                                     preparePost(processorConfig.getProperties().get("url").toString())
-                                    .setBody(convertToString(toResponse(e)))
+                                    .setBody(convertToString(getEventResponse(e)))
                                     .setHeader(ACCEPT, APPLICATION_JSON)
                                     .setHeader(CONTENT_TYPE, APPLICATION_JSON)
                                     .execute();
@@ -167,6 +170,12 @@ public class ProcessorRegistry implements EventProcessor<Event> {
         } catch (ExecutionException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private EventResponse getEventResponse(Event e) {
+        if (((EventResponseMixin) e).getEventResponse() != null)
+            return ((EventResponseMixin) e).getEventResponse();
+        else return toResponse(e);
     }
 
     public ProcessorConfig register(ProcessorConfig config) {

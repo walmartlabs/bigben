@@ -3,9 +3,9 @@ package com.walmartlabs.components.scheduler.core;
 import com.google.common.collect.Table;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO;
+import com.walmartlabs.components.scheduler.entities.Status;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 
@@ -19,8 +19,8 @@ import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
-import static com.walmartlabs.components.scheduler.entities.Bucket.Status.PROCESSING;
-import static com.walmartlabs.components.scheduler.entities.Bucket.Status.UN_PROCESSED;
+import static com.walmartlabs.components.scheduler.entities.Status.PROCESSING;
+import static com.walmartlabs.components.scheduler.entities.Status.UN_PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.epoch;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.nowUTC;
 import static java.lang.String.format;
@@ -43,7 +43,7 @@ public class CheckpointHelper {
         this.bucketManager = bucketManager;
     }
 
-    synchronized ListenableFuture<Event> saveCheckpoint(Table<ZonedDateTime, Integer, Bucket.Status> shards) {
+    synchronized ListenableFuture<Event> saveCheckpoint(Table<ZonedDateTime, Integer, Status> shards) {
         try {
             L.info("saving checkpoint for shards: " + shards);
             return bucketManager.getStatusSyncer().syncShard(epoch(), -1, epoch(), "", PROCESSING, shards.cellSet().stream().sorted((o1, o2) -> {
@@ -56,7 +56,7 @@ public class CheckpointHelper {
         }
     }
 
-    ListenableFuture<?> loadCheckpoint(Table<ZonedDateTime, Integer, Bucket.Status> shards) {
+    ListenableFuture<?> loadCheckpoint(Table<ZonedDateTime, Integer, Status> shards) {
         final EventDO.EventKey key = EventDO.EventKey.of(epoch(), -1, epoch(), "");
         final ListenableFuture<Event> f = bucketManager.getEventDataManager().getAsync(key, fullSelector(key));
         addCallback(f, new FutureCallback<Event>() {
@@ -69,7 +69,7 @@ public class CheckpointHelper {
                         final List<String> split = newArrayList(on("/").split(s));
                         final ZonedDateTime bucketId = ZonedDateTime.parse(split.get(0));
                         final int shard = Integer.parseInt(split.get(1));
-                        final Bucket.Status status = Bucket.Status.valueOf(split.get(2));
+                        final Status status = Status.valueOf(split.get(2));
                         final Collection<Pair<ZonedDateTime, Integer>> pairs = new ArrayList<>();
                         if (MINUTES.between(bucketId, nowUTC()) > bucketManager.getMaxProcessingTime() && status == PROCESSING) {
                             L.warn(format("processing time for shard %s[%d] has expired, marking it unprocessed", bucketId, shard));

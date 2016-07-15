@@ -20,7 +20,7 @@ import java.util.function.Predicate;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.raw;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
-import static com.walmartlabs.components.scheduler.entities.Bucket.Status.EMPTY;
+import static com.walmartlabs.components.scheduler.entities.Status.EMPTY;
 import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.SECONDS;
 

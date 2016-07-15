@@ -34,6 +34,7 @@ import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFuture
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.AbstractDAO.implClass;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.raw;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.selector;
@@ -41,8 +42,8 @@ import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICAT
 import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.*;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.BUCKET_CACHE;
-import static com.walmartlabs.components.scheduler.entities.Bucket.Status.UN_PROCESSED;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
+import static com.walmartlabs.components.scheduler.entities.Status.*;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
 import static java.time.ZonedDateTime.parse;
@@ -68,9 +69,16 @@ public class EventReceiver {
     private static final Selector<EventLookupKey, EventLookup> LOOKUP_SELECTOR = selector(EventLookup.class, EventLookup::getBucketId);
 
     public ListenableFuture<EventResponse> addEvent(EventRequest eventRequest) {
+        if (eventRequest.getTenant() == null) {
+            final EventResponse eventResponse = fromRequest(eventRequest);
+            eventResponse.setStatus(REJECTED.name());
+            eventResponse.setErrors(newArrayList(new Error("400", "id", "", "tenant not present")));
+            L.error("event rejected, tenant missing, " + eventRequest);
+            return immediateFuture(eventResponse);
+        }
         if (eventRequest.getId() == null) {
             final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus("REJECTED");
+            eventResponse.setStatus(REJECTED.name());
             eventResponse.setErrors(newArrayList(new Error("400", "id", "", "event id not present")));
             L.error("event rejected, event id missing, " + eventRequest);
             return immediateFuture(eventResponse);
@@ -85,7 +93,7 @@ public class EventReceiver {
         return catching(transformAsync(lookupDataManager.getAsync(new EventLookupKey(eventRequest.getId()), LOOKUP_SELECTOR), el -> {
             if (el != null) {
                 final EventResponse eventResponse = fromRequest(eventRequest);
-                eventResponse.setStatus("REJECTED_DUPLICATE");
+                eventResponse.setStatus(REJECTED_DUPLICATE.name());
                 eventResponse.setErrors(newArrayList(new Error("400", "id", "", "event with id " + eventRequest.getId() + " already exists")));
                 return immediateFuture(eventResponse);
             } else {
@@ -107,7 +115,7 @@ public class EventReceiver {
                     return transform(allAsList(dataManager.insertAsync(e), lookupDataManager.insertAsync(lookupEntity)), (Function<List<Entity<?>>, EventResponse>) $ -> {
                         L.debug(format("%s, add-event: successful", eventKey));
                         final EventResponse eventResponse = fromRequest(eventRequest);
-                        eventResponse.setStatus("ACCEPTED");
+                        eventResponse.setStatus(ACCEPTED.name());
                         return eventResponse;
                     });
                 });
@@ -183,5 +191,16 @@ public class EventReceiver {
             eventResponse.setErrors(newArrayList(new Error("BB_001", id, cause.getMessage(), getStackTraceString(cause), ERROR, APPLICATION)));
             return eventResponse;
         });
+    }
+
+    private static final EventKey EMPTY_KEY = new EventKey();
+
+    public static Event toEvent(EventResponse e) {
+        final Event event = raw(entity(Event.class, EMPTY_KEY));
+        event.setTenant(e.getTenant());
+        event.setError(null);
+        ((EventResponseMixin) event).setEventResponse(e);
+        e.setProcessedAt(nowUTC().toString());
+        return event;
     }
 }

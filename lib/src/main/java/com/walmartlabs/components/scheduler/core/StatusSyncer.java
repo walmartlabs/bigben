@@ -4,7 +4,7 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmartlabs.components.scheduler.entities.Bucket;
-import com.walmartlabs.components.scheduler.entities.Bucket.Status;
+import com.walmartlabs.components.scheduler.entities.Status;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO;
 import org.apache.log4j.Logger;

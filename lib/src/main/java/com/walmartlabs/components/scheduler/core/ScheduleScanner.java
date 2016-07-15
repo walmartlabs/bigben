@@ -34,7 +34,7 @@ import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
-import static com.walmartlabs.components.scheduler.entities.Bucket.Status.ERROR;
+import static com.walmartlabs.components.scheduler.entities.Status.ERROR;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;

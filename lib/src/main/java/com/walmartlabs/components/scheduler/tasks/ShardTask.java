@@ -33,8 +33,8 @@ import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRo
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static com.walmart.services.common.util.JsonUtil.convertToObject;
 import static com.walmart.services.common.util.JsonUtil.convertToString;
-import static com.walmartlabs.components.scheduler.entities.Bucket.Status.ERROR;
-import static com.walmartlabs.components.scheduler.entities.Bucket.Status.PROCESSED;
+import static com.walmartlabs.components.scheduler.entities.Status.ERROR;
+import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.epoch;
 import static java.lang.Integer.getInteger;
 import static java.lang.Integer.max;

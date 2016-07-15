@@ -2,6 +2,7 @@ package com.walmartlabs.components.scheduler.services;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
@@ -32,8 +33,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static com.google.common.collect.Lists.newArrayList;
-import static com.google.common.util.concurrent.Futures.successfulAsList;
-import static com.google.common.util.concurrent.Futures.transform;
+import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICATION;
 import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
@@ -42,6 +42,8 @@ import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getSt
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.EVENT_SCHEDULER;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
+import static com.walmartlabs.components.scheduler.entities.Status.ACCEPTED;
+import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.time.ZonedDateTime.parse;
@@ -76,6 +78,9 @@ public class EventService {
 
     @Autowired
     private Service service;
+
+    @Autowired
+    private ProcessorRegistry processorRegistry;
 
     @GET
     @Path("/ping")
@@ -135,7 +140,13 @@ public class EventService {
             eventRequest.setTenant(bEG.getTenantId());
             eventRequest.setEventTime(t.toString());
             eventRequest.setId(randomUUID().toString());
-            return eventReceiver.addEvent(eventRequest);
+            final ListenableFuture<EventResponse> f = eventReceiver.addEvent(eventRequest);
+            return transformAsync(f, e -> {
+                if (!ACCEPTED.name().equals(e.getStatus())) {
+                    processorRegistry.getOrCreate(e.getTenant()).process(toEvent(e));
+                }
+                return f;
+            });
         }).collect(toList())), (Function<List<EventResponse>, Object>) l -> {
             l.forEach(e -> {
                 final ZonedDateTime bucketId = utc(bucketize(parse(e.getEventTime()).toInstant().toEpochMilli(), scanInterval));
@@ -163,9 +174,6 @@ public class EventService {
             }
         }).collect(toMap(Pair::getLeft, Pair::getRight));
     }
-
-    @Autowired
-    private ProcessorRegistry processorRegistry;
 
     @POST
     @Path("/processors/register")

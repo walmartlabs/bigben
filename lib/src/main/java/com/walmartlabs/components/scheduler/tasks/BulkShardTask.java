@@ -27,7 +27,7 @@ import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.entities.ObjectFactory.OBJECT_ID.BULK_EVENT_TASK;
-import static com.walmartlabs.components.scheduler.entities.Bucket.Status.ERROR;
+import static com.walmartlabs.components.scheduler.entities.Status.ERROR;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;

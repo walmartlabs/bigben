@@ -15,7 +15,7 @@ import static java.lang.String.format;
  */
 @Entity(table = "events")
 @KeyMapping(keyClass = EventDO.EventKey.class, entityClass = Event.class, version = V1)
-public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
+public class EventDO implements Event, MutableEntity<EventDO.EventKey>, EventResponseMixin {
 
     @EmbeddedId
     private EventKey eventKey;
@@ -185,6 +185,18 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey> {
         public String toString() {
             return format("Event[%s/%d/%s/%s]", bucketId, shard, eventTime, eventId);
         }
+    }
+
+    private EventResponse eventResponse;
+
+    @Override
+    public EventResponse getEventResponse() {
+        return eventResponse;
+    }
+
+    @Override
+    public void setEventResponse(EventResponse eventResponse) {
+        this.eventResponse = eventResponse;
     }
 
     @Override

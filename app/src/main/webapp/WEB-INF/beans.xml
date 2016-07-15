@@ -23,7 +23,6 @@
             </list>
         </constructor-arg>
     </bean>
-    <bean class="com.walmartlabs.components.scheduler.processors.DefaultEventProcessor"/>
 
     <jaxrs:server address="/services">
         <jaxrs:serviceBeans>

@@ -9,6 +9,8 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePublisher;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
+import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
+import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean;
 import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.Event;
@@ -27,10 +29,12 @@ import org.testng.annotations.Test;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
@@ -45,6 +49,7 @@ import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.time.ZonedDateTime.ofInstant;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -97,9 +102,9 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
         final int delay = 1;
         final long from = bucketize(now.plusMinutes(delay).toInstant().toEpochMilli(), scanInterval);
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
-        final int numEvents = 102;
+        final int numEvents = 1;
         counts.set(numEvents);
-        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, numEvents, "$$TEST$$")));
+        System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, numEvents, "1")));
         try {
             latch.await(4, MINUTES);
         } catch (InterruptedException e) {
@@ -120,7 +125,7 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
         final ExecutorService executorService = Executors.newFixedThreadPool(getRuntime().availableProcessors());
         ScheduledExecutorService scheduledThreadPoolExecutor = Executors.newSingleThreadScheduledExecutor();
         scheduledThreadPoolExecutor.scheduleAtFixedRate(() -> throttler.release(initial - throttler.availablePermits()), 0, 1, SECONDS);
-        final int size = 1000000;
+        final int size = 1;
         final CountDownLatch l = new CountDownLatch(size);
         final long n = currentTimeMillis();
         for (int i = 0; i < size; i++) {
@@ -149,6 +154,33 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
         }
         l.await();
         System.out.println("done: time to publish " + size + " event = " + (currentTimeMillis() - n) + " ms");
+    }
+
+    @Test
+    public void consume() throws Exception {
+        final AtomicInteger count = new AtomicInteger();
+        final AtomicReference<Integer> sum = new AtomicReference<>(0);
+        //bigben_promo_kafka j
+        ScheduledExecutorService scheduledExecutorService = newSingleThreadScheduledExecutor();
+        scheduledExecutorService.scheduleAtFixedRate(() -> {
+            try {
+                System.out.println("message received: " + (count.get() - sum.get()) + ", until now: " + count.get() + ", time: " + new Date());
+                sum.set(count.get());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }, 0, 10, TimeUnit.SECONDS);
+        final TopicMessageProcessor tmp = (s, r) -> {
+            System.out.println(r.value());
+            //L.debug("topic: " + s + ", " + r.partition() + ": " + r.offset());
+            count.incrementAndGet();
+            return immediateFuture(null);
+        };
+        System.setProperty(APP_NAME, "gmp-solr-consumer");
+
+        final KafkaConsumerBean consumer = new KafkaConsumerBean("bigben_promo_kafka", tmp);
+        consumer.afterPropertiesSet();
+        new CountDownLatch(1).await();
     }
 
     @Test

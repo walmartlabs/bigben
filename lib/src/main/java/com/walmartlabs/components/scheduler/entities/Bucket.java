@@ -10,8 +10,6 @@ import java.time.ZonedDateTime;
  */
 public interface Bucket extends Entity<ZonedDateTime> {
 
-    enum Status {PROCESSED, ERROR, UN_PROCESSED, PROCESSING, EMPTY}
-
     String getStatus();
 
     void setStatus(String status);
