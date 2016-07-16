@@ -215,7 +215,7 @@ public class BucketManager {
         try {
             final List<ZonedDateTime> bucketIds = reverse(newArrayList(new TreeSet<>(shards.rowKeySet())));
             final List<Pair<ZonedDateTime, Integer>> purged = new ArrayList<>();
-            L.info("checking buckets for purging from shards: " + shards);
+            L.debug("checking buckets for purging from shards: " + shards);
             if (bucketIds.size() > maxBuckets) {
                 for (int i = maxBuckets; i < bucketIds.size(); i++) {
                     final ZonedDateTime bucketId = bucketIds.get(i);
@@ -238,7 +238,7 @@ public class BucketManager {
             }
             if (!purged.isEmpty()) {
                 L.info("purged shards: " + purged);
-                L.info("shards after purging: " + shards);
+                L.debug("shards after purging: " + shards);
             } else L.info("nothing to purge");
         } catch (Exception e) {
             L.error("error in purging shards: " + shards, e);
