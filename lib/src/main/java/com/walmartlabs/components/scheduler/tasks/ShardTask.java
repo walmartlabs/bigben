@@ -6,11 +6,12 @@ import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.services.nosql.data.CqlDAO;
-import com.walmartlabs.components.scheduler.processors.EventProcessor;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.processors.EventProcessor;
 import info.archinnov.achilles.persistence.AsyncManager;
+import org.apache.cxf.common.i18n.Exception;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.type.TypeReference;
 
@@ -91,8 +92,8 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
         });
     }
 
-    private ListenableFuture<ShardStatus> calculateShardStatus(List<EventDO> l) throws IOException {
-        final List<EventDO> events = l.stream().filter(e -> e != null && !PROCESSED.name().equals(e.getStatus())).map(DataManager::raw).collect(toList());
+    private ListenableFuture<ShardStatus> calculateShardStatus(List<Event> l) throws IOException {
+        final List<Event> events = l.stream().filter(e -> e == null || !PROCESSED.name().equals(e.getStatus())).map(DataManager::raw).collect(toList());
         if (!events.isEmpty()) {
             L.info(format("%s, errors in processing shard: %s", executionKey, events));
             final Event entity = entity(Event.class, EventKey.of(bucketId, shard, epoch(), ""));
@@ -105,18 +106,19 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
         }
     }
 
-    private ListenableFuture<List<EventDO>> loadAndProcess(int fetchSize, AsyncManager am, ZonedDateTime eventTime, String eventId) {
+    private ListenableFuture<List<Event>> loadAndProcess(int fetchSize, AsyncManager am, ZonedDateTime eventTime, String eventId) {
         final String taskId = shard + "[" + eventTime + "(" + fetchSize + ")]";
         L.debug(format("%s, loading and processing shard %d, fetchSize %d, from eventTime: %s", executionKey, shard, fetchSize, eventTime));
+        final Class<Event> entityClass = Event.class;
         @SuppressWarnings("unchecked")
-        final ListenableFuture<List<EventDO>> f = async(() -> am.sliceQuery(EventDO.class).forSelect().
+        final ListenableFuture<List<Event>> f = async(() -> am.sliceQuery(entityClass).forSelect().
                 withPartitionComponents(bucketId, shard).fromClusterings(eventTime, eventId).withExclusiveBounds().limit(fetchSize).get(), "load-shard-slice#" + taskId);
         return transformAsync(f, l -> {
             if (l.isEmpty()) {
                 L.debug(format("%s, no more events to process: shard %d, fetchSize %d, (eventTime, eventId): (%s,%s)", executionKey, shard, fetchSize, eventTime, eventId));
                 return immediateFuture(l);
             }
-            final ListenableFuture<List<EventDO>> schedule = async(() -> successfulAsList(l.stream().filter(e ->
+            final ListenableFuture<List<Event>> schedule = async(() -> successfulAsList(l.stream().filter(e ->
                     e != null && !PROCESSED.name().equals(e.getStatus())).map(am::removeProxy).map(this::schedule).
                     collect(toList())), "process-events#" + taskId);
             return transformAsync(schedule, $ -> {
@@ -130,22 +132,22 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
         });
     }
 
-    private ListenableFuture<EventDO> schedule(EventDO e) {
+    private ListenableFuture<Event> schedule(Event e) {
         final long delay = e.id().getEventTime().toInstant().toEpochMilli() - currentTimeMillis();
         if (delay <= 0) {
             L.debug(format("%s, event %s time has expired, processing immediately", executionKey, e.id()));
             return transformAsync(process(e), $ -> save(e));
         } else {
             L.debug(format("%s, scheduling event '%s' after delay %d, at %s", executionKey, e.id(), delay, e.id().getEventTime()));
-            final ListenableFuture<EventDO> process = dereference(EXECUTOR.schedule(() -> process(e), delay, MILLISECONDS));
+            final ListenableFuture<Event> process = dereference(EXECUTOR.schedule(() -> process(e), delay, MILLISECONDS));
             return transformAsync(process, $ -> save(e));
         }
     }
 
-    private ListenableFuture<EventDO> process(EventDO e) {
+    private ListenableFuture<Event> process(Event e) {
         try {
             L.debug(format("%s, processing event: %s", executionKey, e.id()));
-            return transform(eventProcessor.process(e), (Function<Event, EventDO>) $ -> {
+            return transform(eventProcessor.process(e), (Function<Event, Event>) $ -> {
                 L.debug(format("%s, processed event: %s", executionKey, e.id()));
                 e.setStatus(PROCESSED.name());
                 return e;
@@ -158,13 +160,13 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
         }
     }
 
-    private ListenableFuture<EventDO> save(EventDO e) {
+    private ListenableFuture<Event> save(Event e) {
         L.debug(format("%s, saving event: %s to the DB, the status is '%s'", executionKey, e.id(), e.getStatus()));
         final Event entity = entity(Event.class, e.id());
         entity.setStatus(e.getStatus());
         if (e.getError() != null)
             entity.setError(e.getError());
-        return transform(eventDM.saveAsync(entity), (Function<Event, EventDO>) $ -> (EventDO) $);
+        return transform(eventDM.saveAsync(entity), (Function<Event, Event>) $ -> e);
     }
 
     private AsyncManager getAsyncManager() {

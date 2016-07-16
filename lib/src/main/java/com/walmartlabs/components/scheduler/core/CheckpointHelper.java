@@ -39,7 +39,7 @@ public class CheckpointHelper {
 
     private final BucketManager bucketManager;
 
-    public CheckpointHelper(BucketManager bucketManager) {
+    CheckpointHelper(BucketManager bucketManager) {
         this.bucketManager = bucketManager;
     }
 

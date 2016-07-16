@@ -12,9 +12,9 @@ import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmartlabs.components.scheduler.entities.Bucket;
-import com.walmartlabs.components.scheduler.entities.Status;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.entities.Status;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 
@@ -26,13 +26,11 @@ import java.util.function.Consumer;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.reverse;
-import static com.google.common.util.concurrent.Futures.addCallback;
-import static com.google.common.util.concurrent.Futures.transform;
+import static com.google.common.util.concurrent.Futures.*;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmartlabs.components.scheduler.entities.Status.*;
-import static com.walmartlabs.components.scheduler.utils.TimeUtils.epoch;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.nowUTC;
 import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
@@ -170,7 +168,6 @@ public class BucketManager {
                 if (status != null && status == PROCESSING) {
                     L.warn(format("bulk timer for shard: %s[%d] expired, marking it %s", bucketId, shard, UN_PROCESSED));
                     this.shards.put(bucketId, shard, UN_PROCESSED);
-                    statusSyncer.syncShard(bucketId, shard, epoch(), "", UN_PROCESSED, null);
                 }
             }
         } catch (Exception e) {
@@ -197,9 +194,12 @@ public class BucketManager {
         }
     }
 
-    synchronized void bucketProcessed(ZonedDateTime bucketId) {
+    private static final ListenableFuture<Bucket> NO_OP = immediateFuture(null);
+
+    synchronized ListenableFuture<Bucket> bucketProcessed(ZonedDateTime bucketId) {
         if (shards.get(bucketId, -1) == PROCESSED)
-            return;
+            return NO_OP;
+        L.info(format("marking bucket %s as " + PROCESSED, bucketId));
         final Map<Integer, Status> shards = this.shards.rowMap().get(bucketId);
         if (shards != null) {
             final Set<Integer> dup = new HashSet<>(shards.keySet());
@@ -208,7 +208,7 @@ public class BucketManager {
             }
         }
         this.shards.put(bucketId, -1, PROCESSED);
-        statusSyncer.syncBucket(bucketId, PROCESSED);
+        return statusSyncer.syncBucket(bucketId, PROCESSED);
     }
 
     private void purgeIfNeeded() {

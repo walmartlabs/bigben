@@ -27,6 +27,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.google.common.collect.Iterables.concat;
 import static com.google.common.collect.Iterators.cycle;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Sets.newHashSet;
@@ -35,6 +36,7 @@ import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFuture
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.entities.Status.ERROR;
+import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;
@@ -43,6 +45,7 @@ import static java.time.ZonedDateTime.now;
 import static java.time.ZonedDateTime.ofInstant;
 import static java.util.concurrent.TimeUnit.*;
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
 import static org.apache.commons.lang3.tuple.Pair.of;
 
 /**
@@ -157,7 +160,20 @@ public class ScheduleScanner implements Service {
                                             @Override
                                             public void onSuccess(List<List<ShardStatus>> result) {
                                                 L.info(format("schedule for bucket %s finished successfully => %s", currentBucketId, result));
-                                                bucketManager.bucketProcessed(currentBucketId);
+                                                final Set<ZonedDateTime> buckets = newArrayList(concat(result)).stream().map(ShardStatus::getBucketId).collect(toSet());
+                                                addCallback(successfulAsList(buckets.stream().map(b -> bucketManager.bucketProcessed(b)).collect(toList())),
+                                                        new FutureCallback<List<Bucket>>() {
+                                                            @Override
+                                                            public void onSuccess(List<Bucket> result) {
+                                                                L.info(format("%s, buckets are marked %s: %s",
+                                                                        currentBucketId, currentBucketId, result.stream().filter(b -> b != null).collect(toList())));
+                                                            }
+
+                                                            @Override
+                                                            public void onFailure(Throwable t) {
+                                                                L.error(format("%s, error in marking following buckets %s: %s ", currentBucketId, PROCESSED, buckets), t);
+                                                            }
+                                                        });
                                             }
 
                                             @Override
@@ -207,7 +223,6 @@ public class ScheduleScanner implements Service {
     }
 
     private final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(Exception.class));
-    private static final ListenableFuture<List<ShardStatus>> NO_OP = immediateFuture(new ArrayList<>());
 
     public void shutdown() {
         isShutdown.set(true);

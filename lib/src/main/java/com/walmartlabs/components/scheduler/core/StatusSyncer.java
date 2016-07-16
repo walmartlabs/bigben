@@ -4,9 +4,9 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmartlabs.components.scheduler.entities.Bucket;
-import com.walmartlabs.components.scheduler.entities.Status;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO;
+import com.walmartlabs.components.scheduler.entities.Status;
 import org.apache.log4j.Logger;
 
 import java.time.ZonedDateTime;
@@ -20,19 +20,19 @@ import static java.time.ZonedDateTime.now;
 /**
  * Created by smalik3 on 7/5/16
  */
-public class StatusSyncer {
+class StatusSyncer {
 
     private static final Logger L = Logger.getLogger(StatusSyncer.class);
 
     private final DataManager<ZonedDateTime, Bucket> dataManager;
     private final DataManager<EventDO.EventKey, Event> dm;
 
-    public StatusSyncer(DataManager<ZonedDateTime, Bucket> dataManager, DataManager<EventDO.EventKey, Event> dm) {
+    StatusSyncer(DataManager<ZonedDateTime, Bucket> dataManager, DataManager<EventDO.EventKey, Event> dm) {
         this.dataManager = dataManager;
         this.dm = dm;
     }
 
-    public ListenableFuture<Bucket> syncBucket(ZonedDateTime bucketId, Status status) {
+    ListenableFuture<Bucket> syncBucket(ZonedDateTime bucketId, Status status) {
         final Bucket entity = entity(Bucket.class, bucketId);
         entity.setProcessedAt(now(UTC));
         entity.setStatus(status.name());
@@ -53,7 +53,7 @@ public class StatusSyncer {
         return f;
     }
 
-    public ListenableFuture<Event> syncShard(ZonedDateTime bucketId, int shard, ZonedDateTime eventTime, String eventId, Status status, String payload) {
+    ListenableFuture<Event> syncShard(ZonedDateTime bucketId, int shard, ZonedDateTime eventTime, String eventId, Status status, String payload) {
         final Event entity = entity(Event.class, EventDO.EventKey.of(bucketId, shard, eventTime, eventId));
         entity.setStatus(status.name());
         if (payload != null)
