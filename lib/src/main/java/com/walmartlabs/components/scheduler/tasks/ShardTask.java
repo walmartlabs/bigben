@@ -11,7 +11,6 @@ import com.walmartlabs.components.scheduler.entities.EventDO;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.processors.EventProcessor;
 import info.archinnov.achilles.persistence.AsyncManager;
-import org.apache.cxf.common.i18n.Exception;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.type.TypeReference;
 
@@ -27,6 +26,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.AbstractDAO.implClass;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
@@ -109,9 +109,9 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
     private ListenableFuture<List<Event>> loadAndProcess(int fetchSize, AsyncManager am, ZonedDateTime eventTime, String eventId) {
         final String taskId = shard + "[" + eventTime + "(" + fetchSize + ")]";
         L.debug(format("%s, loading and processing shard %d, fetchSize %d, from eventTime: %s", executionKey, shard, fetchSize, eventTime));
-        final Class<Event> entityClass = Event.class;
+        final Class<Event> implClass = implClass(V1, EventKey.class);
         @SuppressWarnings("unchecked")
-        final ListenableFuture<List<Event>> f = async(() -> am.sliceQuery(entityClass).forSelect().
+        final ListenableFuture<List<Event>> f = async(() -> am.sliceQuery(implClass).forSelect().
                 withPartitionComponents(bucketId, shard).fromClusterings(eventTime, eventId).withExclusiveBounds().limit(fetchSize).get(), "load-shard-slice#" + taskId);
         return transformAsync(f, l -> {
             if (l.isEmpty()) {

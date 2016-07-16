@@ -160,8 +160,10 @@ public class ScheduleScanner implements Service {
                                             @Override
                                             public void onSuccess(List<List<ShardStatus>> result) {
                                                 L.info(format("schedule for bucket %s finished successfully => %s", currentBucketId, result));
-                                                final Set<ZonedDateTime> buckets = newArrayList(concat(result)).stream().map(ShardStatus::getBucketId).collect(toSet());
-                                                addCallback(successfulAsList(buckets.stream().map(b -> bucketManager.bucketProcessed(b)).collect(toList())),
+                                                final List<ShardStatus> shardStatues = newArrayList(concat(result));
+                                                final Set<ZonedDateTime> buckets = shardStatues.stream().map(ShardStatus::getBucketId).collect(toSet());
+                                                final Set<ZonedDateTime> erroredBuckets = shardStatues.stream().filter(shardStatus -> shardStatus.getStatus() == ERROR).map(ShardStatus::getBucketId).collect(toSet());
+                                                addCallback(successfulAsList(buckets.stream().map(b -> bucketManager.bucketProcessed(b, erroredBuckets.contains(b) ? ERROR : PROCESSED)).collect(toList())),
                                                         new FutureCallback<List<Bucket>>() {
                                                             @Override
                                                             public void onSuccess(List<Bucket> result) {

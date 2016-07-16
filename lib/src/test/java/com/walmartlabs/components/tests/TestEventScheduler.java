@@ -99,14 +99,14 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
     public void testEventScheduler() throws Exception {
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final ZonedDateTime now = now(UTC);
-        final int delay = 1;
+        final int delay = 2;
         final long from = bucketize(now.plusMinutes(delay).toInstant().toEpochMilli(), scanInterval);
         final String t1 = ofInstant(ofEpochMilli(from), UTC).toString();
         final int numEvents = 1;
         counts.set(numEvents);
         System.out.println(eventService.generateEvents(new BulkEventGeneration(t1, 1, numEvents, "1")));
         try {
-            latch.await(4, MINUTES);
+            latch.await(3, MINUTES);
         } catch (InterruptedException e) {
             throw new AssertionError("test timed out");
         }

@@ -51,15 +51,15 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
         setProperty(APP_NAME, "gmp-solr-consumer");
         final MessagePublisher<String, EventRequest, Object> publisher = new PublisherFactory("promo_evt_inbound", "bigben_kafka", true).create();
         final ZonedDateTime now = now(UTC);
-        final ZonedDateTime time = now.plusMinutes(5).withSecond(0).withNano(0);
-        final int durationSecs = 5 * 60;
+        final ZonedDateTime time = now.plusMinutes(3).withSecond(0).withNano(0);
+        final int durationSecs = 60;
         final Random random = new Random();
         final int initial = 1000000;
         final Semaphore throttler = new Semaphore(initial);
         final ExecutorService executorService = Executors.newFixedThreadPool(getRuntime().availableProcessors());
         ScheduledExecutorService scheduledThreadPoolExecutor = Executors.newSingleThreadScheduledExecutor();
         scheduledThreadPoolExecutor.scheduleAtFixedRate(() -> throttler.release(initial - throttler.availablePermits()), 0, 1, SECONDS);
-        final int size = 1000000;
+        final int size = 1;
         final CountDownLatch l = new CountDownLatch(size);
         final Map<String, Integer> histogram = new HashMap<>();
         final long n = currentTimeMillis();

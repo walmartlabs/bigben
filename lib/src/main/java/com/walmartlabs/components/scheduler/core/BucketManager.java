@@ -182,7 +182,7 @@ public class BucketManager {
                 shards.remove(bucketId, shard);
                 if (!shards.containsRow(bucketId)) {
                     L.info(format("no more shards to be processed for bucket: %s, marking it %s", bucketId, PROCESSED));
-                    bucketProcessed(bucketId);
+                    bucketProcessed(bucketId, PROCESSED);
                 }
                 break;
             case ERROR:
@@ -196,10 +196,10 @@ public class BucketManager {
 
     private static final ListenableFuture<Bucket> NO_OP = immediateFuture(null);
 
-    synchronized ListenableFuture<Bucket> bucketProcessed(ZonedDateTime bucketId) {
-        if (shards.get(bucketId, -1) == PROCESSED)
+    synchronized ListenableFuture<Bucket> bucketProcessed(ZonedDateTime bucketId, Status status) {
+        if (shards.get(bucketId, -1) == status)
             return NO_OP;
-        L.info(format("marking bucket %s as " + PROCESSED, bucketId));
+        L.info(format("marking bucket %s as " + status, bucketId));
         final Map<Integer, Status> shards = this.shards.rowMap().get(bucketId);
         if (shards != null) {
             final Set<Integer> dup = new HashSet<>(shards.keySet());
@@ -207,8 +207,8 @@ public class BucketManager {
                 this.shards.remove(bucketId, shardKey);
             }
         }
-        this.shards.put(bucketId, -1, PROCESSED);
-        return statusSyncer.syncBucket(bucketId, PROCESSED);
+        this.shards.put(bucketId, -1, status);
+        return statusSyncer.syncBucket(bucketId, status);
     }
 
     private void purgeIfNeeded() {
