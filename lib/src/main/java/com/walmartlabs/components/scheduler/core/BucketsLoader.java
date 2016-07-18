@@ -83,7 +83,7 @@ class BucketsLoader {
                                         return b == null ? createEmptyBucket(bId) : raw(b);
                                     }
                                 }), Exception.class, ex -> {
-                            L.error("error in fetching bucket: " + bId);
+                            L.error("error in fetching bucket: " + bId, ex); //TODO: keep track of buckets that could not be loaded.
                             return createEmptyBucket(bId);
                         }));
                     } else {

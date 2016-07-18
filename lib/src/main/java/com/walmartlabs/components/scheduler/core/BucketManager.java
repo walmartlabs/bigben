@@ -94,8 +94,10 @@ public class BucketManager {
             l.forEach(b -> {
                 if (b != null && !shards.containsRow(b.id())) {
                     if (b.getCount() == 0) {
+                        L.info(format("no events in the bucket: %s, marking it %s", b.id(), EMPTY));
                         shards.put(b.id(), -1, EMPTY);
                     } else if (b.getCount() > 0 && PROCESSED.name().equals(b.getStatus())) {
+                        L.info(format("bucket: %s is already done, marking it %s", b.id(), PROCESSED));
                         shards.put(b.id(), -1, PROCESSED);
                     } else if (b.getCount() > 0 && !PROCESSED.name().equals(b.getStatus())) {
                         int shardSize = PROPS.getInteger("event.shard.size", 1000);
@@ -105,6 +107,8 @@ public class BucketManager {
                             if (!shards.contains(b.id(), i))
                                 shards.put(b.id(), i, UN_PROCESSED);
                         }
+                        L.info(format("bucket: %s has %d events, resulting in %d shards, marking all shards %s",
+                                b.id(), b.getCount(), numShards, UN_PROCESSED));
                     }
                 }
             });
@@ -131,9 +135,8 @@ public class BucketManager {
                         filter(cell -> cell.getValue() != EMPTY && cell.getValue() != PROCESSED && cell.getValue() != PROCESSING).
                         forEach(cell -> processableShards.put(cell.getRowKey(), cell.getColumnKey()));
                 L.info(format("processable shards at bucket: %s, are => %s", bucketId, processableShards));
-                if (!processableShards.containsKey(bucketId)) {
-                    L.info(format("no events in the bucket: %s, marking it %s", bucketId, EMPTY));
-                    shards.put(bucketId, -1, EMPTY);
+                if (!processableShards.containsKey(bucketId) && shards.get(bucketId, -1) == EMPTY) {
+                    L.info(format("no events in the bucket: %s", bucketId));
                 }
             }
 
