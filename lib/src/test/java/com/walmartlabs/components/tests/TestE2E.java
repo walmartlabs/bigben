@@ -49,21 +49,26 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
     @Test
     public void produce() throws ExecutionException, InterruptedException {
         setProperty(APP_NAME, "gmp-solr-consumer");
+
+        // input:
+        final int durationSecs = 5 * 60;
+        final int throttling = 1_000_000;
+        final int numEvents = 1_000_000;
+        final int initialDelay = 4;
+
         final MessagePublisher<String, EventRequest, Object> publisher = new PublisherFactory("promo_evt_inbound", "bigben_kafka", true).create();
         final ZonedDateTime now = now(UTC);
-        final ZonedDateTime time = now.plusMinutes(5).withSecond(0).withNano(0);
-        final int durationSecs = 5 * 60;
+        final ZonedDateTime time = now.plusMinutes(initialDelay).withSecond(0).withNano(0);
         final Random random = new Random();
-        final int initial = 1_000_000;
-        final Semaphore throttler = new Semaphore(initial);
+        final Semaphore throttler = new Semaphore(throttling);
         final ExecutorService executorService = Executors.newFixedThreadPool(getRuntime().availableProcessors());
         ScheduledExecutorService scheduledThreadPoolExecutor = Executors.newSingleThreadScheduledExecutor();
-        scheduledThreadPoolExecutor.scheduleAtFixedRate(() -> throttler.release(initial - throttler.availablePermits()), 0, 1, SECONDS);
-        final int size = 1_000_000;
-        final CountDownLatch l = new CountDownLatch(size);
+        scheduledThreadPoolExecutor.scheduleAtFixedRate(() -> throttler.release(throttling - throttler.availablePermits()), 0, 1, SECONDS);
+
+        final CountDownLatch l = new CountDownLatch(numEvents);
         final Map<String, Integer> histogram = new HashMap<>();
         final long n = currentTimeMillis();
-        for (int i = 0; i < size; i++) {
+        for (int i = 0; i < numEvents; i++) {
             throttler.acquire();
             final ZonedDateTime eventTime = time.plusSeconds(random.nextInt(durationSecs));
             final EventRequest eventRequest = new EventRequest();
@@ -95,7 +100,7 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
 
         }
         l.await();
-        System.out.println("done: time to publish " + size + " event = " + (currentTimeMillis() - n) + " ms");
+        System.out.println("done: time to publish " + numEvents + " event = " + (currentTimeMillis() - n) + " ms");
         System.out.println("distribution: ");
         histogram.forEach((k, v) -> System.out.println("bucket: " + k + ", counts: " + v));
     }
@@ -114,7 +119,7 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
             }
         }, 0, 10, TimeUnit.SECONDS);
         final TopicMessageProcessor tmp = (s, r) -> {
-            System.out.println(r.value());
+            //System.out.println(r.value());
             //L.debug("topic: " + s + ", " + r.partition() + ": " + r.offset());
             count.incrementAndGet();
             return immediateFuture(null);

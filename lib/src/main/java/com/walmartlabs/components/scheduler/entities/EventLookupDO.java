@@ -2,12 +2,8 @@ package com.walmartlabs.components.scheduler.entities;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.KeyMapping;
 import com.walmart.gmp.ingestion.platform.framework.data.core.MutableEntity;
-import com.walmartlabs.components.scheduler.entities.codecs.EventLookupKeyToString;
 import com.walmartlabs.components.scheduler.entities.codecs.ZonedDateTimeToDate;
-import info.archinnov.achilles.annotations.Column;
-import info.archinnov.achilles.annotations.Entity;
-import info.archinnov.achilles.annotations.Id;
-import info.archinnov.achilles.annotations.TypeTransformer;
+import info.archinnov.achilles.annotations.*;
 
 import java.time.ZonedDateTime;
 
@@ -20,8 +16,7 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersi
 @KeyMapping(keyClass = EventLookupDO.EventLookupKey.class, entityClass = EventLookup.class, version = V1)
 public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.EventLookupKey> {
 
-    @Id(name = "xref_id")
-    @TypeTransformer(valueCodecClass = EventLookupKeyToString.class)
+    @EmbeddedId
     private EventLookupKey id;
 
     @Column(name = "bucket_id")
@@ -105,6 +100,12 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
     }
 
     public static class EventLookupKey {
+        @PartitionKey(value = 1)
+        @Column
+        private String tenant;
+
+        @PartitionKey(value = 2)
+        @Column(name = "xref_id")
         private String xrefId;
 
         public String getXrefId() {
@@ -115,17 +116,27 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
             this.xrefId = xrefId;
         }
 
-        public EventLookupKey(String xrefId) {
+        public EventLookupKey(String xrefId, String tenant) {
             this.xrefId = xrefId;
+            this.tenant = tenant;
         }
 
         public EventLookupKey() {
+        }
+
+        public String getTenant() {
+            return tenant;
+        }
+
+        public void setTenant(String tenant) {
+            this.tenant = tenant;
         }
 
         @Override
         public String toString() {
             return "EventLookupKey{" +
                     "xrefId='" + xrefId + '\'' +
+                    ", tenant='" + tenant + '\'' +
                     '}';
         }
     }

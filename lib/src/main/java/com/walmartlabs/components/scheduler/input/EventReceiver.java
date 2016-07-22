@@ -76,27 +76,61 @@ public class EventReceiver {
             L.error("event rejected, tenant missing, " + eventRequest);
             return immediateFuture(eventResponse);
         }
-        if (eventRequest.getId() == null) {
+        if (eventRequest.getEventTime() == null) {
             final EventResponse eventResponse = fromRequest(eventRequest);
             eventResponse.setStatus(REJECTED.name());
-            eventResponse.setErrors(newArrayList(new Error("400", "id", "", "event id not present")));
-            L.error("event rejected, event id missing, " + eventRequest);
+            eventResponse.setErrors(newArrayList(new Error("400", "eventTime", "", "event time not present")));
+            L.error("event rejected, event time missing, " + eventRequest);
             return immediateFuture(eventResponse);
         }
         final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
         final long eventTimeMillis = parse(eventRequest.getEventTime()).toInstant().toEpochMilli();
         final ZonedDateTime bucketId = utc(bucketize(eventTimeMillis, scanInterval));
-        final EventKey eventKey = EventKey.of(bucketId, 0, utc(eventTimeMillis), UUIDUtil.toString(randomUUID()));
-        L.debug(format("%s, event-time: %s -> bucket-id: %s", eventKey, eventKey.getEventTime(), bucketId));
-        L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, eventRequest));
 
-        return catching(transformAsync(lookupDataManager.getAsync(new EventLookupKey(eventRequest.getId()), LOOKUP_SELECTOR), el -> {
+        final EventLookupKey eventLookupKey = new EventLookupKey(eventRequest.getId(), eventRequest.getTenant());
+        return catching(transformAsync(lookupDataManager.getAsync(eventLookupKey, LOOKUP_SELECTOR), el -> {
             if (el != null) {
-                final EventResponse eventResponse = fromRequest(eventRequest);
-                eventResponse.setStatus(REJECTED_DUPLICATE.name());
-                eventResponse.setErrors(newArrayList(new Error("400", "id", "", "event with id " + eventRequest.getId() + " already exists")));
-                return immediateFuture(eventResponse);
+                if (el.getEventTime().toInstant().toEpochMilli() == eventTimeMillis) {
+                    final EventKey eventKey = EventKey.of(el.getBucketId(), el.getShard(), el.getEventTime(), el.getEventId());
+                    L.debug(format("%s, event update received, no change in event time", eventKey));
+                    final Event e = entity(Event.class, eventKey);
+                    e.setTenant(el.id().getTenant());
+                    e.setPayload(eventRequest.getPayload());
+                    e.setStatus(UN_PROCESSED.name());
+                    return transform(dataManager.saveAsync(e), new Function<Event, EventResponse>() {
+                        @Override
+                        public EventResponse apply(Event $) {
+                            L.debug(format("%s, event updated successfully", eventKey));
+                            final EventResponse eR = fromRequest(eventRequest);
+                            eR.setEventId(eventKey.getEventId());
+                            eR.setStatus(UPDATED.name());
+                            return eR;
+                        }
+                    });
+                } else {
+                    final EventKey eventKey = EventKey.of(el.getBucketId(), el.getShard(), parse(eventRequest.getEventTime()), el.getEventId());
+                    L.debug(format("%s, event update received, event time changed, deleting and re-inserting", eventKey));
+                    return transformAsync(removeEvent(eventRequest.getId(), eventRequest.getTenant()), er -> {
+                        if (er.getErrors() != null && !er.getErrors().isEmpty())
+                            L.warn("error in deleting event: " + er);
+                        return transform(addEvent(eventRequest), new Function<EventResponse, EventResponse>() {
+                            @Override
+                            public EventResponse apply(EventResponse er) {
+                                if (er.getErrors() != null && !er.getErrors().isEmpty())
+                                    L.warn("error in re-inserting event: " + er);
+                                else {
+                                    L.debug("event updated successfully, " + er);
+                                    er.setStatus(UPDATED.name());
+                                }
+                                return er;
+                            }
+                        });
+                    });
+                }
             } else {
+                final EventKey eventKey = EventKey.of(bucketId, 0, utc(eventTimeMillis), UUIDUtil.toString(randomUUID()));
+                L.debug(format("%s, event-time: %s -> bucket-id: %s", eventKey, eventKey.getEventTime(), bucketId));
+                L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, eventRequest));
                 final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(BUCKET_CACHE);
                 return transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, EventResponse>) count -> {
                     eventKey.setShard((int) ((count - 1) / PROPS.getInteger("event.shard.size", 1000)));
@@ -107,7 +141,7 @@ public class EventReceiver {
                     e.setXrefId(eventRequest.getId());
                     e.setPayload(eventRequest.getPayload());
                     L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
-                    final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(eventRequest.getId() == null ? eventKey.getEventId() : eventRequest.getId()));
+                    final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(eventRequest.getId() == null ? eventKey.getEventId() : eventRequest.getId(), eventRequest.getTenant()));
                     lookupEntity.setBucketId(eventKey.getBucketId());
                     lookupEntity.setShard(eventKey.getShard());
                     lookupEntity.setEventTime(eventKey.getEventTime());
@@ -115,6 +149,7 @@ public class EventReceiver {
                     return transform(allAsList(dataManager.insertAsync(e), lookupDataManager.insertAsync(lookupEntity)), (Function<List<Entity<?>>, EventResponse>) $ -> {
                         L.debug(format("%s, add-event: successful", eventKey));
                         final EventResponse eventResponse = fromRequest(eventRequest);
+                        eventResponse.setEventId(eventKey.getEventId());
                         eventResponse.setStatus(ACCEPTED.name());
                         return eventResponse;
                     });
@@ -159,12 +194,13 @@ public class EventReceiver {
         }
     }
 
-    private static final Selector<EventLookupKey, EventLookup> FULL_SELECTOR = fullSelector(new EventLookupKey(""));
+    private static final Selector<EventLookupKey, EventLookup> FULL_SELECTOR = fullSelector(new EventLookupKey("", ""));
 
-    public ListenableFuture<EventResponse> removeEvent(String id) {
+    public ListenableFuture<EventResponse> removeEvent(String id, String tenant) {
         final EventResponse eventResponse = new EventResponse();
         eventResponse.setId(id);
-        return catching(transformAsync(lookupDataManager.getAsync(new EventLookupKey(id), FULL_SELECTOR), eventLookup -> {
+        eventResponse.setTenant(tenant);
+        return catching(transformAsync(lookupDataManager.getAsync(new EventLookupKey(id, tenant), FULL_SELECTOR), eventLookup -> {
             if (eventLookup == null) {
                 return immediateFuture(eventResponse);
             }
@@ -172,15 +208,17 @@ public class EventReceiver {
             final CqlDAO<EventKey, Event> evtCqlDAO = (CqlDAO<EventKey, Event>) dataManager.getPrimaryDAO(V1).unwrap();
             final AsyncManager am = evtCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
             final EventKey eventKey = EventKey.of(eventLookup.getBucketId(), eventLookup.getShard(), eventLookup.getEventTime(), eventLookup.getEventId());
-            L.info("removing event: " + eventKey);
+            L.debug("removing event: " + eventKey);
             return transformAsync(am.deleteById(implClass(V1, EventKey.class), eventKey), $ -> {
-                L.info("removing event look up: " + eventLookup);
+                L.debug("removing event look up: " + eventLookup);
                 return transform(am.deleteById(implClass(V1, EventLookup.class), eventLookup.id()), new Function<Empty, EventResponse>() {
                     @Override
                     public EventResponse apply(Empty $) {
                         L.debug("event removed successfully : " + id);
                         eventResponse.setEventId(eventKey.getEventId());
                         eventResponse.setEventTime(eventKey.getEventTime().toString());
+                        eventResponse.setStatus(DELETED.name());
+                        eventResponse.setTenant(tenant);
                         return eventResponse;
                     }
                 });
@@ -188,7 +226,7 @@ public class EventReceiver {
         }), Exception.class, ex -> {
             final Throwable cause = getRootCause(ex);
             L.error("error in removing the event: " + id, cause);
-            eventResponse.setErrors(newArrayList(new Error("BB_001", id, cause.getMessage(), getStackTraceString(cause), ERROR, APPLICATION)));
+            eventResponse.setErrors(newArrayList(new Error("500", id, cause.getMessage(), getStackTraceString(cause), ERROR, APPLICATION)));
             return eventResponse;
         });
     }

@@ -56,6 +56,7 @@ public class EventResponse extends EventRequest {
         eventResponse.setEventTime(eventRequest.getEventTime());
         eventResponse.setId(eventRequest.getId());
         eventResponse.setPayload(eventRequest.getPayload());
+        eventResponse.setMode(eventRequest.getMode());
         return eventResponse;
     }
 

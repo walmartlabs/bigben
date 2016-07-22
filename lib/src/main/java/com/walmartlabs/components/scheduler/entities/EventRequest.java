@@ -1,11 +1,6 @@
 package com.walmartlabs.components.scheduler.entities;
 
-import com.walmart.services.common.util.JsonUtil;
-
-import java.io.IOException;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.util.UUID;
+import static com.walmartlabs.components.scheduler.entities.EventRequest.Mode.ADD;
 
 /**
  * Created by smalik3 on 6/22/16
@@ -16,6 +11,9 @@ public class EventRequest {
     private String id;
     private String payload;
     private String tenant;
+    private Mode mode = ADD;
+
+    public enum Mode {ADD, REMOVE}
 
     public String getEventTime() {
         return eventTime;
@@ -49,6 +47,14 @@ public class EventRequest {
         this.tenant = tenant;
     }
 
+    public Mode getMode() {
+        return mode;
+    }
+
+    public void setMode(Mode mode) {
+        this.mode = mode;
+    }
+
     @Override
     public String toString() {
         return "EventRequest{" +
@@ -56,15 +62,7 @@ public class EventRequest {
                 ", id='" + id + '\'' +
                 ", payload='" + payload + '\'' +
                 ", tenant='" + tenant + '\'' +
+                ", mode=" + mode +
                 '}';
-    }
-
-    public static void main(String[] args) throws IOException {
-        EventRequest eventRequest = new EventRequest();
-        eventRequest.setId(UUID.randomUUID().toString());
-        eventRequest.setPayload("some payload");
-        eventRequest.setTenant("PROMO_STG");
-        eventRequest.setEventTime("2016-07-13T21:15Z");
-        System.out.println(JsonUtil.convertToString(eventRequest));
     }
 }

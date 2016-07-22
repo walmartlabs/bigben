@@ -40,6 +40,7 @@ import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.EVENT_SCHEDULER;
+import static com.walmartlabs.components.scheduler.entities.EventRequest.Mode.ADD;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
 import static com.walmartlabs.components.scheduler.entities.Status.ACCEPTED;
@@ -104,24 +105,19 @@ public class EventService {
     }
 
     @POST
-    @Path("/add")
-    public Response addEvent(EventRequest eventRequest) throws Exception {
+    @Path("/submit")
+    public Response process(List<EventRequest> eventRequests) throws Exception {
         try {
-            return ok(eventReceiver.addEvent(eventRequest).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS)).build();
+            final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
+                    e -> e.getMode() == ADD ? eventReceiver.addEvent(e) : eventReceiver.removeEvent(e.getId(), e.getTenant())
+            ).collect(toList())).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
+            return ok().entity(eventResponses).build();
         } catch (Exception e) {
-            final EventResponse eventResponse = fromRequest(eventRequest);
+            final EventResponse eventResponse = new EventResponse();
             final Throwable rootCause = getRootCause(e);
-            eventResponse.setErrors(newArrayList(new Error("500", "add-event", getStackTraceString(rootCause), rootCause.getMessage(), ERROR, APPLICATION)));
+            eventResponse.setErrors(newArrayList(new Error("500", "submit", getStackTraceString(rootCause), rootCause.getMessage(), ERROR, APPLICATION)));
             return status(INTERNAL_SERVER_ERROR).entity(eventResponse).build();
         }
-    }
-
-    @POST
-    @Path("/bulk/add")
-    public Response addEvents(List<EventRequest> eventRequests) throws Exception {
-        final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
-                e -> eventReceiver.addEvent(e)).collect(toList())).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
-        return ok().entity(eventResponses).build();
     }
 
     @POST
@@ -176,7 +172,7 @@ public class EventService {
     }
 
     @POST
-    @Path("/processors/register")
+    @Path("/register")
     public Response registerProcessor(ProcessorConfig config) {
         try {
             final ProcessorConfig previous = processorRegistry.register(config);
@@ -194,24 +190,23 @@ public class EventService {
     private DataManager<EventLookupKey, EventLookup> lookUpDM;
 
     @GET
-    @Path("/{id}")
-    public Response find(@PathParam("id") String id) {
-        return find(id, false);
+    @Path("/find")
+    public Response find(EventRequest eventRequest) {
+        return find(eventRequest, false);
     }
 
     @POST
-    @Path("/dryrun/{id}")
-    public Response dryrun(@PathParam("id") String id) {
-        return find(id, true);
+    @Path("/dryrun")
+    public Response dryrun(EventRequest eventRequest) {
+        return find(eventRequest, true);
     }
 
-    private Response find(String id, boolean fire) {
-        final EventResponse eventResponse = new EventResponse();
-        if (id != null && id.trim().length() > 0) {
-            final EventLookupKey eventLookupKey = new EventLookupKey(id);
+    private Response find(EventRequest eventRequest, boolean fire) {
+        final EventResponse eventResponse = fromRequest(eventRequest);
+        if (eventRequest != null && eventRequest.getId() != null && eventRequest.getId().trim().length() > 0) {
+            final EventLookupKey eventLookupKey = new EventLookupKey(eventRequest.getId(), eventRequest.getTenant());
             final EventLookup eventLookup = lookUpDM.get(eventLookupKey);
             if (eventLookup == null) {
-                eventResponse.setId(id);
                 return status(NOT_FOUND).entity(eventResponse).build();
             } else {
                 final Event event = eventDM.get(EventKey.of(eventLookup.getBucketId(), eventLookup.getShard(), eventLookup.getEventTime(), eventLookup.getEventId()));
@@ -226,7 +221,7 @@ public class EventService {
                 }
             }
         } else {
-            eventResponse.setErrors(newArrayList(new Error("400.BIGBEN", id, "id null", "id null")));
+            eventResponse.setErrors(newArrayList(new Error("400.BIGBEN", "id", "id null", "id null")));
             return status(BAD_REQUEST).entity(eventResponse).build();
         }
     }
@@ -236,41 +231,5 @@ public class EventService {
     public Map<String, String> receive(EventResponse eventResponse) {
         L.debug("received event response: " + eventResponse);
         return ImmutableMap.of("status", "received");
-    }
-
-    @POST
-    @Path("/delete/{id}")
-    public Response removeEvent(@PathParam("id") String id) {
-        try {
-            final EventResponse eventResponse = eventReceiver.removeEvent(id).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
-            if (eventResponse.getEventId() == null) {
-                return status(NOT_FOUND).entity(eventResponse).build();
-            } else {
-                return ok().entity(eventResponse).build();
-            }
-        } catch (Exception e) {
-            final Throwable rootCause = getRootCause(e);
-            final EventResponse eventResponse = new EventResponse();
-            eventResponse.setId(id);
-            eventResponse.setErrors(newArrayList(new Error("500", id, getStackTraceString(rootCause), rootCause.getMessage(), ERROR, APPLICATION)));
-            return status(INTERNAL_SERVER_ERROR).entity(eventResponse).build();
-        }
-    }
-
-    @POST
-    @Path("/bulk/delete")
-    public Response removeEvent(List<String> ids) {
-        try {
-            return status(OK).entity(successfulAsList(ids.stream().map(id -> eventReceiver.removeEvent(id)).collect(toList())).
-                    get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS)).build();
-        } catch (Exception e) {
-            return status(INTERNAL_SERVER_ERROR).entity(ids.stream().map(id -> {
-                final EventResponse eventResponse = new EventResponse();
-                eventResponse.setId(id);
-                final Throwable rootCause = getRootCause(e);
-                eventResponse.setErrors(newArrayList(new Error("500", id, getStackTraceString(rootCause), rootCause.getMessage(), ERROR, APPLICATION)));
-                return eventResponse;
-            }).collect(toList())).build();
-        }
     }
 }
