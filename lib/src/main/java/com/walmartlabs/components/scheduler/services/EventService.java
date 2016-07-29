@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
+import com.walmart.gmp.ingestion.platform.framework.core.Props;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.platform.kernel.exception.error.Error;
 import com.walmartlabs.components.core.services.Service;
@@ -24,6 +25,8 @@ import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
@@ -56,6 +59,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
+import static javax.ws.rs.core.MediaType.TEXT_PLAIN;
 import static javax.ws.rs.core.Response.Status.*;
 import static javax.ws.rs.core.Response.ok;
 import static javax.ws.rs.core.Response.status;
@@ -228,8 +232,10 @@ public class EventService {
 
     @POST
     @Path("/_receive_")
-    public Map<String, String> receive(EventResponse eventResponse) {
+    @Produces(TEXT_PLAIN)
+    public String receive(EventResponse eventResponse, @Context HttpHeaders httpHeaders) {
         L.debug("received event response: " + eventResponse);
-        return ImmutableMap.of("status", "received");
+        System.out.println(httpHeaders);
+        return "done";
     }
 }

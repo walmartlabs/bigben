@@ -12,7 +12,7 @@
     <bean id="eventService" class="com.walmartlabs.components.scheduler.services.EventService"/>
 
     <bean id="dataManager" class="com.walmartlabs.components.scheduler.utils.HackedDataManager">
-        <constructor-arg index="0" value="file://dm-config.json"/>
+        <constructor-arg index="0" value="ccm://bigbenProps/dm-config"/>
     </bean>
 
     <bean id="eventScheduler" class="com.walmartlabs.components.scheduler.core.ScheduleScanner"/>
@@ -21,7 +21,7 @@
 
     <bean id="hz" class="com.walmart.gmp.ingestion.platform.framework.core.Hz">
         <constructor-arg index="0" value="hz.xml.vm"/>
-        <constructor-arg index="1" value="file://hz/${hz.file.name:local}.json"/>
+        <constructor-arg index="1" value="ccm://bigbenProps/${hz.config}"/>
     </bean>
 
     <bean class="com.walmartlabs.components.core.services.ClusterSingleton">
@@ -32,7 +32,7 @@
     <bean id="eventProcessor" class="com.walmartlabs.components.scheduler.input.MessageProcessor"/>
     <bean id="kafkaConsumer"
           class="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean">
-        <constructor-arg index="0" value="bigben_kafka"/>
+        <constructor-arg index="0" value="bigbenProps"/>
         <constructor-arg index="1" ref="eventProcessor"/>
     </bean>
 

@@ -147,9 +147,14 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
     private ListenableFuture<Event> process(Event e) {
         try {
             L.debug(format("%s, processing event: %s", executionKey, e.id()));
-            return transform(eventProcessor.process(e), (Function<Event, Event>) $ -> {
+            e.setStatus(PROCESSED.name());
+            return catching(transform(eventProcessor.process(e), (Function<Event, Event>) $ -> {
                 L.debug(format("%s, processed event: %s", executionKey, e.id()));
-                e.setStatus(PROCESSED.name());
+                return e;
+            }), Exception.class, ex -> {
+                L.error(format("%s, error in processing event, marking it %s", executionKey, ERROR));
+                e.setStatus(ERROR.name());
+                e.setError(getStackTraceString(getRootCause(ex)));
                 return e;
             });
         } catch (Throwable t) {

@@ -6,6 +6,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
+import com.ning.http.client.AsyncCompletionHandler;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.Response;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
@@ -27,7 +28,6 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.util.concurrent.Futures.*;
-import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static com.google.common.util.concurrent.SettableFuture.create;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
@@ -41,6 +41,7 @@ import static java.time.ZonedDateTime.now;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.function.Function.identity;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
+import static javax.ws.rs.core.MediaType.MEDIA_TYPE_WILDCARD;
 
 /**
  * Created by smalik3 on 6/21/16
@@ -119,28 +120,37 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                     processorCache.get(tenant, () -> e -> {
                         final SettableFuture<Event> future = create();
                         try {
-                            final com.ning.http.client.ListenableFuture<Response> f = ASYNC_HTTP_CLIENT.
+                            final AsyncHttpClient.BoundRequestBuilder builder = ASYNC_HTTP_CLIENT.
                                     preparePost(processorConfig.getProperties().get("url").toString())
-                                    .setBody(convertToString(getEventResponse(e)))
-                                    .setHeader(ACCEPT, APPLICATION_JSON)
-                                    .setHeader(CONTENT_TYPE, APPLICATION_JSON)
-                                    .execute();
-                            f.addListener(() -> {
-                                try {
-                                    final Response response = f.get();
+                                    .setBody(convertToString(getEventResponse(e)));
+                            @SuppressWarnings("unchecked")
+                            final Map<String, String> headers = (Map<String, String>) processorConfig.getProperties().get("headers");
+                            if (headers != null && !headers.isEmpty()) {
+                                if (L.isDebugEnabled())
+                                    L.debug("adding custom headers: " + headers);
+                                headers.forEach(builder::setHeader);
+                            }
+                            builder.setHeader(ACCEPT, MEDIA_TYPE_WILDCARD).setHeader(CONTENT_TYPE, APPLICATION_JSON);
+                            builder.execute(new AsyncCompletionHandler<Response>() {
+                                @Override
+                                public Response onCompleted(Response response) throws Exception {
                                     if (response.getStatusCode() == 200 || response.getStatusCode() == 204) {
                                         if (L.isDebugEnabled()) {
-                                            L.debug(format("event processed successfully, response code: %d," +
-                                                    response.getStatusCode(), e));
+                                            L.debug(format("event processed successfully, response code: %d, response body: %s, event: %s",
+                                                    response.getStatusCode(), response.getResponseBody(), e));
                                         }
                                         future.set(e);
                                     } else {
                                         future.setException(new RuntimeException(response.getResponseBody()));
                                     }
-                                } catch (Exception e1) {
-                                    future.setException(getRootCause(e1));
+                                    return response;
                                 }
-                            }, directExecutor());
+
+                                @Override
+                                public void onThrowable(Throwable t) {
+                                    future.setException(getRootCause(t));
+                                }
+                            });
                             return future;
                         } catch (Exception ex) {
                             future.setException(getRootCause(ex));
