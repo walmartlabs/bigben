@@ -7,7 +7,7 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.services.nosql.data.CqlDAO;
 import info.archinnov.achilles.persistence.AsyncManager;
-import info.archinnov.achilles.type.Options;
+import info.archinnov.achilles.options.Options;
 
 import java.util.Map;
 
