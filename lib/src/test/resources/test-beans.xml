@@ -12,7 +12,7 @@
 
     <import resource="classpath*:platform-minimal.xml"/>
 
-    <bean id="dataManager" class="com.walmartlabs.components.scheduler.utils.HackedDataManager">
+    <bean id="dataManager" class="com.walmartlabs.components.scheduler.utils.BigbenDataManager">
         <constructor-arg index="0" value="file://dm-config.json"/>
     </bean>
 

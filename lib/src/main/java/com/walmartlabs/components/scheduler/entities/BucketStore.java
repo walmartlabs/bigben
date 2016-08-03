@@ -6,7 +6,7 @@ import com.hazelcast.core.MapStore;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManagerConfig;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
-import com.walmartlabs.components.scheduler.utils.HackedDataManager;
+import com.walmartlabs.components.scheduler.utils.BigbenDataManager;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -42,7 +42,7 @@ public class BucketStore implements MapStore<ZonedDateTime, Bucket> {
                 "(" + dmConfigPath + " is required)" + properties);
         final DataManagerConfig dataManagerConfig = parse(properties.getProperty(dmConfigPath), DataManagerConfig.class);
         dataManagerConfig.getInterceptorConfigs().clear();
-        dataManager = new HackedDataManager<>(dataManagerConfig);
+        dataManager = new BigbenDataManager<>(dataManagerConfig);
     }
 
     public BucketStore() {

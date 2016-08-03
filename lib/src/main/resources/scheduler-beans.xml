@@ -11,7 +11,7 @@
 
     <bean id="eventService" class="com.walmartlabs.components.scheduler.services.EventService"/>
 
-    <bean id="dataManager" class="com.walmartlabs.components.scheduler.utils.HackedDataManager">
+    <bean id="dataManager" class="com.walmartlabs.components.scheduler.utils.BigbenDataManager">
         <constructor-arg index="0" value="ccm://bigbenProps/dm-config"/>
     </bean>
 
