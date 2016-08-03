@@ -17,9 +17,12 @@ import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.entities.*;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
+import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
 import info.archinnov.achilles.persistence.AsyncManager;
 import info.archinnov.achilles.type.Empty;
 import org.apache.log4j.Logger;
+import org.jetbrains.annotations.Nullable;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.cache.processor.EntryProcessorException;
@@ -43,6 +46,8 @@ import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.*;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.BUCKET_CACHE;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
+import static com.walmartlabs.components.scheduler.entities.ObjectFactory.OBJECT_ID.EVENT_RECEIVER_ADD_EVENT;
+import static com.walmartlabs.components.scheduler.entities.ObjectFactory.SCHEDULER_FACTORY_ID;
 import static com.walmartlabs.components.scheduler.entities.Status.*;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
@@ -52,7 +57,7 @@ import static java.util.UUID.randomUUID;
 /**
  * Created by smalik3 on 3/23/16
  */
-public class EventReceiver {
+public class EventReceiver implements InitializingBean {
 
     private static final Logger L = Logger.getLogger(EventReceiver.class);
 
@@ -63,27 +68,25 @@ public class EventReceiver {
     private Hz hz;
 
     @Autowired
+    private ProcessorRegistry processorRegistry;
+
+    private int scanInterval;
+
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
+    }
+
+    @Autowired
     private DataManager<EventLookupKey, EventLookup> lookupDataManager;
 
     public static final CountIncrementer CACHED_PROCESSOR = new CountIncrementer();
     private static final Selector<EventLookupKey, EventLookup> LOOKUP_SELECTOR = selector(EventLookup.class, EventLookup::getBucketId);
 
     public ListenableFuture<EventResponse> addEvent(EventRequest eventRequest) {
-        if (eventRequest.getTenant() == null) {
-            final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(REJECTED.name());
-            eventResponse.setErrors(newArrayList(new Error("400", "id", "", "tenant not present")));
-            L.error("event rejected, tenant missing, " + eventRequest);
-            return immediateFuture(eventResponse);
-        }
-        if (eventRequest.getEventTime() == null) {
-            final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(REJECTED.name());
-            eventResponse.setErrors(newArrayList(new Error("400", "eventTime", "", "event time not present")));
-            L.error("event rejected, event time missing, " + eventRequest);
-            return immediateFuture(eventResponse);
-        }
-        final Integer scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
+        final ListenableFuture<EventResponse> failed = validate(eventRequest);
+        if (failed != null) return failed;
+
         final long eventTimeMillis = parse(eventRequest.getEventTime()).toInstant().toEpochMilli();
         final ZonedDateTime bucketId = utc(bucketize(eventTimeMillis, scanInterval));
 
@@ -164,6 +167,48 @@ public class EventReceiver {
         });
     }
 
+    @Nullable
+    private ListenableFuture<EventResponse> validate(EventRequest eventRequest) {
+        if (eventRequest.getTenant() == null) {
+            final EventResponse eventResponse = fromRequest(eventRequest);
+            eventResponse.setStatus(REJECTED.name());
+            eventResponse.setErrors(newArrayList(new Error("400", "tenant", "", "tenant not present")));
+            L.error("event rejected, tenant missing, " + eventRequest);
+            return immediateFuture(eventResponse);
+        }
+        if (eventRequest.getEventTime() == null) {
+            final EventResponse eventResponse = fromRequest(eventRequest);
+            eventResponse.setStatus(REJECTED.name());
+            eventResponse.setErrors(newArrayList(new Error("400", "eventTime", "", "event time not present")));
+            L.error("event rejected, event time not present, " + eventRequest);
+            return immediateFuture(eventResponse);
+        }
+        if (!processorRegistry.registeredTenants().contains(eventRequest.getTenant())) {
+            final EventResponse eventResponse = fromRequest(eventRequest);
+            eventResponse.setStatus(REJECTED.name());
+            eventResponse.setErrors(newArrayList(new Error("400", "tenant", "", "tenant not registered / unknown tenant")));
+            L.error("event rejected, unknown tenant. Did you register one in the processors.json?, " + eventRequest);
+            return immediateFuture(eventResponse);
+        }
+        try {
+            parse(eventRequest.getEventTime());
+        } catch (Exception e) {
+            final EventResponse eventResponse = fromRequest(eventRequest);
+            eventResponse.setStatus(REJECTED.name());
+            eventResponse.setErrors(newArrayList(new Error("400", "eventTime", "", "event time can not be parsed. Must be in ISO 8601 format.")));
+            L.error("event rejected, bad event time format, " + eventRequest);
+            return immediateFuture(eventResponse);
+        }
+        if (parse(eventRequest.getEventTime()).isBefore(nowUTC())) {
+            final EventResponse eventResponse = fromRequest(eventRequest);
+            eventResponse.setStatus(PROCESSED.name());
+            eventResponse.setProcessedAt(nowUTC().toString());
+            L.warn("lapsed event received, processing immediately: " + eventRequest);
+            return transform(processorRegistry.getOrCreate(eventRequest.getTenant()).process(toEvent(eventResponse)), (Function<Event, EventResponse>) $ -> eventResponse);
+        }
+        return null;
+    }
+
     private static class CountIncrementer extends AbstractIDSGMPEntryProcessor<ZonedDateTime, Bucket> {
         @Override
         public Long process(Entry<ZonedDateTime, Bucket> entry) throws EntryProcessorException {
@@ -177,12 +222,12 @@ public class EventReceiver {
 
         @Override
         public int getFactoryId() {
-            return ObjectFactory.SCHEDULER_FACTORY_ID;
+            return SCHEDULER_FACTORY_ID;
         }
 
         @Override
         public int getId() {
-            return ObjectFactory.OBJECT_ID.EVENT_RECEIVER_ADD_EVENT.ordinal();
+            return EVENT_RECEIVER_ADD_EVENT.ordinal();
         }
 
         @Override

@@ -20,6 +20,7 @@ import org.apache.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -192,10 +193,18 @@ public class ProcessorRegistry implements EventProcessor<Event> {
         checkArgument(config != null, "null processor config");
         checkArgument(config.getTenant() != null && config.getTenant().trim().length() > 0, "null or empty tenantId");
         checkArgument(config.getType() != null, "null processor type");
-        checkArgument(config.getProperties() == null || config.getProperties().isEmpty(), "null or empty properties");
+        checkArgument(config.getProperties() != null && !config.getProperties().isEmpty(), "null or empty properties");
         L.info("registering new processor");
         final ProcessorConfig previous = configs.put(config.getTenant(), config);
         processorCache.invalidate(config.getTenant());
         return previous;
+    }
+
+    public Set<String> registeredTenants() {
+        return configs.keySet();
+    }
+
+    public Map<String, ProcessorConfig> registeredConfigs() {
+        return configs;
     }
 }

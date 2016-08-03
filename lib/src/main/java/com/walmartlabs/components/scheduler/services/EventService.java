@@ -5,8 +5,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
-import com.walmart.gmp.ingestion.platform.framework.core.Props;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
+import com.walmart.gmp.ingestion.platform.framework.jobs.SerializableCallable;
 import com.walmart.platform.kernel.exception.error.Error;
 import com.walmartlabs.components.core.services.Service;
 import com.walmartlabs.components.scheduler.entities.Event;
@@ -36,8 +36,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Maps.transformValues;
 import static com.google.common.util.concurrent.Futures.*;
+import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICATION;
 import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
@@ -47,6 +50,7 @@ import static com.walmartlabs.components.scheduler.entities.EventRequest.Mode.AD
 import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
 import static com.walmartlabs.components.scheduler.entities.Status.ACCEPTED;
+import static com.walmartlabs.components.scheduler.entities.Status.REJECTED;
 import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
@@ -115,7 +119,9 @@ public class EventService {
             final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
                     e -> e.getMode() == ADD ? eventReceiver.addEvent(e) : eventReceiver.removeEvent(e.getId(), e.getTenant())
             ).collect(toList())).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
-            return ok().entity(eventResponses).build();
+            if (eventResponses.stream().filter(er -> REJECTED.name().equals(er.getStatus())).findAny().isPresent())
+                return status(PARTIAL_CONTENT).entity(eventResponses).build();
+            else return ok().entity(eventResponses).build();
         } catch (Exception e) {
             final EventResponse eventResponse = new EventResponse();
             final Throwable rootCause = getRootCause(e);
@@ -179,12 +185,26 @@ public class EventService {
     @Path("/register")
     public Response registerProcessor(ProcessorConfig config) {
         try {
-            final ProcessorConfig previous = processorRegistry.register(config);
-            return ok(ImmutableMap.of("status", "SUCCESS", "previous", previous, "current", config)).build();
+            successfulAsList(transformValues(
+                    hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(
+                            (SerializableCallable<ProcessorConfig>) () -> spring().getBean(ProcessorRegistry.class).register(config)),
+                    new Function<Future<ProcessorConfig>, ListenableFuture<ProcessorConfig>>() {
+                        @Override
+                        public ListenableFuture<ProcessorConfig> apply(Future<ProcessorConfig> f) {
+                            return adapt(f);
+                        }
+                    }).values()).get(PROPS.getInteger("processor.register.timeout", 60), SECONDS);
+            return ok(ImmutableMap.of("status", "SUCCESS")).build();
         } catch (Exception e) {
             L.error("error in registering processor: " + config, e);
             return status(INTERNAL_SERVER_ERROR).entity(ImmutableMap.of("status", "FAIL", "error", getRootCause(e).getStackTrace())).build();
         }
+    }
+
+    @GET
+    @Path("/processorRegistry")
+    public Response registeredTenants() {
+        return ok().entity(processorRegistry.registeredConfigs()).build();
     }
 
     @Autowired
@@ -195,13 +215,19 @@ public class EventService {
 
     @GET
     @Path("/find")
-    public Response find(EventRequest eventRequest) {
+    public Response find(@QueryParam("id") String id, @QueryParam("tenant") String tenant) {
+        final EventRequest eventRequest = new EventRequest();
+        eventRequest.setId(id);
+        eventRequest.setTenant(tenant);
         return find(eventRequest, false);
     }
 
     @POST
     @Path("/dryrun")
-    public Response dryrun(EventRequest eventRequest) {
+    public Response dryrun(@QueryParam("id") String id, @QueryParam("tenant") String tenant) {
+        final EventRequest eventRequest = new EventRequest();
+        eventRequest.setId(id);
+        eventRequest.setTenant(tenant);
         return find(eventRequest, true);
     }
 

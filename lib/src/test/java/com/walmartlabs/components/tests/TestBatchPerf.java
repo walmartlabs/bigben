@@ -45,7 +45,11 @@ public class TestBatchPerf extends AbstractTestNGSpringContextTests {
 
     @DataProvider
     public Object[][] data() {
-        return new Object[][]{new Object[]{"logged-batch", 10000, 1000, 1000}, new Object[]{"scatter-gather", 10000, 1000, 1000}, new Object[]{"unlogged-batch", 10000, 1000, 1000}/*, new Object[]{"no-batch", 10000, 1000, 1000},*/};
+        return new Object[][]{
+                new Object[]{"logged-batch", 10000, 1000, 1000},
+                new Object[]{"scatter-gather", 10000, 1000, 1000},
+                new Object[]{"unlogged-batch", 10000, 1000, 1000}
+                /*, new Object[]{"no-batch", 10000, 1000, 1000},*/};
     }
 
     @Test(dataProvider = "data", invocationCount = 10)

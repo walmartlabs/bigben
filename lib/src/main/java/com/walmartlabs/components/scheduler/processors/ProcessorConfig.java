@@ -1,11 +1,12 @@
 package com.walmartlabs.components.scheduler.processors;
 
+import java.io.Serializable;
 import java.util.Map;
 
 /**
  * Created by smalik3 on 6/21/16
  */
-public class ProcessorConfig {
+public class ProcessorConfig implements Serializable {
 
     public enum Type {KAFKA, HTTP, CUSTOM_BEAN, CUSTOM_CLASS}
 

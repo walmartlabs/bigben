@@ -9,6 +9,7 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableScheduledFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
+import com.hazelcast.core.IMap;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmartlabs.components.scheduler.entities.Bucket;
@@ -57,10 +58,11 @@ public class BucketManager {
     private volatile BucketsLoader bucketsLoader;
     private final StatusSyncer statusSyncer;
     private final CheckpointHelper checkpointHelper;
+    private final IMap<ZonedDateTime, Bucket> map;
 
     @SuppressWarnings("unchecked")
     public BucketManager(int maxBuckets, int maxProcessingTime, DataManager<?, ?> dm, int bucketWidth,
-                         int checkpointInterval, TimeUnit checkpointUnit, int lookbackRange) {
+                         int checkpointInterval, TimeUnit checkpointUnit, int lookbackRange, IMap<ZonedDateTime, Bucket> map) {
         this.maxBuckets = maxBuckets;
         this.maxProcessingTime = maxProcessingTime;
         this.dataManager = (DataManager<ZonedDateTime, Bucket>) dm;
@@ -87,6 +89,7 @@ public class BucketManager {
             L.info("saving checkpoint during shutdown");
             saveCheckpoint();
         }));
+        this.map = map;
     }
 
     private final Consumer<List<Bucket>> consumer = l -> {
@@ -125,7 +128,7 @@ public class BucketManager {
             bucketsLoader.start();
         }
 
-        final ListenableFuture<Bucket> f = dataManager.getAsync(bucketId, selector);
+        final ListenableFuture<Bucket> f = dataManager.getAsync(bucketId, selector);//adapt(map.getAsync(bucketId));
         final Multimap<ZonedDateTime, Integer> processableShards = HashMultimap.create();
         addCallback(f, new FutureCallback<Bucket>() {
             @Override

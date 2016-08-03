@@ -92,7 +92,7 @@ public class ScheduleScanner implements Service {
         final int checkpointInterval = PROPS.getInteger("event.bucket.manager.checkpoint.interval", 1);
         final TimeUnit checkpointIntervalUnits = TimeUnit.valueOf(PROPS.getProperty("event.bucket.manager.checkpoint.interval.units", MINUTES.name()));
         bucketManager = new BucketManager(lookbackRange, 2 * bucketWidth * 60, dataManager, bucketWidth * 60,
-                checkpointInterval, checkpointIntervalUnits, lookbackRange);
+                checkpointInterval, checkpointIntervalUnits, lookbackRange, hz.hz().getMap(BUCKET_CACHE));
     }
 
     @Override
