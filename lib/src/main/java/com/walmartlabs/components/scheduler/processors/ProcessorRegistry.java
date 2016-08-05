@@ -77,9 +77,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
     public ListenableFuture<Event> process(Event event) {
         try {
             event.setProcessedAt(now(UTC));
-            return catchingAsync(taskExecutor.async(() -> {
-                        return getOrCreate(event.getTenant()).process(event);
-                    }, "event-processor",
+            return catchingAsync(taskExecutor.async(() -> getOrCreate(event.getTenant()).process(event), "event-processor",
                     PROPS.getInteger("event.processor.max.retries", 3),
                     PROPS.getInteger("event.processor.initial.delay", 1),
                     PROPS.getInteger("event.processor.backoff.multiplier", 2),
