@@ -39,7 +39,8 @@ import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.entities.Status.ERROR;
 import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
-import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.nextScan;
 import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;
@@ -77,6 +78,7 @@ public class ScheduleScanner implements Service {
 
     private BucketManager bucketManager;
     private int bucketWidth;
+    private volatile ZonedDateTime lastScan;
 
     private static final AtomicInteger index = new AtomicInteger();
     static final ListeningScheduledExecutorService SCHEDULER =
@@ -114,6 +116,7 @@ public class ScheduleScanner implements Service {
         final ZonedDateTime nextScan = nextScan(now, scanInterval);
         final long delay = ChronoUnit.MILLIS.between(now, nextScan);
         final ZonedDateTime bucket = ofInstant(ofEpochMilli(bucketize(now.toInstant().toEpochMilli(), scanInterval)), UTC);
+        lastScan = bucket.minusMinutes(bucketWidth);
         L.info(format("first-scan at: %s, for bucket: %s, next-scan at: %s, " +
                 "initial-delay: %d ms, subsequent-scans: after every %d minutes", now, bucket, nextScan, delay, scanInterval));
         SCHEDULER.scheduleAtFixedRate(this::scan, delay, MILLISECONDS.convert(scanInterval, MINUTES), MILLISECONDS);
@@ -126,7 +129,8 @@ public class ScheduleScanner implements Service {
             L.info("system is shutdown, no more schedules will be processed");
             return;
         }
-        final ZonedDateTime currentBucketId = utc(bucketize(now(UTC).toInstant().toEpochMilli(), bucketWidth));
+        final ZonedDateTime currentBucketId = lastScan.plusMinutes(bucketWidth);
+        lastScan = currentBucketId;
         L.info(format("scanning the schedule(s) for bucket: %s", currentBucketId));
         try {
             addCallback(bucketManager.getProcessableShardsForOrBefore(currentBucketId),
@@ -164,28 +168,27 @@ public class ScheduleScanner implements Service {
                                         new FutureCallback<List<List<ShardStatus>>>() {
                                             @Override
                                             public void onSuccess(List<List<ShardStatus>> result) {
-                                                L.info(format("schedule for bucket %s finished successfully => %s", currentBucketId, result));
-                                                final List<ShardStatus> shardStatues = newArrayList(concat(result));
+                                                L.info(format("schedule for bucket %s finished normally => %s", currentBucketId, result));
+                                                final List<ShardStatus> shardStatues = newArrayList(concat(result.stream().filter(r -> r != null).collect(toList())));
                                                 final Set<ZonedDateTime> buckets = shardStatues.stream().map(ShardStatus::getBucketId).collect(toSet());
                                                 final Set<ZonedDateTime> erroredBuckets = shardStatues.stream().filter(shardStatus -> shardStatus.getStatus() == ERROR).map(ShardStatus::getBucketId).collect(toSet());
                                                 addCallback(successfulAsList(buckets.stream().map(b -> bucketManager.bucketProcessed(b, erroredBuckets.contains(b) ? ERROR : PROCESSED)).collect(toList())),
                                                         new FutureCallback<List<Bucket>>() {
                                                             @Override
-                                                            public void onSuccess(List<Bucket> result) {
-                                                                L.info(format("%s, buckets are marked %s: %s",
-                                                                        currentBucketId, currentBucketId, result.stream().filter(b -> b != null).collect(toList())));
+                                                            public void onSuccess(List<Bucket> $) {
+                                                                L.info(format("bucket-scan: %s, successfully updated the scan-status: %s", currentBucketId, buckets));
                                                             }
 
                                                             @Override
                                                             public void onFailure(Throwable t) {
-                                                                L.error(format("%s, error in marking following buckets %s: %s ", currentBucketId, PROCESSED, buckets), t);
+                                                                L.error(format("bucket-scan: %s, failed to update the scan-status: %s ", currentBucketId, buckets), t);
                                                             }
                                                         });
                                             }
 
                                             @Override
                                             public void onFailure(Throwable t) {
-                                                L.error(format("schedule for bucket %s finished with error", currentBucketId), t);
+                                                L.error(format("schedule for bucket %s finished abnormally", currentBucketId), t);
                                             }
                                         });
                             } catch (Exception e) {
@@ -211,7 +214,7 @@ public class ScheduleScanner implements Service {
         addCallback(f, new FutureCallback<ShardStatusList>() {
             @Override
             public void onSuccess(ShardStatusList result) {
-                L.info(format("%s, member %s reported success for shards: %s", bucket, member.getSocketAddress(), result));
+                L.info(format("%s, member %s finished normally for shards: %s", bucket, member.getSocketAddress(), result));
                 for (ShardStatus shardStatus : result.getList()) {
                     bucketManager.shardDone(shardStatus.getBucketId(), shardStatus.getShard(), shardStatus.getStatus());
                 }
@@ -219,7 +222,7 @@ public class ScheduleScanner implements Service {
 
             @Override
             public void onFailure(Throwable t) {
-                L.error(format("%s, member %s reported error for shards: %s", bucket, member.getSocketAddress(), shardsData), t);
+                L.error(format("%s, member %s finished abnormally for shards: %s", bucket, member.getSocketAddress(), shardsData), t);
                 for (Pair<ZonedDateTime, Integer> pair : shardsData) {
                     bucketManager.shardDone(pair.getLeft(), pair.getRight(), ERROR);
                 }
@@ -234,6 +237,12 @@ public class ScheduleScanner implements Service {
     public void shutdown() {
         isShutdown.set(true);
         bucketManager.saveCheckpoint();
+        SCHEDULER.shutdown();
+        try {
+            SCHEDULER.awaitTermination(1, MINUTES);
+        } catch (InterruptedException e) {
+            L.warn("failed to shutdown the SCHEDULER", e);
+        }
     }
 
     public boolean isShutdown() {

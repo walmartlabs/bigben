@@ -32,9 +32,10 @@ class StatusSyncer {
         this.dm = dm;
     }
 
-    ListenableFuture<Bucket> syncBucket(ZonedDateTime bucketId, Status status) {
+    ListenableFuture<Bucket> syncBucket(ZonedDateTime bucketId, Status status, boolean setProcessedAt) {
         final Bucket entity = entity(Bucket.class, bucketId);
-        entity.setProcessedAt(now(UTC));
+        if (setProcessedAt)
+            entity.setProcessedAt(now(UTC));
         entity.setStatus(status.name());
         L.info(format("bucket %s is done, syncing status as %s", bucketId, status));
         final ListenableFuture<Bucket> f = dataManager.saveAsync(entity);

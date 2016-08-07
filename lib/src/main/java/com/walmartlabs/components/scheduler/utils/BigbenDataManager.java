@@ -6,6 +6,7 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.DataManagerConfig;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.services.nosql.data.CqlDAO;
+import com.walmartlabs.components.scheduler.entities.AuditableEntity;
 import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventLookup;
@@ -15,9 +16,11 @@ import info.archinnov.achilles.options.Options;
 import info.archinnov.achilles.persistence.AsyncManager;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.ZonedDateTime;
 import java.util.Map;
 
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.nowUTC;
 import static info.archinnov.achilles.options.OptionsBuilder.withTtl;
 
 /**
@@ -50,11 +53,19 @@ public class BigbenDataManager<K, T extends Entity<K>> extends DataManager<K, T>
 
     @Override
     public ListenableFuture<T> performSave(T entity, Options options) {
+        if (entity instanceof AuditableEntity) {
+            ((AuditableEntity) entity).setModifiedAt(nowUTC());
+        }
         return super.performSave(entity, newOptions(options, entity));
     }
 
     @Override
     public ListenableFuture<T> performInsert(T entity, Options options) {
+        if (entity instanceof AuditableEntity) {
+            final ZonedDateTime now = nowUTC();
+            ((AuditableEntity) entity).setCreatedAt(now);
+            ((AuditableEntity) entity).setModifiedAt(now);
+        }
         return super.performInsert(entity, newOptions(options, entity));
     }
 

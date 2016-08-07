@@ -3,8 +3,6 @@ package com.walmartlabs.components.scheduler.core;
 import com.google.common.base.Function;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.Table;
-import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableScheduledFuture;
@@ -12,6 +10,7 @@ import com.hazelcast.core.IMap;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmartlabs.components.scheduler.entities.Bucket;
+import com.walmartlabs.components.scheduler.entities.BucketDO;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.entities.Status;
@@ -20,8 +19,8 @@ import org.apache.log4j.Logger;
 
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.reverse;
@@ -35,26 +34,26 @@ import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
-import static org.apache.commons.lang3.tuple.Pair.of;
 
 /**
  * Created by smalik3 on 6/29/16
  */
 public class BucketManager {
 
-    private static final Logger L = Logger.getLogger(BucketManager.class);
+    static final Logger L = Logger.getLogger(BucketManager.class);
 
     private final int maxBuckets;
     private final int maxProcessingTime;
     private final DataManager<ZonedDateTime, Bucket> dataManager;
     private final DataManager<EventKey, Event> eventDataManager;
     private final int lookbackRange;
-    private final Table<ZonedDateTime, Integer, Status> shards = TreeBasedTable.create();
+    private final Map<ZonedDateTime, BucketSnapshot> buckets = new ConcurrentHashMap<>();
     private final int bucketWidth;
     private volatile BucketsLoader bucketsLoader;
     private final StatusSyncer statusSyncer;
     private final CheckpointHelper checkpointHelper;
     private final IMap<ZonedDateTime, Bucket> map;
+    private final int shardSize;
 
     @SuppressWarnings("unchecked")
     public BucketManager(int maxBuckets, int maxProcessingTime, DataManager<?, ?> dm, int bucketWidth,
@@ -65,13 +64,16 @@ public class BucketManager {
         this.eventDataManager = (DataManager<EventKey, Event>) dm;
         this.lookbackRange = lookbackRange;
         this.bucketWidth = bucketWidth;
+        this.shardSize = PROPS.getInteger("event.shard.size", 1000);
         checkpointHelper = new CheckpointHelper(this);
         statusSyncer = new StatusSyncer(dataManager, eventDataManager);
         L.info(format("saving checkpoint every %d %s", checkpointInterval, checkpointUnit));
         SCHEDULER.scheduleAtFixedRate(this::saveCheckpoint, checkpointInterval, checkpointInterval, checkpointUnit);
         try {
             L.info("loading the previously saved checkpoint, if any");
-            transform(checkpointHelper.loadCheckpoint(shards), (Function<Object, Object>) $ -> {
+            transform(checkpointHelper.loadCheckpoint(), (Function<Map<ZonedDateTime, BucketSnapshot>, Object>) data -> {
+                L.info("loaded previous checkpoint: " + data);
+                buckets.putAll(data);
                 purgeIfNeeded();
                 return null;
             }).get();
@@ -85,39 +87,15 @@ public class BucketManager {
         this.map = map;
     }
 
-    private final Consumer<List<Bucket>> consumer = l -> {
-        synchronized (BucketManager.this) {
-            l.forEach(b -> {
-                if (b != null && !shards.containsRow(b.id())) {
-                    if (b.getCount() == 0) {
-                        L.info(format("no events in the bucket: %s, marking it %s", b.id(), EMPTY));
-                        shards.put(b.id(), -1, EMPTY);
-                    } else if (b.getCount() > 0 && PROCESSED.name().equals(b.getStatus())) {
-                        L.info(format("bucket: %s is already done, marking it %s", b.id(), PROCESSED));
-                        shards.put(b.id(), -1, PROCESSED);
-                    } else if (b.getCount() > 0 && !PROCESSED.name().equals(b.getStatus())) {
-                        int shardSize = PROPS.getInteger("event.shard.size", 1000);
-                        final int count = (int) b.getCount();
-                        final int numShards = count % shardSize == 0 ? count / shardSize : count / shardSize + 1;
-                        for (int i = 0; i < numShards; i++) {
-                            if (!shards.contains(b.id(), i))
-                                shards.put(b.id(), i, UN_PROCESSED);
-                        }
-                        L.info(format("bucket: %s has %d events, resulting in %d shards, marking all shards %s",
-                                b.id(), b.getCount(), numShards, UN_PROCESSED));
-                    }
-                }
-            });
-        }
-    };
-
     private static final Selector<ZonedDateTime, Bucket> selector = fullSelector(nowUTC());
 
-    synchronized ListenableFuture<Multimap<ZonedDateTime, Integer>> getProcessableShardsForOrBefore(ZonedDateTime bucketId) {
+    ListenableFuture<Multimap<ZonedDateTime, Integer>> getProcessableShardsForOrBefore(ZonedDateTime bucketId) {
         if (bucketsLoader == null) {
             L.info("starting the background load of previous buckets");
             final Integer fetchSize = PROPS.getInteger("buckets.background.load.fetch.size", 10);
-            bucketsLoader = new BucketsLoader(lookbackRange, fetchSize, consumer, shards::containsRow, bucketWidth, dataManager, bucketId);
+            bucketsLoader = new BucketsLoader(lookbackRange, fetchSize,
+                    b -> buckets.put(b.id(), new BucketSnapshot(b.id(), b.getCount(), shardSize, b.getStatus())),
+                    buckets::containsKey, bucketWidth, dataManager, bucketId);
             bucketsLoader.start();
         }
 
@@ -126,15 +104,15 @@ public class BucketManager {
         addCallback(f, new FutureCallback<Bucket>() {
             @Override
             public void onSuccess(Bucket bucket) {
-                consumer.accept(newArrayList(bucket));
-                synchronized (this) {
-                    shards.cellSet().stream().
-                            filter(cell -> cell.getValue() != EMPTY && cell.getValue() != PROCESSED && cell.getValue() != PROCESSING).
-                            forEach(cell -> processableShards.put(cell.getRowKey(), cell.getColumnKey()));
-                    L.info(format("processable shards at bucket: %s, are => %s", bucketId, processableShards));
-                    if (!processableShards.containsKey(bucketId) && shards.get(bucketId, -1) == EMPTY) {
-                        L.info(format("no events in the bucket: %s", bucketId));
-                    }
+                bucket = bucket == null ? createEmptyBucket(bucketId) : bucket;
+                if (buckets.putIfAbsent(bucketId, new BucketSnapshot(bucketId, bucket.getCount(), shardSize, bucket.getStatus())) != null) {
+                    L.warn(format("bucket with id %s already existed in the cache, this is highly unusual", bucketId));
+                }
+                buckets.entrySet().stream().filter(e -> e.getValue().awaiting().cardinality() > 0).forEach(e ->
+                        e.getValue().awaiting().stream().forEach(s -> processableShards.put(e.getKey(), s)));
+                L.info(format("processable shards at bucket: %s, are => %s", bucketId, processableShards));
+                if (!processableShards.containsKey(bucketId)) {
+                    L.info(format("no events in the bucket: %s", bucketId));
                 }
             }
 
@@ -147,16 +125,14 @@ public class BucketManager {
     }
 
     synchronized void registerForProcessing(Collection<Pair<ZonedDateTime, Integer>> pairs) {
-        for (Pair<ZonedDateTime, Integer> pair : pairs) {
-            shards.put(pair.getLeft(), pair.getRight(), PROCESSING);
-        }
+        pairs.forEach(p -> buckets.get(p.getLeft()).processing(p.getRight()));
         purgeIfNeeded();
         startShardsTimer(pairs);
     }
 
-    ListenableScheduledFuture<?> startShardsTimer(Collection<Pair<ZonedDateTime, Integer>> pairs) {
+    private ListenableScheduledFuture<?> startShardsTimer(Collection<Pair<ZonedDateTime, Integer>> pairs) {
         final List<String> shards = pairs.stream().sorted().map(p -> p.getLeft() + "[" + p.getRight() + "]").collect(toList());
-        L.info(format("starting bulk timer for shards: %s", shards));
+        L.info(format("starting processing timer for shards: %s", shards));
         return SCHEDULER.schedule(() -> checkShardsStatus(pairs, shards), maxProcessingTime, SECONDS);
     }
 
@@ -164,11 +140,11 @@ public class BucketManager {
         try {
             for (Pair<ZonedDateTime, Integer> pair : pairs) {
                 final ZonedDateTime bucketId = pair.getLeft();
-                final Integer shard = pair.getRight();
-                final Status status = this.shards.get(bucketId, shard);
-                if (status != null && status == PROCESSING) {
-                    L.warn(format("bulk timer for shard: %s[%d] expired, marking it %s", bucketId, shard, UN_PROCESSED));
-                    this.shards.put(bucketId, shard, UN_PROCESSED);
+                final int shard = pair.getRight();
+                final BucketSnapshot bd = buckets.get(bucketId);
+                if (bd != null && bd.processing().get(shard)) {
+                    L.warn(format("bulk timer for shard: %s[%d] expired, marking the shard as failure", bucketId, shard));
+                    bd.done(shard, ERROR);
                 }
             }
         } catch (Exception e) {
@@ -176,79 +152,69 @@ public class BucketManager {
         }
     }
 
-    synchronized void shardDone(ZonedDateTime bucketId, Integer shard, Status shardStatus) {
-        switch (shardStatus) {
-            case PROCESSED:
-                L.info(format("shard: %s[%s] finished successfully", bucketId, shard));
-                shards.remove(bucketId, shard);
-                if (!shards.containsRow(bucketId)) {
-                    L.info(format("no more shards to be processed for bucket: %s, marking it %s", bucketId, PROCESSED));
-                    bucketProcessed(bucketId, PROCESSED);
-                }
-                break;
-            case ERROR:
-                L.info(format("shard: %s[%s] finished with error", bucketId, shard));
-                shards.put(bucketId, shard, ERROR);
-                break;
-            default:
-                throw new IllegalArgumentException(format("bucket: %s, shard: %d, status: %s", bucketId, shard, shardStatus.name()));
+    synchronized void shardDone(ZonedDateTime bucketId, Integer shard, Status status) {
+        if (!buckets.containsKey(bucketId)) {
+            L.warn(format("bucket %s not found in cache, might have been purged, ignoring this call", bucketId));
+            return;
+        }
+        final BucketSnapshot bd = buckets.get(bucketId);
+        bd.done(shard, status);
+        if (bd.processing().cardinality() == 0) {
+            final Status bucketStatus = bd.awaiting().cardinality() == 0 ? PROCESSED : ERROR;
+            L.info(format("all shards done for bucket: %s, marking it %s", bucketId, bucketStatus));
+            bucketProcessed(bucketId, bucketStatus);
         }
     }
 
     private static final ListenableFuture<Bucket> NO_OP = immediateFuture(null);
 
     synchronized ListenableFuture<Bucket> bucketProcessed(ZonedDateTime bucketId, Status status) {
-        if (shards.get(bucketId, -1) == status)
+        final BucketSnapshot bd = buckets.get(bucketId);
+        if (bd == null || bd.awaiting().cardinality() == 0)
             return NO_OP;
         L.info(format("marking bucket %s as " + status, bucketId));
-        final Map<Integer, Status> shards = this.shards.rowMap().get(bucketId);
-        if (shards != null) {
-            final Set<Integer> dup = new HashSet<>(shards.keySet());
-            for (Integer shardKey : dup) {
-                this.shards.remove(bucketId, shardKey);
-            }
-        }
-        this.shards.put(bucketId, -1, status);
-        return statusSyncer.syncBucket(bucketId, status);
+        bd.processing().clear();
+        if (status == PROCESSED)
+            bd.awaiting().clear();
+        return statusSyncer.syncBucket(bucketId, status, true);
     }
 
     private synchronized void purgeIfNeeded() {
         try {
-            final List<ZonedDateTime> bucketIds = reverse(newArrayList(new TreeSet<>(shards.rowKeySet())));
-            final List<Pair<ZonedDateTime, Integer>> purged = new ArrayList<>();
-            L.debug("checking buckets for purging from shards: " + shards);
+            final List<ZonedDateTime> bucketIds = reverse(newArrayList(new TreeSet<>(buckets.keySet())));
+            final List<BucketSnapshot> purged = new ArrayList<>();
+            L.debug("checking buckets for purging from shards: " + buckets);
             if (bucketIds.size() > maxBuckets) {
                 for (int i = maxBuckets; i < bucketIds.size(); i++) {
                     final ZonedDateTime bucketId = bucketIds.get(i);
-                    final Map<Integer, Status> statusByShard = shards.row(bucketId);
-                    L.info(format("purging the following shards for bucket %s, => %s", bucketId, statusByShard));
-                    final Set<Status> statuses = new HashSet<>(statusByShard.values());
-                    if (statuses.contains(ERROR)) {
-                        statusSyncer.syncBucket(bucketId, ERROR);
-                    } else if (statuses.contains(UN_PROCESSED) || statuses.contains(PROCESSING)) {
-                        statusSyncer.syncBucket(bucketId, UN_PROCESSED);
-                    } else if (statuses.size() == 1 && statuses.contains(PROCESSED)) {
-                        statusSyncer.syncBucket(bucketId, PROCESSED);
+                    final BucketSnapshot bs = buckets.get(bucketId);
+                    if (bs.processing().cardinality() > 0)
+                        L.info(format("bucket %s is currently being processed, cancelling purge for this bucket", bucketId));
+                    else buckets.remove(bucketId);
+                    L.debug("purging bucket snapshot: " + bs);
+                    purged.add(bs);
+                    if (bs.count() == 0)
+                        continue;
+                    if (bs.processing().cardinality() == 0 && bs.awaiting().cardinality() == 0) {
+                        statusSyncer.syncBucket(bucketId, PROCESSED, false);
+                    } else {
+                        statusSyncer.syncBucket(bucketId, ERROR, false);
                     }
-                    final Set<Integer> dups = new HashSet<>(statusByShard.keySet());
-                    for (Integer shard : dups) {
-                        shards.remove(bucketId, shard);
-                        purged.add(of(bucketId, shard));
-                    }
+                    purged.add(bs);
                 }
             }
             if (!purged.isEmpty()) {
-                L.info("purged shards: " + purged);
-                L.debug("shards after purging: " + shards);
+                L.info("purged snapshots: " + purged);
             } else L.info("nothing to purge");
+
         } catch (Exception e) {
-            L.error("error in purging shards: " + shards, e);
+            L.error("error in purging snapshots", e);
         }
     }
 
     synchronized void saveCheckpoint() {
         purgeIfNeeded();
-        checkpointHelper.saveCheckpoint(shards);
+        checkpointHelper.saveCheckpoint(buckets);
     }
 
     int getMaxProcessingTime() {
@@ -261,5 +227,13 @@ public class BucketManager {
 
     StatusSyncer getStatusSyncer() {
         return statusSyncer;
+    }
+
+    static Bucket createEmptyBucket(ZonedDateTime bId) {
+        final BucketDO bucketDO = new BucketDO();
+        bucketDO.setId(bId);
+        bucketDO.setStatus(EMPTY.name());
+        bucketDO.setCount(0);
+        return bucketDO;
     }
 }

@@ -32,12 +32,19 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey>, EventRes
     @Column(name = "xref_id")
     private String xrefId;
 
-    @Column
     private String payload;
 
     @Column(name = "processed_at")
     @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
     private ZonedDateTime processedAt;
+
+    @Column(name = "created_at")
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    private ZonedDateTime createdAt;
+
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    @Column(name = "modified_at")
+    private ZonedDateTime modifiedAt;
 
     public String getStatus() {
         return status;
@@ -102,16 +109,6 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey>, EventRes
     }
 
     @Override
-    public String getPayload() {
-        return payload;
-    }
-
-    @Override
-    public void setPayload(String payload) {
-        this.payload = payload;
-    }
-
-    @Override
     public ZonedDateTime getProcessedAt() {
         return processedAt;
     }
@@ -119,6 +116,34 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey>, EventRes
     @Override
     public void setProcessedAt(ZonedDateTime processedAt) {
         this.processedAt = processedAt;
+    }
+
+    @Override
+    public ZonedDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(ZonedDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public ZonedDateTime getModifiedAt() {
+        return modifiedAt;
+    }
+
+    public void setModifiedAt(ZonedDateTime modifiedAt) {
+        this.modifiedAt = modifiedAt;
+    }
+
+    @Override
+    public String getPayload() {
+        return payload;
+    }
+
+    @Override
+    public void setPayload(String payload) {
+        this.payload = payload;
     }
 
     public static class EventKey {
@@ -208,7 +233,10 @@ public class EventDO implements Event, MutableEntity<EventDO.EventKey>, EventRes
                 ", tenant='" + tenant + '\'' +
                 ", xrefId='" + xrefId + '\'' +
                 ", payload='" + payload + '\'' +
-                ", processedAt=" + getProcessedAt() +
+                ", processedAt=" + processedAt +
+                ", createdAt=" + createdAt +
+                ", modifiedAt=" + modifiedAt +
+                ", eventResponse=" + eventResponse +
                 '}';
     }
 }

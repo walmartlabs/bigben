@@ -32,6 +32,8 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
         setProperty("event.shard.size", "10");
         setProperty("hazelcast.slow.operation.detector.stacktrace.logging.enabled", "true");
         setProperty("com.walmart.platform.config.appName", "gmp-solr-consumer");
+        setProperty("hz.config", "hz_local");
+        setProperty("ccmProps", "bigbenProps");
     }
 
     @Autowired
