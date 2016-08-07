@@ -7,14 +7,11 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.entities.Event;
-import com.walmartlabs.components.scheduler.entities.EventDO;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.processors.EventProcessor;
 import info.archinnov.achilles.persistence.AsyncManager;
 import org.apache.log4j.Logger;
-import org.codehaus.jackson.type.TypeReference;
 
-import java.io.IOException;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -29,11 +26,8 @@ import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.AbstractDAO.implClass;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
-import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
-import static com.walmart.services.common.util.JsonUtil.convertToObject;
-import static com.walmart.services.common.util.JsonUtil.convertToString;
 import static com.walmartlabs.components.scheduler.entities.Status.ERROR;
 import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.epoch;
@@ -76,34 +70,19 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
     public ListenableFuture<ShardStatus> call() throws Exception {
         final int fetchSize = max(10, min(fetchSizeHint, 400));
         L.info(format("%s, processing shard with fetch size: %d", executionKey, fetchSize));
-        final EventKey errorKey = EventKey.of(bucketId, shard, epoch(), "");
-        return catching(transformAsync(eventDM.getAsync(errorKey, fullSelector(errorKey)), evt -> {
-            if (evt == null || evt.getError() == null || evt.getError().trim().length() == 0) {
-                L.info(format("%s, processing shard from beginning", executionKey));
-                return transformAsync(loadAndProcess(fetchSize, getAsyncManager(), epoch(), ""), this::calculateShardStatus);
+        return catching(transform(loadAndProcess(fetchSize, getAsyncManager(), epoch(), ""), (Function<List<Event>, ShardStatus>) l -> {
+            final List<Event> events = l.stream().filter(e -> e == null || !PROCESSED.name().equals(e.getStatus())).map(DataManager::raw).collect(toList());
+            if (!events.isEmpty()) {
+                L.info(format("%s, errors in processing shard: %s", executionKey, events));
+                return new ShardStatus(bucketId, shard, ERROR);
             } else {
-                L.info(format("%s, processing just the errored out events", executionKey));
-                return transformAsync(allAsList(convertToObject(evt.getError(), new TypeReference<List<EventDO>>() {
-                }).stream().map(this::schedule).collect(toList())), this::calculateShardStatus);
+                L.info(format("%s, shard processed successfully", executionKey));
+                return new ShardStatus(bucketId, shard, PROCESSED);
             }
         }), Exception.class, ex -> {
             L.error(format("%s, error in processing shard", executionKey), ex);
             return new ShardStatus(bucketId, shard, ERROR);
         });
-    }
-
-    private ListenableFuture<ShardStatus> calculateShardStatus(List<Event> l) throws IOException {
-        final List<Event> events = l.stream().filter(e -> e == null || !PROCESSED.name().equals(e.getStatus())).map(DataManager::raw).collect(toList());
-        if (!events.isEmpty()) {
-            L.info(format("%s, errors in processing shard: %s", executionKey, events));
-            final Event entity = entity(Event.class, EventKey.of(bucketId, shard, epoch(), ""));
-            entity.setStatus(ERROR.name());
-            entity.setError(convertToString(events));
-            return transform(eventDM.saveAsync(entity), (Function<Event, ShardStatus>) $ -> new ShardStatus(bucketId, shard, ERROR));
-        } else {
-            L.info(format("%s, shard processed successfully", executionKey));
-            return immediateFuture(new ShardStatus(bucketId, shard, PROCESSED));
-        }
     }
 
     private ListenableFuture<List<Event>> loadAndProcess(int fetchSize, AsyncManager am, ZonedDateTime eventTime, String eventId) {
@@ -147,14 +126,15 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
     private ListenableFuture<Event> process(Event e) {
         try {
             L.debug(format("%s, processing event: %s", executionKey, e.id()));
-            e.setStatus(PROCESSED.name());
             return catching(transform(eventProcessor.process(e), (Function<Event, Event>) $ -> {
                 L.debug(format("%s, processed event: %s", executionKey, e.id()));
                 return e;
             }), Exception.class, ex -> {
                 L.error(format("%s, error in processing event, marking it %s", executionKey, ERROR));
-                e.setStatus(ERROR.name());
-                e.setError(getStackTraceString(getRootCause(ex)));
+                if (e.getStatus() == null) {
+                    e.setStatus(ERROR.name());
+                    e.setError(getStackTraceString(getRootCause(ex)));
+                }
                 return e;
             });
         } catch (Throwable t) {

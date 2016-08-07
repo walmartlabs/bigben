@@ -17,6 +17,11 @@
         <appender-ref ref="console"/>
     </root>
 
+    <logger name="com.walmartlabs.components.scheduler.processors.ProcessorRegistry" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="console"/>
+    </logger>
+
     <!--<logger name="com.walmartlabs.components.scheduler.core.ScheduleScanner" additivity="false">
         <level value="INFO"/>
         <appender-ref ref="console"/>
@@ -38,7 +43,7 @@
     </logger>-->
 
     <logger name="com.datastax.driver.core">
-        <level value="DEBUG" />
+        <level value="DEBUG"/>
     </logger>
 
 </log4j:configuration>

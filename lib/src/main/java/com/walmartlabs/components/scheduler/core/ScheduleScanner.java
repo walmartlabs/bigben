@@ -4,6 +4,7 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.TreeMultimap;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
@@ -22,9 +23,9 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.collect.Iterables.concat;
@@ -32,12 +33,14 @@ import static com.google.common.collect.Iterators.cycle;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.util.concurrent.Futures.*;
+import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.entities.Status.ERROR;
 import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
+import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
 import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;
@@ -75,8 +78,10 @@ public class ScheduleScanner implements Service {
     private BucketManager bucketManager;
     private int bucketWidth;
 
-    private static final ScheduledExecutorService EXECUTOR_SERVICE =
-            new ScheduledThreadPoolExecutor(1, r -> new Thread(r, "EventSchedulerThread"));
+    private static final AtomicInteger index = new AtomicInteger();
+    static final ListeningScheduledExecutorService SCHEDULER =
+            listeningDecorator(new ScheduledThreadPoolExecutor(getRuntime().availableProcessors(),
+                    r -> new Thread(r, "InternalScheduler#" + index.getAndIncrement())));
     private static final Logger L = Logger.getLogger(ScheduleScanner.class);
 
     @Override
@@ -111,7 +116,7 @@ public class ScheduleScanner implements Service {
         final ZonedDateTime bucket = ofInstant(ofEpochMilli(bucketize(now.toInstant().toEpochMilli(), scanInterval)), UTC);
         L.info(format("first-scan at: %s, for bucket: %s, next-scan at: %s, " +
                 "initial-delay: %d ms, subsequent-scans: after every %d minutes", now, bucket, nextScan, delay, scanInterval));
-        EXECUTOR_SERVICE.scheduleAtFixedRate(this::scan, delay, MILLISECONDS.convert(scanInterval, MINUTES), MILLISECONDS);
+        SCHEDULER.scheduleAtFixedRate(this::scan, delay, MILLISECONDS.convert(scanInterval, MINUTES), MILLISECONDS);
         L.info("executing first time scan");
         scan();
     }

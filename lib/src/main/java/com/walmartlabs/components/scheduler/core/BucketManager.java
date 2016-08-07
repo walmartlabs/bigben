@@ -8,7 +8,6 @@ import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableScheduledFuture;
-import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.hazelcast.core.IMap;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
@@ -22,20 +21,18 @@ import org.apache.log4j.Logger;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.reverse;
 import static com.google.common.util.concurrent.Futures.*;
-import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
+import static com.walmartlabs.components.scheduler.core.ScheduleScanner.SCHEDULER;
 import static com.walmartlabs.components.scheduler.entities.Status.*;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.nowUTC;
 import static java.lang.Runtime.getRuntime;
 import static java.lang.String.format;
-import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.tuple.Pair.of;
@@ -49,7 +46,6 @@ public class BucketManager {
 
     private final int maxBuckets;
     private final int maxProcessingTime;
-    private final ListeningScheduledExecutorService service;
     private final DataManager<ZonedDateTime, Bucket> dataManager;
     private final DataManager<EventKey, Event> eventDataManager;
     private final int lookbackRange;
@@ -68,14 +64,11 @@ public class BucketManager {
         this.dataManager = (DataManager<ZonedDateTime, Bucket>) dm;
         this.eventDataManager = (DataManager<EventKey, Event>) dm;
         this.lookbackRange = lookbackRange;
-        final AtomicInteger index = new AtomicInteger();
-        service = listeningDecorator(newScheduledThreadPool(getRuntime().availableProcessors(),
-                (r) -> new Thread(r, "BucketManagerInternalScheduler#" + index.getAndIncrement())));
         this.bucketWidth = bucketWidth;
         checkpointHelper = new CheckpointHelper(this);
         statusSyncer = new StatusSyncer(dataManager, eventDataManager);
         L.info(format("saving checkpoint every %d %s", checkpointInterval, checkpointUnit));
-        service.scheduleAtFixedRate(this::saveCheckpoint, checkpointInterval, checkpointInterval, checkpointUnit);
+        SCHEDULER.scheduleAtFixedRate(this::saveCheckpoint, checkpointInterval, checkpointInterval, checkpointUnit);
         try {
             L.info("loading the previously saved checkpoint, if any");
             transform(checkpointHelper.loadCheckpoint(shards), (Function<Object, Object>) $ -> {
@@ -124,7 +117,7 @@ public class BucketManager {
         if (bucketsLoader == null) {
             L.info("starting the background load of previous buckets");
             final Integer fetchSize = PROPS.getInteger("buckets.background.load.fetch.size", 10);
-            bucketsLoader = new BucketsLoader(lookbackRange, fetchSize, consumer, shards::containsRow, bucketWidth, dataManager, bucketId, service);
+            bucketsLoader = new BucketsLoader(lookbackRange, fetchSize, consumer, shards::containsRow, bucketWidth, dataManager, bucketId);
             bucketsLoader.start();
         }
 
@@ -134,12 +127,14 @@ public class BucketManager {
             @Override
             public void onSuccess(Bucket bucket) {
                 consumer.accept(newArrayList(bucket));
-                shards.cellSet().stream().
-                        filter(cell -> cell.getValue() != EMPTY && cell.getValue() != PROCESSED && cell.getValue() != PROCESSING).
-                        forEach(cell -> processableShards.put(cell.getRowKey(), cell.getColumnKey()));
-                L.info(format("processable shards at bucket: %s, are => %s", bucketId, processableShards));
-                if (!processableShards.containsKey(bucketId) && shards.get(bucketId, -1) == EMPTY) {
-                    L.info(format("no events in the bucket: %s", bucketId));
+                synchronized (this) {
+                    shards.cellSet().stream().
+                            filter(cell -> cell.getValue() != EMPTY && cell.getValue() != PROCESSED && cell.getValue() != PROCESSING).
+                            forEach(cell -> processableShards.put(cell.getRowKey(), cell.getColumnKey()));
+                    L.info(format("processable shards at bucket: %s, are => %s", bucketId, processableShards));
+                    if (!processableShards.containsKey(bucketId) && shards.get(bucketId, -1) == EMPTY) {
+                        L.info(format("no events in the bucket: %s", bucketId));
+                    }
                 }
             }
 
@@ -162,7 +157,7 @@ public class BucketManager {
     ListenableScheduledFuture<?> startShardsTimer(Collection<Pair<ZonedDateTime, Integer>> pairs) {
         final List<String> shards = pairs.stream().sorted().map(p -> p.getLeft() + "[" + p.getRight() + "]").collect(toList());
         L.info(format("starting bulk timer for shards: %s", shards));
-        return service.schedule(() -> checkShardsStatus(pairs, shards), maxProcessingTime, SECONDS);
+        return SCHEDULER.schedule(() -> checkShardsStatus(pairs, shards), maxProcessingTime, SECONDS);
     }
 
     private synchronized void checkShardsStatus(Collection<Pair<ZonedDateTime, Integer>> pairs, List<String> shards) {
@@ -217,7 +212,7 @@ public class BucketManager {
         return statusSyncer.syncBucket(bucketId, status);
     }
 
-    private void purgeIfNeeded() {
+    private synchronized void purgeIfNeeded() {
         try {
             final List<ZonedDateTime> bucketIds = reverse(newArrayList(new TreeSet<>(shards.rowKeySet())));
             final List<Pair<ZonedDateTime, Integer>> purged = new ArrayList<>();

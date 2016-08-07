@@ -34,8 +34,10 @@ import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmart.gmp.ingestion.platform.framework.utils.ConfigParser.parse;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
+import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static com.walmart.services.common.util.JsonUtil.convertToString;
 import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
+import static com.walmartlabs.components.scheduler.entities.Status.*;
 import static java.lang.String.format;
 import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
@@ -76,24 +78,37 @@ public class ProcessorRegistry implements EventProcessor<Event> {
     @Override
     public ListenableFuture<Event> process(Event event) {
         try {
+            event.setStatus(PROCESSING.name());
             event.setProcessedAt(now(UTC));
-            return catchingAsync(taskExecutor.async(() -> getOrCreate(event.getTenant()).process(event), "event-processor",
+            return catchingAsync(transform(taskExecutor.async(() -> getOrCreate(event.getTenant()).process(event), "processor-event-id:" + event.id(),
                     PROPS.getInteger("event.processor.max.retries", 3),
                     PROPS.getInteger("event.processor.initial.delay", 1),
                     PROPS.getInteger("event.processor.backoff.multiplier", 2),
                     SECONDS
-            ), Exception.class, ex -> {
-                L.error("error in event processor after multiple retries, this failure will be IGNORED and event is marked PROCESSED. event-id:" + event.id(), ex);
+            ), (Function<Event, Event>) $ -> {
+                if (event.getStatus() == null) {
+                    L.warn(format("event processed with no status, the processor must set the status, marking this event as PROCESSED: %s", event.id()));
+                    event.setStatus(PROCESSED.name());
+                }
+                return event;
+            }), Exception.class, ex -> {
+                L.error("error in processing event by processor after multiple retries, will be retried later if within 'events.backlog.check.limit', event-id:" + event.id(), ex);
+                event.setStatus(ERROR.name());
+                if (ex != null)
+                    event.setError(getStackTraceString(getRootCause(ex)));
+                else event.setError("null error");
                 return immediateFuture(event);
             });
         } catch (Exception e) {
+            event.setStatus(ERROR.name());
+            event.setError(getStackTraceString(getRootCause(e)));
             return immediateFailedFuture(getRootCause(e));
         }
     }
 
     private static final AsyncHttpClient ASYNC_HTTP_CLIENT = new AsyncHttpClient();
 
-    public EventProcessor<Event> getOrCreate(String tenant) {
+    private EventProcessor<Event> getOrCreate(String tenant) {
         try {
             final ProcessorConfig processorConfig = configs.get(tenant);
             if (processorConfig == null)
@@ -133,10 +148,13 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                             builder.execute(new AsyncCompletionHandler<Response>() {
                                 @Override
                                 public Response onCompleted(Response response) throws Exception {
-                                    if (response.getStatusCode() == 200 || response.getStatusCode() == 204) {
-                                        if (L.isDebugEnabled()) {
-                                            L.debug(format("event processed successfully, response code: %d, response body: %s, event: %s",
-                                                    response.getStatusCode(), response.getResponseBody(), e));
+                                    final int code = response.getStatusCode();
+                                    if ((code >= 200 && code < 300) || (code >= 400 && code < 500)) {
+                                        if (code < 400 && L.isDebugEnabled()) {
+                                            L.debug(format("event processed successfully, response code: %d, response body: %s, event: %s", code, response.getResponseBody(), e));
+                                        } else {
+                                            L.warn(format("got a 'bad request' response with status code: %d, event will not be retried anymore", code));
+                                            e.setError(response.getResponseBody());
                                         }
                                         future.set(e);
                                     } else {

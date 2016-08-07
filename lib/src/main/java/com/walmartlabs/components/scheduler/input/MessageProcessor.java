@@ -12,7 +12,6 @@ import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.google.common.util.concurrent.Futures.transformAsync;
 import static com.walmart.services.common.util.JsonUtil.convertToObject;
 import static com.walmartlabs.components.scheduler.entities.EventRequest.Mode.REMOVE;
-import static com.walmartlabs.components.scheduler.entities.Status.LAPSED;
 import static com.walmartlabs.components.scheduler.entities.Status.REJECTED;
 import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
 
@@ -39,9 +38,9 @@ public class MessageProcessor implements TopicMessageProcessor {
                 return transformAsync(eventReceiver.removeEvent(eventRequest.getId(), eventRequest.getTenant()), $ -> SUCCESS);
             } else {
                 return transformAsync(eventReceiver.addEvent(eventRequest), e -> {
-                    if (e != null && (REJECTED.name().equals(e.getStatus()) || LAPSED.name().equals(e.getStatus()))) {
+                    if (e != null && (REJECTED.name().equals(e.getStatus()))) {
                         L.warn("event was rejected, failure status: " + e.getStatus());
-                        return transformAsync(processorRegistry.getOrCreate(e.getTenant()).process(toEvent(e)), $ -> SUCCESS);
+                        return transformAsync(processorRegistry.process(toEvent(e)), $ -> SUCCESS);
                     }
                     return SUCCESS;
                 });

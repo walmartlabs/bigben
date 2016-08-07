@@ -119,8 +119,9 @@ public class EventService {
             final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
                     e -> e.getMode() == ADD ? eventReceiver.addEvent(e) : eventReceiver.removeEvent(e.getId(), e.getTenant())
             ).collect(toList())).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
-            if (eventResponses.stream().filter(er -> REJECTED.name().equals(er.getStatus())).findAny().isPresent())
-                return status(PARTIAL_CONTENT).entity(eventResponses).build();
+            long errors = eventResponses.stream().filter(er -> REJECTED.name().equals(er.getStatus())).count();
+            if (errors == eventResponses.size()) return status(BAD_REQUEST).entity(eventResponses).build();
+            else if (errors > 0) return status(PARTIAL_CONTENT).entity(eventResponses).build();
             else return ok().entity(eventResponses).build();
         } catch (Exception e) {
             final EventResponse eventResponse = new EventResponse();
@@ -149,7 +150,7 @@ public class EventService {
             final ListenableFuture<EventResponse> f = eventReceiver.addEvent(eventRequest);
             return transformAsync(f, e -> {
                 if (!ACCEPTED.name().equals(e.getStatus())) {
-                    processorRegistry.getOrCreate(e.getTenant()).process(toEvent(e));
+                    processorRegistry.process(toEvent(e));
                 }
                 return f;
             });
@@ -246,7 +247,7 @@ public class EventService {
                     return status(NOT_FOUND).entity(eventResponse).build();
                 } else {
                     if (fire)
-                        processorRegistry.getOrCreate(event.getTenant()).process(event);
+                        processorRegistry.process(event);
                     return status(OK).entity(toResponse(event)).build();
                 }
             }

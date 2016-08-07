@@ -201,9 +201,9 @@ public class EventReceiver implements InitializingBean {
         }
         if (parse(eventRequest.getEventTime()).isBefore(nowUTC())) {
             final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(LAPSED.name());
+            eventResponse.setStatus(PROCESSED.name());
             eventResponse.setProcessedAt(nowUTC().toString());
-            L.warn(format("lapsed event received, marking it %s, eventRequest: %s", LAPSED, eventRequest));
+            L.warn(format("lapsed event received, marking it %s, eventRequest: %s", PROCESSED, eventRequest));
             return immediateFuture(eventResponse);
         }
         return null;
