@@ -33,8 +33,7 @@ public class EventEnrichProcessor implements EventProcessor<Event> {
 
     @Override
     public ListenableFuture<Event> process(Event event) {
-        return transformAsync(lookupDataManager.getAsync(EventLookup.class,
-                new EventLookupKey(event.getXrefId(), event.getTenant()), FULL_SELECTOR), el -> {
+        return transformAsync(lookupDataManager.getAsync(new EventLookupKey(event.getXrefId(), event.getTenant()), FULL_SELECTOR), el -> {
             if (el == null) {
                 L.debug("no look up found for event, ignoring this event" + event.id());
                 event.setStatus(PROCESSED.name());

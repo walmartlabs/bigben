@@ -109,22 +109,22 @@ public class EventReceiver implements InitializingBean {
                         }
                     });
                 } else {
-                    final EventKey eventKey = EventKey.of(el.getBucketId(), el.getShard(), parse(eventRequest.getEventTime()), el.getEventId());
-                    L.debug(format("%s, event update received, event time changed, re-inserting followed by deleting old event", eventKey));
-                    return transform(transformAsync(addEvent(eventRequest), $ -> removeEvent0(el)), (Function<EventLookup, EventResponse>) $ -> {
-                        L.debug(format("%s, event updated successfully", eventKey));
+                    L.debug("event update received, event time changed, add new event -> update existing look up -> delete old event");
+                    return transform(transformAsync(transformAsync(addEvent0(eventRequest, bucketId, eventTimeMillis),
+                            $ -> addLookup0(eventRequest, $.id(), true)), $ -> transform(removeEvent0(el), (Function<EventLookup, EventLookup>) $$ -> $)), (Function<EventLookup, EventResponse>) $ -> {
+                        L.debug(format("%s, event updated successfully", $.id()));
                         final EventResponse eR = fromRequest(eventRequest);
-                        eR.setEventId(eventKey.getEventId());
+                        eR.setEventId(raw($).getEventId());
                         eR.setStatus(UPDATED.name());
                         return eR;
                     });
                 }
             } else {
                 return transform(transformAsync(addEvent0(eventRequest, bucketId, eventTimeMillis),
-                        e -> addLookup0(eventRequest, e.id())), (Function<EventLookup, EventResponse>) ell -> {
-                    L.debug(format("%s, add-event: successful", ell.id()));
+                        $ -> addLookup0(eventRequest, $.id(), false)), (Function<EventLookup, EventResponse>) $ -> {
+                    L.debug(format("%s, add-event: successful", $.id()));
                     final EventResponse eventResponse = fromRequest(eventRequest);
-                    eventResponse.setEventId(ell.getEventId());
+                    eventResponse.setEventId(raw($).getEventId());
                     eventResponse.setStatus(ACCEPTED.name());
                     return eventResponse;
                 });
@@ -155,11 +155,13 @@ public class EventReceiver implements InitializingBean {
             return immediateFuture(eventResponse);
         }
         if (!processorRegistry.registeredTenants().contains(eventRequest.getTenant())) {
-            final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(REJECTED.name());
-            eventResponse.setErrors(newArrayList(new Error("400", "tenant", "", "tenant not registered / unknown tenant")));
-            L.error("event rejected, unknown tenant. Did you register one in the processors.json?, " + eventRequest);
-            return immediateFuture(eventResponse);
+            if (PROPS.getProperty("skip.tenant.validation") == null) {
+                final EventResponse eventResponse = fromRequest(eventRequest);
+                eventResponse.setStatus(REJECTED.name());
+                eventResponse.setErrors(newArrayList(new Error("400", "tenant", "", "tenant not registered / unknown tenant")));
+                L.error("event rejected, unknown tenant. Did you register one in the processors.json?, " + eventRequest);
+                return immediateFuture(eventResponse);
+            }
         }
         try {
             parse(eventRequest.getEventTime());
@@ -213,7 +215,7 @@ public class EventReceiver implements InitializingBean {
     private static final Selector<EventLookupKey, EventLookup> FULL_SELECTOR = fullSelector(new EventLookupKey("", ""));
     private final TaskExecutor taskExecutor = new TaskExecutor(retryableExceptions);
 
-    private ListenableFuture<EventLookup> addLookup0(EventRequest eventRequest, EventKey eventKey) {
+    private ListenableFuture<EventLookup> addLookup0(EventRequest eventRequest, EventKey eventKey, boolean update) {
         final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(eventRequest.getId() == null ?
                 eventKey.getEventId() : eventRequest.getId(), eventRequest.getTenant()));
         lookupEntity.setBucketId(eventKey.getBucketId());
@@ -222,7 +224,7 @@ public class EventReceiver implements InitializingBean {
         lookupEntity.setEventId(eventKey.getEventId());
         lookupEntity.setPayload(eventRequest.getPayload());
         L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
-        return lookupDataManager.insertAsync(lookupEntity);
+        return update ? lookupDataManager.saveAsync(lookupEntity) : lookupDataManager.insertAsync(lookupEntity);
     }
 
     private ListenableFuture<Event> addEvent0(EventRequest eventRequest, ZonedDateTime bucketId, long eventTimeMillis) {
@@ -235,7 +237,6 @@ public class EventReceiver implements InitializingBean {
             e.setStatus(UN_PROCESSED.name());
             e.setTenant(eventRequest.getTenant());
             e.setXrefId(eventRequest.getId());
-            L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
             return dataManager.insertAsync(e);
         });
     }

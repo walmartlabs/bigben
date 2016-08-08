@@ -86,7 +86,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                     PROPS.getInteger("event.processor.backoff.multiplier", 2),
                     SECONDS
             ), (Function<Event, Event>) $ -> {
-                if (event.getStatus() == null) {
+                if (event.getStatus() == null || PROCESSING.name().equals(event.getStatus())) {
                     L.warn(format("event processed with no status, the processor must set the status, marking this event as PROCESSED: %s", event.id()));
                     event.setStatus(PROCESSED.name());
                 }

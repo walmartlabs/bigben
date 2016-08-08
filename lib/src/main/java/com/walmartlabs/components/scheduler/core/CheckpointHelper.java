@@ -46,6 +46,7 @@ public class CheckpointHelper {
             final EventLookup entity = DataManager.entity(EventLookup.class, KEY);
             entity.setPayload(OBJECT_MAPPER.writeValueAsString(transformValues(sorted, (Function<BucketSnapshot, Map<String, Object>>) bs ->
                     ImmutableMap.of("b", bs.id().toString(), "c", bs.count(), "a", from(bs.awaiting()), "p", from(bs.processing()))).values()));
+            entity.setShard(-1);
             return lookupDataManager.saveAsync(entity);
         } catch (Exception e) {
             L.error("error in saving the checkpoint: buckets: " + data, e);
