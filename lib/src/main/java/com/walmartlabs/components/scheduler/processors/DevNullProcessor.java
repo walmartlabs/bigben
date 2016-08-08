@@ -6,6 +6,8 @@ import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventResponseMixin;
 import org.apache.log4j.Logger;
 
+import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
+
 /**
  * Created by smalik3 on 6/21/16
  */
@@ -21,6 +23,8 @@ public class DevNullProcessor implements EventProcessor<Event> {
             L.warn("routing event response with no tenant to /dev/null: " + ((EventResponseMixin) event).getEventResponse());
         else
             L.warn("routing event with no tenant to /dev/null: " + event);
+        event.setError("/dev/null");
+        event.setStatus(PROCESSED.name());
         return DONE;
     }
 }

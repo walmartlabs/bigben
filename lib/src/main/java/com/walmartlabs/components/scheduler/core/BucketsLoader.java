@@ -1,33 +1,27 @@
 package com.walmartlabs.components.scheduler.core;
 
-import com.google.common.base.Function;
 import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmartlabs.components.scheduler.entities.Bucket;
-import com.walmartlabs.components.scheduler.entities.BucketDO;
 import org.apache.log4j.Logger;
 
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-import static com.google.common.util.concurrent.Futures.*;
+import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
-import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.raw;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.retryableExceptions;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
+import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
+import static com.walmartlabs.components.scheduler.core.BucketManager.createEmptyBucket;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.SCHEDULER;
-import static com.walmartlabs.components.scheduler.entities.Status.EMPTY;
 import static java.lang.String.format;
 import static java.time.ZonedDateTime.now;
-import static java.util.Collections.singletonList;
-import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -39,7 +33,7 @@ class BucketsLoader {
 
     private final int lookbackRange;
     private final int fetchSize;
-    private final Consumer<List<Bucket>> consumer;
+    private final Consumer<Bucket> consumer;
     private final Predicate<ZonedDateTime> predicate;
     private final int bucketWidth;
     private final DataManager<ZonedDateTime, Bucket> dataManager;
@@ -48,7 +42,7 @@ class BucketsLoader {
     private final TaskExecutor taskExecutor = new TaskExecutor(retryableExceptions);
     private static final Selector<ZonedDateTime, Bucket> SELECTOR = fullSelector(now());
 
-    BucketsLoader(int lookbackRange, int fetchSize, Consumer<List<Bucket>> consumer,
+    BucketsLoader(int lookbackRange, int fetchSize, Consumer<Bucket> consumer,
                   Predicate<ZonedDateTime> predicate, int bucketWidth,
                   DataManager<ZonedDateTime, Bucket> dataManager, ZonedDateTime bucketId) {
         this.lookbackRange = lookbackRange;
@@ -73,32 +67,29 @@ class BucketsLoader {
         }
         try {
             L.info("initiating background load of buckets from index: " + fromIndex);
-            final List<ListenableFuture<Bucket>> futures = new ArrayList<>();
             final AtomicReference<Integer> currentBucketIndex = new AtomicReference<>();
+            final AtomicBoolean atLeastOne = new AtomicBoolean();
             for (int i = 1; i <= fetchSize; i++) {
                 final int bucketIndex = fromIndex + i;
                 if (bucketIndex <= lookbackRange) {
                     currentBucketIndex.set(bucketIndex);
                     final ZonedDateTime bId = bucketId.minusSeconds(bucketIndex * bucketWidth);
                     if (!predicate.test(bId)) {
-                        L.info("loading bucket: " + bId);
-                        futures.add(catching(transform(dataManager.getAsync(bId, SELECTOR),
-                                new Function<Bucket, Bucket>() {
-                                    @Override
-                                    public Bucket apply(Bucket b) {
-                                        return b == null ? createEmptyBucket(bId) : raw(b);
-                                    }
-                                }), Exception.class, ex -> {
-                            L.error(format("error in fetching bucket: %s, system will retry for %d times before giving up", bId, (lookbackRange - fromIndex + 1)), ex);
-                            taskExecutor.async(() -> {
-                                L.info("retrying the bucket re-load: " + bId);
-                                return transform(dataManager.getAsync(bId, SELECTOR), (Function<Bucket, Bucket>) b -> {
-                                    consumer.accept(singletonList(b));
-                                    return b;
-                                });
-                            }, "bucket-load-retry-" + bId, lookbackRange - fromIndex + 1, bucketWidth, 1, MINUTES);
-                            return createEmptyBucket(bId);
-                        }));
+                        atLeastOne.set(true);
+                        L.info(format("loading bucket: %s, failures will be retried %d times every %d seconds", bId, lookbackRange - bucketIndex + 1, bucketWidth));
+                        addCallback(taskExecutor.async(() -> dataManager.getAsync(bId, SELECTOR), "bucket-load:" + bId,
+                                lookbackRange - bucketIndex + 1, bucketWidth, 1, SECONDS), new FutureCallback<Bucket>() {
+                            @Override
+                            public void onSuccess(Bucket b) {
+                                L.info(format("bucket %s loaded successfully", bId));
+                                consumer.accept(b == null ? createEmptyBucket(bId) : b);
+                            }
+
+                            @Override
+                            public void onFailure(Throwable t) {
+                                L.error(format("error in loading bucket %s, system is giving up", bId), getRootCause(t));
+                            }
+                        });
                     } else {
                         L.info(format("bucket %s already loaded, skipping...", bId));
                     }
@@ -107,31 +98,10 @@ class BucketsLoader {
                     break;
                 }
             }
-            addCallback(successfulAsList(futures), new FutureCallback<List<Bucket>>() {
-                @Override
-                public void onSuccess(List<Bucket> buckets) {
-                    L.info("loaded buckets: " + buckets);
-                    consumer.accept(buckets);
-                    SCHEDULER.schedule(() -> load(currentBucketIndex.get()), futures.isEmpty() ? 0 : waitInterval, SECONDS);
-                }
-
-                @Override
-                public void onFailure(Throwable t) {
-                    L.error("could not load buckets, trying again: " + this, t);
-                    SCHEDULER.schedule(() -> load(fromIndex), waitInterval, SECONDS);
-                }
-            });
+            SCHEDULER.schedule(() -> load(currentBucketIndex.get()), !atLeastOne.get() ? 0 : waitInterval, SECONDS);
         } catch (Exception e) {
             L.error("could not load buckets: " + this, e);
         }
-    }
-
-    private Bucket createEmptyBucket(ZonedDateTime bId) {
-        final BucketDO bucketDO = new BucketDO();
-        bucketDO.setId(bId);
-        bucketDO.setStatus(EMPTY.name());
-        bucketDO.setCount(0);
-        return bucketDO;
     }
 
     @Override

@@ -8,7 +8,7 @@ import java.time.ZonedDateTime;
 /**
  * Created by smalik3 on 3/16/16
  */
-public interface Event extends Entity<EventKey> {
+public interface Event extends Entity<EventKey>, AuditableEntity {
 
     String getStatus();
 

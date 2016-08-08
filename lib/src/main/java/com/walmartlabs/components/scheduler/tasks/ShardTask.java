@@ -149,6 +149,7 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
         L.debug(format("%s, saving event: %s to the DB, the status is '%s'", executionKey, e.id(), e.getStatus()));
         final Event entity = entity(Event.class, e.id());
         entity.setStatus(e.getStatus());
+        entity.setProcessedAt(e.getProcessedAt());
         if (e.getError() != null)
             entity.setError(e.getError());
         return transform(eventDM.saveAsync(entity), (Function<Event, Event>) $ -> e);

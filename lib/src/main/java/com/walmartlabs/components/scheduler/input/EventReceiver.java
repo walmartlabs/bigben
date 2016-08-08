@@ -9,8 +9,8 @@ import com.hazelcast.nio.ObjectDataOutput;
 import com.walmart.gmp.ingestion.platform.framework.core.AbstractIDSGMPEntryProcessor;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
+import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.platform.kernel.exception.error.Error;
 import com.walmart.services.common.util.UUIDUtil;
 import com.walmart.services.nosql.data.CqlDAO;
@@ -36,8 +36,7 @@ import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.AbstractDAO.implClass;
-import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
-import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.raw;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.*;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.selector;
@@ -53,6 +52,7 @@ import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
 import static java.time.ZonedDateTime.parse;
 import static java.util.UUID.randomUUID;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * Created by smalik3 on 3/23/16
@@ -96,13 +96,11 @@ public class EventReceiver implements InitializingBean {
                 if (el.getEventTime().toInstant().toEpochMilli() == eventTimeMillis) {
                     final EventKey eventKey = EventKey.of(el.getBucketId(), el.getShard(), el.getEventTime(), el.getEventId());
                     L.debug(format("%s, event update received, no change in event time", eventKey));
-                    final Event e = entity(Event.class, eventKey);
-                    e.setTenant(el.id().getTenant());
-                    e.setPayload(eventRequest.getPayload());
-                    e.setStatus(UN_PROCESSED.name());
-                    return transform(dataManager.saveAsync(e), new Function<Event, EventResponse>() {
+                    final EventLookup entity = entity(EventLookup.class, eventLookupKey);
+                    entity.setPayload(eventRequest.getPayload());
+                    return transform(lookupDataManager.saveAsync(entity), new Function<EventLookup, EventResponse>() {
                         @Override
-                        public EventResponse apply(Event $) {
+                        public EventResponse apply(EventLookup $) {
                             L.debug(format("%s, event updated successfully", eventKey));
                             final EventResponse eR = fromRequest(eventRequest);
                             eR.setEventId(eventKey.getEventId());
@@ -111,51 +109,24 @@ public class EventReceiver implements InitializingBean {
                         }
                     });
                 } else {
-                    final EventKey eventKey = EventKey.of(el.getBucketId(), el.getShard(), parse(eventRequest.getEventTime()), el.getEventId());
-                    L.debug(format("%s, event update received, event time changed, deleting and re-inserting", eventKey));
-                    return transformAsync(removeEvent(eventRequest.getId(), eventRequest.getTenant()), er -> {
-                        if (er.getErrors() != null && !er.getErrors().isEmpty())
-                            L.warn("error in deleting event: " + er);
-                        return transform(addEvent(eventRequest), new Function<EventResponse, EventResponse>() {
-                            @Override
-                            public EventResponse apply(EventResponse er) {
-                                if (er.getErrors() != null && !er.getErrors().isEmpty())
-                                    L.warn("error in re-inserting event: " + er);
-                                else {
-                                    L.debug("event updated successfully, " + er);
-                                    er.setStatus(UPDATED.name());
-                                }
-                                return er;
-                            }
-                        });
+                    L.debug("event update received, event time changed, add new event -> update existing look up -> delete old event");
+                    return transform(transformAsync(transformAsync(addEvent0(eventRequest, bucketId, eventTimeMillis),
+                            $ -> addLookup0(eventRequest, $.id(), true)), $ -> transform(removeEvent0(el), (Function<EventLookup, EventLookup>) $$ -> $)), (Function<EventLookup, EventResponse>) $ -> {
+                        L.debug(format("%s, event updated successfully", $.id()));
+                        final EventResponse eR = fromRequest(eventRequest);
+                        eR.setEventId(raw($).getEventId());
+                        eR.setStatus(UPDATED.name());
+                        return eR;
                     });
                 }
             } else {
-                final EventKey eventKey = EventKey.of(bucketId, 0, utc(eventTimeMillis), UUIDUtil.toString(randomUUID()));
-                L.debug(format("%s, event-time: %s -> bucket-id: %s", eventKey, eventKey.getEventTime(), bucketId));
-                L.debug(format("%s, add-event: bucket-table: insert, %s", eventKey, eventRequest));
-                final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(BUCKET_CACHE);
-                return transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, EventResponse>) count -> {
-                    eventKey.setShard((int) ((count - 1) / PROPS.getInteger("event.shard.size", 1000)));
-                    L.debug(format("%s, add-event: event-table: insert", eventKey));
-                    final Event e = entity(Event.class, eventKey);
-                    e.setStatus(UN_PROCESSED.name());
-                    e.setTenant(eventRequest.getTenant());
-                    e.setXrefId(eventRequest.getId());
-                    e.setPayload(eventRequest.getPayload());
-                    L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
-                    final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(eventRequest.getId() == null ? eventKey.getEventId() : eventRequest.getId(), eventRequest.getTenant()));
-                    lookupEntity.setBucketId(eventKey.getBucketId());
-                    lookupEntity.setShard(eventKey.getShard());
-                    lookupEntity.setEventTime(eventKey.getEventTime());
-                    lookupEntity.setEventId(eventKey.getEventId());
-                    return transform(allAsList(dataManager.insertAsync(e), lookupDataManager.insertAsync(lookupEntity)), (Function<List<Entity<?>>, EventResponse>) $ -> {
-                        L.debug(format("%s, add-event: successful", eventKey));
-                        final EventResponse eventResponse = fromRequest(eventRequest);
-                        eventResponse.setEventId(eventKey.getEventId());
-                        eventResponse.setStatus(ACCEPTED.name());
-                        return eventResponse;
-                    });
+                return transform(transformAsync(addEvent0(eventRequest, bucketId, eventTimeMillis),
+                        $ -> addLookup0(eventRequest, $.id(), false)), (Function<EventLookup, EventResponse>) $ -> {
+                    L.debug(format("%s, add-event: successful", $.id()));
+                    final EventResponse eventResponse = fromRequest(eventRequest);
+                    eventResponse.setEventId(raw($).getEventId());
+                    eventResponse.setStatus(ACCEPTED.name());
+                    return eventResponse;
                 });
             }
         }), Exception.class, ex -> {
@@ -184,11 +155,13 @@ public class EventReceiver implements InitializingBean {
             return immediateFuture(eventResponse);
         }
         if (!processorRegistry.registeredTenants().contains(eventRequest.getTenant())) {
-            final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(REJECTED.name());
-            eventResponse.setErrors(newArrayList(new Error("400", "tenant", "", "tenant not registered / unknown tenant")));
-            L.error("event rejected, unknown tenant. Did you register one in the processors.json?, " + eventRequest);
-            return immediateFuture(eventResponse);
+            if (PROPS.getProperty("skip.tenant.validation") == null) {
+                final EventResponse eventResponse = fromRequest(eventRequest);
+                eventResponse.setStatus(REJECTED.name());
+                eventResponse.setErrors(newArrayList(new Error("400", "tenant", "", "tenant not registered / unknown tenant")));
+                L.error("event rejected, unknown tenant. Did you register one in the processors.json?, " + eventRequest);
+                return immediateFuture(eventResponse);
+            }
         }
         try {
             parse(eventRequest.getEventTime());
@@ -240,6 +213,47 @@ public class EventReceiver implements InitializingBean {
     }
 
     private static final Selector<EventLookupKey, EventLookup> FULL_SELECTOR = fullSelector(new EventLookupKey("", ""));
+    private final TaskExecutor taskExecutor = new TaskExecutor(retryableExceptions);
+
+    private ListenableFuture<EventLookup> addLookup0(EventRequest eventRequest, EventKey eventKey, boolean update) {
+        final EventLookup lookupEntity = entity(EventLookup.class, new EventLookupKey(eventRequest.getId() == null ?
+                eventKey.getEventId() : eventRequest.getId(), eventRequest.getTenant()));
+        lookupEntity.setBucketId(eventKey.getBucketId());
+        lookupEntity.setShard(eventKey.getShard());
+        lookupEntity.setEventTime(eventKey.getEventTime());
+        lookupEntity.setEventId(eventKey.getEventId());
+        lookupEntity.setPayload(eventRequest.getPayload());
+        L.debug(format("%s, add-event: event-lookup-table: insert", eventKey));
+        return update ? lookupDataManager.saveAsync(lookupEntity) : lookupDataManager.insertAsync(lookupEntity);
+    }
+
+    private ListenableFuture<Event> addEvent0(EventRequest eventRequest, ZonedDateTime bucketId, long eventTimeMillis) {
+        final EventKey eventKey = EventKey.of(bucketId, 0, utc(eventTimeMillis), UUIDUtil.toString(randomUUID()));
+        final IMap<ZonedDateTime, Bucket> cache = hz.hz().getMap(BUCKET_CACHE);
+        return transformAsync(adapt(cache.submitToKey(bucketId, CACHED_PROCESSOR)), (AsyncFunction<Long, Event>) count -> {
+            eventKey.setShard((int) ((count - 1) / PROPS.getInteger("event.shard.size", 1000)));
+            L.debug(format("%s, add-event: event-table: insert", eventKey));
+            final Event e = entity(Event.class, eventKey);
+            e.setStatus(UN_PROCESSED.name());
+            e.setTenant(eventRequest.getTenant());
+            e.setXrefId(eventRequest.getId());
+            return dataManager.insertAsync(e);
+        });
+    }
+
+    private ListenableFuture<EventLookup> removeEvent0(EventLookup eventLookup) {
+        @SuppressWarnings("unchecked")
+        final CqlDAO<EventKey, Event> evtCqlDAO = (CqlDAO<EventKey, Event>) dataManager.getPrimaryDAO(V1).unwrap();
+        final AsyncManager am = evtCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
+        final EventKey eventKey = EventKey.of(eventLookup.getBucketId(), eventLookup.getShard(), eventLookup.getEventTime(), eventLookup.getEventId());
+        L.debug("removing event: " + eventKey);
+        return transform(taskExecutor.async(() -> am.deleteById(implClass(V1, EventKey.class), eventKey), "delete-" + eventKey,
+                PROPS.getInteger("event.delete.max.retries", 3),
+                PROPS.getInteger("event.delete.initial.delay", 1),
+                PROPS.getInteger("event.delete.backoff.multiplier", 2),
+                SECONDS
+        ), (Function<? super Empty, ? extends EventLookup>) $ -> eventLookup);
+    }
 
     public ListenableFuture<EventResponse> removeEvent(String id, String tenant) {
         final EventResponse eventResponse = new EventResponse();
@@ -272,6 +286,7 @@ public class EventReceiver implements InitializingBean {
             final Throwable cause = getRootCause(ex);
             L.error("error in removing the event: " + id, cause);
             eventResponse.setErrors(newArrayList(new Error("500", id, cause.getMessage(), getStackTraceString(cause), ERROR, APPLICATION)));
+            eventResponse.setStatus(Status.ERROR.name());
             return eventResponse;
         });
     }

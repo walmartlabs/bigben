@@ -33,6 +33,17 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
     @Column(name = "event_id")
     private String eventId;
 
+    @Column(name = "created_at")
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    private ZonedDateTime createdAt;
+
+    @TypeTransformer(valueCodecClass = ZonedDateTimeToDate.class)
+    @Column(name = "modified_at")
+    private ZonedDateTime modifiedAt;
+
+    @Column
+    private String payload;
+
     public ZonedDateTime getBucketId() {
         return bucketId;
     }
@@ -99,6 +110,34 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
         this.eventId = eventId;
     }
 
+    @Override
+    public ZonedDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public void setCreatedAt(ZonedDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public ZonedDateTime getModifiedAt() {
+        return modifiedAt;
+    }
+
+    public void setModifiedAt(ZonedDateTime modifiedAt) {
+        this.modifiedAt = modifiedAt;
+    }
+
+    @Override
+    public String getPayload() {
+        return payload;
+    }
+
+    @Override
+    public void setPayload(String payload) {
+        this.payload = payload;
+    }
+
     public static class EventLookupKey {
         @PartitionKey(value = 1)
         @Column
@@ -149,6 +188,9 @@ public class EventLookupDO implements EventLookup, MutableEntity<EventLookupDO.E
                 ", shard=" + shard +
                 ", eventTime=" + eventTime +
                 ", eventId='" + eventId + '\'' +
+                ", createdAt=" + createdAt +
+                ", modifiedAt=" + modifiedAt +
+                ", payload='" + payload + '\'' +
                 '}';
     }
 }

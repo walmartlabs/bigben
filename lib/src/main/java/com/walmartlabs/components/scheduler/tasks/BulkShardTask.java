@@ -8,10 +8,10 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmartlabs.components.scheduler.processors.EventProcessor;
-import com.walmartlabs.components.scheduler.entities.ObjectFactory;
 import com.walmartlabs.components.scheduler.entities.Event;
-import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
+import com.walmartlabs.components.scheduler.entities.ObjectFactory;
+import com.walmartlabs.components.scheduler.processors.EventEnrichProcessor;
+import com.walmartlabs.components.scheduler.processors.EventProcessor;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 
@@ -78,9 +78,8 @@ public class BulkShardTask implements Runnable, Callable<ShardStatusList>, Ident
         final List<String> buckets = shards.stream().map(p -> p.getLeft() + "/" + p.getRight()).collect(toList());
         L.debug(format("%s, executing bulk event task for buckets/shards on node: %s", buckets, hz.getCluster().getLocalMember().getSocketAddress()));
         final DataManager<?, ?> dm = spring().getBean(DataManager.class);
-        @SuppressWarnings("unchecked")
-        final EventProcessor<Event> ep = spring().getBean(ProcessorRegistry.class);
-        final int maxEvents = PROPS.getInteger("event.max.events.in.memory", 10000);
+        final EventProcessor<Event> ep = spring().getBean(EventEnrichProcessor.class);
+        final int maxEvents = PROPS.getInteger("event.max.events.in.memory", 100000);
         final int fetchSizeHint = maxEvents / shards.size();
         return allAsList(shards.stream().map(p -> {
             try {

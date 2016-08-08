@@ -11,6 +11,7 @@ import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
 
 import java.time.ZonedDateTime;
+import java.util.concurrent.CountDownLatch;
 
 import static com.walmartlabs.components.scheduler.entities.EventRequest.Mode.ADD;
 import static com.walmartlabs.components.scheduler.entities.Status.*;
@@ -32,6 +33,8 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
         setProperty("event.shard.size", "10");
         setProperty("hazelcast.slow.operation.detector.stacktrace.logging.enabled", "true");
         setProperty("com.walmart.platform.config.appName", "gmp-solr-consumer");
+        setProperty("hz.config", "hz_local");
+        setProperty("ccmProps", "bigbenProps");
     }
 
     @Autowired
@@ -50,7 +53,7 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
     public void testEventReceiver() throws Exception {
         final EventRequest eventRequest = new EventRequest();
         eventRequest.setId(randomUUID().toString());
-        eventRequest.setTenant("TEMP");
+        eventRequest.setTenant("$$TEST$$");
         eventRequest.setPayload("payload123");
         eventRequest.setMode(ADD);
         eventRequest.setEventTime(nowUTC().plusMinutes(2).toString());
@@ -70,8 +73,9 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
         // update:
         eventRequest.setPayload("payload234");
         final EventResponse updatedEventResponse = eventReceiver.addEvent(eventRequest).get();
-        compareLookup(eventRequest, updatedEventResponse, eventLookup);
-        compareEvent(eventRequest, eventLookup);
+        final EventLookup eventLookup0 = lookupManager.get(eventLookupKey);
+        compareLookup(eventRequest, updatedEventResponse, eventLookup0);
+        compareEvent(eventRequest, eventLookup0);
         compareRequestAndResponse(eventRequest, updatedEventResponse, UPDATED);
 
         // update event time:
@@ -95,12 +99,14 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
         assertEquals(eventResponse1.getTenant(), eventRequest.getTenant());
         assertNull(lookupManager.get(eventLookupKey));
         assertNull(eventDataManager.get(EventKey.of(eventLookup.getBucketId(), 0, eventLookup.getEventTime(), eventLookup.getEventId())));
+
+        new CountDownLatch(1).await();
     }
 
     private void compareEvent(EventRequest eventRequest, EventLookup eventLookup) {
         final Event event = eventDataManager.get(EventKey.of(eventLookup.getBucketId(), 0, eventLookup.getEventTime(), eventLookup.getEventId()));
         assertNotNull(event);
-        assertEquals(event.getPayload(), eventRequest.getPayload());
+        assertEquals(eventLookup.getPayload(), eventRequest.getPayload());
         assertEquals(event.getStatus(), UN_PROCESSED.name());
         assertEquals(event.getTenant(), eventRequest.getTenant());
         assertEquals(event.getXrefId(), eventRequest.getId());

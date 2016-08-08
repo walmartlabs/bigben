@@ -7,7 +7,7 @@ import java.time.ZonedDateTime;
 /**
  * Created by smalik3 on 3/29/16
  */
-public interface EventLookup extends Entity<EventLookupDO.EventLookupKey> {
+public interface EventLookup extends Entity<EventLookupDO.EventLookupKey>, AuditableEntity {
 
     ZonedDateTime getBucketId();
 
@@ -24,4 +24,8 @@ public interface EventLookup extends Entity<EventLookupDO.EventLookupKey> {
     String getEventId();
 
     void setEventId(String eventId);
+
+    String getPayload();
+
+    void setPayload(String payload);
 }
