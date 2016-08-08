@@ -18,15 +18,17 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 
 import java.time.ZonedDateTime;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Lists.newArrayList;
-import static com.google.common.collect.Lists.reverse;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
+import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.SCHEDULER;
 import static com.walmartlabs.components.scheduler.entities.Status.*;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.nowUTC;
@@ -65,8 +67,9 @@ public class BucketManager {
         this.lookbackRange = lookbackRange;
         this.bucketWidth = bucketWidth;
         this.shardSize = PROPS.getInteger("event.shard.size", 1000);
-        checkpointHelper = new CheckpointHelper(this);
-        statusSyncer = new StatusSyncer(dataManager, eventDataManager);
+        this.checkpointHelper = new CheckpointHelper(this);
+        this.statusSyncer = new StatusSyncer(dataManager, eventDataManager);
+        this.map = map;
         L.info(format("saving checkpoint every %d %s", checkpointInterval, checkpointUnit));
         SCHEDULER.scheduleAtFixedRate(this::saveCheckpoint, checkpointInterval, checkpointInterval, checkpointUnit);
         try {
@@ -84,7 +87,6 @@ public class BucketManager {
             L.info("saving checkpoint during shutdown");
             saveCheckpoint();
         }));
-        this.map = map;
     }
 
     private static final Selector<ZonedDateTime, Bucket> selector = fullSelector(nowUTC());
@@ -153,62 +155,75 @@ public class BucketManager {
     }
 
     synchronized void shardDone(ZonedDateTime bucketId, Integer shard, Status status) {
-        if (!buckets.containsKey(bucketId)) {
+        final BucketSnapshot bd = buckets.get(bucketId);
+        if (bd == null) {
             L.warn(format("bucket %s not found in cache, might have been purged, ignoring this call", bucketId));
             return;
         }
-        final BucketSnapshot bd = buckets.get(bucketId);
         bd.done(shard, status);
-        if (bd.processing().cardinality() == 0) {
+        /*if (bd.processing().cardinality() == 0) {
             final Status bucketStatus = bd.awaiting().cardinality() == 0 ? PROCESSED : ERROR;
             L.info(format("all shards done for bucket: %s, marking it %s", bucketId, bucketStatus));
             bucketProcessed(bucketId, bucketStatus);
-        }
+        }*/
     }
 
     private static final ListenableFuture<Bucket> NO_OP = immediateFuture(null);
 
     synchronized ListenableFuture<Bucket> bucketProcessed(ZonedDateTime bucketId, Status status) {
         final BucketSnapshot bd = buckets.get(bucketId);
-        if (bd == null || bd.awaiting().cardinality() == 0)
+        if (bd == null) {
+            L.warn(format("bucket %s not found in cache, this is extremely unusual", bucketId));
             return NO_OP;
-        L.info(format("marking bucket %s as " + status, bucketId));
+        }
         bd.processing().clear();
-        if (status == PROCESSED)
+        if (status == PROCESSED) {
+            L.info(format("bucket %s done, marking it as %s, all shards done", bucketId, status));
             bd.awaiting().clear();
+        } else if (status == ERROR)
+            L.warn(format("bucket %s done, marking it as %s, failed shards are: %s", bucketId, status, bd.awaiting()));
         return statusSyncer.syncBucket(bucketId, status, true);
     }
 
     private synchronized void purgeIfNeeded() {
         try {
-            final List<ZonedDateTime> bucketIds = reverse(newArrayList(new TreeSet<>(buckets.keySet())));
-            final List<BucketSnapshot> purged = new ArrayList<>();
-            L.debug("checking buckets for purging from shards: " + buckets);
-            if (bucketIds.size() > maxBuckets) {
-                for (int i = maxBuckets; i < bucketIds.size(); i++) {
-                    final ZonedDateTime bucketId = bucketIds.get(i);
-                    final BucketSnapshot bs = buckets.get(bucketId);
-                    if (bs.processing().cardinality() > 0)
-                        L.info(format("bucket %s is currently being processed, cancelling purge for this bucket", bucketId));
-                    else buckets.remove(bucketId);
-                    L.debug("purging bucket snapshot: " + bs);
-                    purged.add(bs);
-                    if (bs.count() == 0)
-                        continue;
-                    if (bs.processing().cardinality() == 0 && bs.awaiting().cardinality() == 0) {
-                        statusSyncer.syncBucket(bucketId, PROCESSED, false);
-                    } else {
-                        statusSyncer.syncBucket(bucketId, ERROR, false);
-                    }
-                    purged.add(bs);
-                }
-            }
-            if (!purged.isEmpty()) {
-                L.info("purged snapshots: " + purged);
-            } else L.info("nothing to purge");
+            if (buckets.size() <= maxBuckets)
+                L.info("nothing to purge");
 
+            L.info("initiating purge check for buckets: " + this.buckets);
+            addCallback(successfulAsList(newArrayList(this.buckets.keySet()).stream().
+                    sorted().limit(buckets.size() - maxBuckets).map(b -> {
+                //buckets.get(b).count() > 0 || buckets.get(b).processing().cardinality() > 0
+                final BucketSnapshot bs = this.buckets.get(b);
+                if (bs.processing().cardinality() > 0) {
+                    L.info(format("skipping purge of bucket %s, shards are still being processed", b));
+                    return NO_OP;
+                } else {
+                    L.debug("purging bucket snapshot: " + bs);
+                    buckets.remove(b);
+                    if (bs.count() == 0) {
+                        return immediateFuture(createEmptyBucket(b));
+                    } else {
+                        if (bs.awaiting().cardinality() == 0) {
+                            return statusSyncer.syncBucket(b, PROCESSED, false);
+                        } else {
+                            return statusSyncer.syncBucket(b, ERROR, false);
+                        }
+                    }
+                }
+            }).collect(toList())), new FutureCallback<List<Bucket>>() {
+                @Override
+                public void onSuccess(List<Bucket> l) {
+                    L.info("purged buckets: " + l.stream().filter(b -> b != null).collect(toList()));
+                }
+
+                @Override
+                public void onFailure(Throwable t) {
+                    L.error("error in purging buckets", getRootCause(t));
+                }
+            });
         } catch (Exception e) {
-            L.error("error in purging snapshots", e);
+            L.error("error in purging snapshots", getRootCause(e));
         }
     }
 
