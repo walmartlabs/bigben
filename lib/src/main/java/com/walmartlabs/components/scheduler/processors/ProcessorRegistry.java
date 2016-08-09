@@ -78,7 +78,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
     @Override
     public ListenableFuture<Event> process(Event event) {
         try {
-            event.setStatus(PROCESSING.name());
+            event.setStatus(TRIGGERED.name());
             event.setProcessedAt(now(UTC));
             return catchingAsync(transform(taskExecutor.async(() -> getOrCreate(event.getTenant()).process(event), "processor-event-id:" + event.id(),
                     PROPS.getInteger("event.processor.max.retries", 3),

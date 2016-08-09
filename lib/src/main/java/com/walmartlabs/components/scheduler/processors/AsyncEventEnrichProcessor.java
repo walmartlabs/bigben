@@ -57,7 +57,7 @@ public class AsyncEventEnrichProcessor extends EventEnrichProcessor implements E
     public ListenableFuture<ConsumerRecord<String, String>> apply(String topic, ConsumerRecord<String, String> record) {
         try {
             final EventResponse eventResponse = convertToObject(record.value(), EventResponse.class);
-            eventResponse.setProcessedAt(nowUTC().toString());
+            eventResponse.setTriggeredAt(nowUTC().toString());
             eventResponse.setStatus(PROCESSING);
             final Event event = toEvent(eventResponse);
             event.setTenant(event.getPayload());

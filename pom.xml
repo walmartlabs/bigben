@@ -22,7 +22,7 @@
         <gmp-ingestion-platform.version>1.73</gmp-ingestion-platform.version>
         <hazelcast.version>3.6.3</hazelcast.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <ingestion-pipeline-messages.version>0.7-SNAPSHOT</ingestion-pipeline-messages.version>
+        <ingestion-pipeline-messages.version>0.7</ingestion-pipeline-messages.version>
     </properties>
     <dependencyManagement>
         <dependencies>

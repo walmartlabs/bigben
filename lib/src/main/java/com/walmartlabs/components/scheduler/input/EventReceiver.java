@@ -178,7 +178,7 @@ public class EventReceiver implements InitializingBean {
         if (parse(eventRequest.getEventTime()).isBefore(nowUTC())) {
             final EventResponse eventResponse = fromRequest(eventRequest);
             eventResponse.setStatus(PROCESSED);
-            eventResponse.setProcessedAt(nowUTC().toString());
+            eventResponse.setTriggeredAt(nowUTC().toString());
             L.warn(format("lapsed event received, marking it %s, eventRequest: %s", PROCESSED, eventRequest));
             return immediateFuture(eventResponse);
         }
@@ -301,7 +301,7 @@ public class EventReceiver implements InitializingBean {
         event.setTenant(e.getTenant());
         event.setError(null);
         ((EventResponseMixin) event).setEventResponse(e);
-        e.setProcessedAt(nowUTC().toString());
+        e.setTriggeredAt(nowUTC().toString());
         return event;
     }
 }

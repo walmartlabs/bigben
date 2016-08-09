@@ -25,7 +25,7 @@ public class EventUtils {
         EventResponse eventResponse = new EventResponse();
         eventResponse.setId(e.getXrefId());
         eventResponse.setEventId(e.id().getEventId());
-        eventResponse.setProcessedAt(e.getProcessedAt() == null ? null : e.getProcessedAt().toString());
+        eventResponse.setTriggeredAt(e.getProcessedAt() == null ? null : e.getProcessedAt().toString());
         eventResponse.setTenant(e.getTenant());
         eventResponse.setEventTime(e.id().getEventTime().toString());
         eventResponse.setPayload(e.getPayload());
