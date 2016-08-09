@@ -11,6 +11,9 @@ import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
+import com.walmart.marketplace.messages.v1_bigben.EventRequest;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse.Status;
 import com.walmart.platform.kernel.exception.error.Error;
 import com.walmart.services.common.util.UUIDUtil;
 import com.walmart.services.nosql.data.CqlDAO;
@@ -40,14 +43,14 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.selector;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.*;
 import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICATION;
 import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.*;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.BUCKET_CACHE;
-import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
 import static com.walmartlabs.components.scheduler.entities.ObjectFactory.OBJECT_ID.EVENT_RECEIVER_ADD_EVENT;
 import static com.walmartlabs.components.scheduler.entities.ObjectFactory.SCHEDULER_FACTORY_ID;
-import static com.walmartlabs.components.scheduler.entities.Status.*;
+import static com.walmartlabs.components.scheduler.utils.EventUtils.fromRequest;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.String.format;
 import static java.time.ZonedDateTime.parse;
@@ -104,7 +107,7 @@ public class EventReceiver implements InitializingBean {
                             L.debug(format("%s, event updated successfully", eventKey));
                             final EventResponse eR = fromRequest(eventRequest);
                             eR.setEventId(eventKey.getEventId());
-                            eR.setStatus(UPDATED.name());
+                            eR.setStatus(UPDATED);
                             return eR;
                         }
                     });
@@ -115,7 +118,7 @@ public class EventReceiver implements InitializingBean {
                         L.debug(format("%s, event updated successfully", $.id()));
                         final EventResponse eR = fromRequest(eventRequest);
                         eR.setEventId(raw($).getEventId());
-                        eR.setStatus(UPDATED.name());
+                        eR.setStatus(UPDATED);
                         return eR;
                     });
                 }
@@ -125,7 +128,7 @@ public class EventReceiver implements InitializingBean {
                     L.debug(format("%s, add-event: successful", $.id()));
                     final EventResponse eventResponse = fromRequest(eventRequest);
                     eventResponse.setEventId(raw($).getEventId());
-                    eventResponse.setStatus(ACCEPTED.name());
+                    eventResponse.setStatus(ACCEPTED);
                     return eventResponse;
                 });
             }
@@ -133,7 +136,7 @@ public class EventReceiver implements InitializingBean {
             final List<Error> errors = getErrorAtServer(ex);
             final EventResponse eventResponse = fromRequest(eventRequest);
             eventResponse.setErrors(errors);
-            eventResponse.setStatus(ERROR.name());
+            eventResponse.setStatus(Status.ERROR);
             return eventResponse;
         });
     }
@@ -142,14 +145,14 @@ public class EventReceiver implements InitializingBean {
     private ListenableFuture<EventResponse> validate(EventRequest eventRequest) {
         if (eventRequest.getTenant() == null) {
             final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(REJECTED.name());
+            eventResponse.setStatus(REJECTED);
             eventResponse.setErrors(newArrayList(new Error("400", "tenant", "", "tenant not present")));
             L.error("event rejected, tenant missing, " + eventRequest);
             return immediateFuture(eventResponse);
         }
         if (eventRequest.getEventTime() == null) {
             final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(REJECTED.name());
+            eventResponse.setStatus(REJECTED);
             eventResponse.setErrors(newArrayList(new Error("400", "eventTime", "", "event time not present")));
             L.error("event rejected, event time not present, " + eventRequest);
             return immediateFuture(eventResponse);
@@ -157,7 +160,7 @@ public class EventReceiver implements InitializingBean {
         if (!processorRegistry.registeredTenants().contains(eventRequest.getTenant())) {
             if (PROPS.getProperty("skip.tenant.validation") == null) {
                 final EventResponse eventResponse = fromRequest(eventRequest);
-                eventResponse.setStatus(REJECTED.name());
+                eventResponse.setStatus(REJECTED);
                 eventResponse.setErrors(newArrayList(new Error("400", "tenant", "", "tenant not registered / unknown tenant")));
                 L.error("event rejected, unknown tenant. Did you register one in the processors.json?, " + eventRequest);
                 return immediateFuture(eventResponse);
@@ -167,14 +170,14 @@ public class EventReceiver implements InitializingBean {
             parse(eventRequest.getEventTime());
         } catch (Exception e) {
             final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(REJECTED.name());
+            eventResponse.setStatus(REJECTED);
             eventResponse.setErrors(newArrayList(new Error("400", "eventTime", "", "event time can not be parsed. Must be in ISO 8601 format.")));
             L.error("event rejected, bad event time format, " + eventRequest);
             return immediateFuture(eventResponse);
         }
         if (parse(eventRequest.getEventTime()).isBefore(nowUTC())) {
             final EventResponse eventResponse = fromRequest(eventRequest);
-            eventResponse.setStatus(PROCESSED.name());
+            eventResponse.setStatus(PROCESSED);
             eventResponse.setProcessedAt(nowUTC().toString());
             L.warn(format("lapsed event received, marking it %s, eventRequest: %s", PROCESSED, eventRequest));
             return immediateFuture(eventResponse);
@@ -276,7 +279,7 @@ public class EventReceiver implements InitializingBean {
                         L.debug("event removed successfully : " + id);
                         eventResponse.setEventId(eventKey.getEventId());
                         eventResponse.setEventTime(eventKey.getEventTime().toString());
-                        eventResponse.setStatus(DELETED.name());
+                        eventResponse.setStatus(DELETED);
                         eventResponse.setTenant(tenant);
                         return eventResponse;
                     }
@@ -286,7 +289,7 @@ public class EventReceiver implements InitializingBean {
             final Throwable cause = getRootCause(ex);
             L.error("error in removing the event: " + id, cause);
             eventResponse.setErrors(newArrayList(new Error("500", id, cause.getMessage(), getStackTraceString(cause), ERROR, APPLICATION)));
-            eventResponse.setStatus(Status.ERROR.name());
+            eventResponse.setStatus(Status.ERROR);
             return eventResponse;
         });
     }

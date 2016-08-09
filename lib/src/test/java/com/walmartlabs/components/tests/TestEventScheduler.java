@@ -11,12 +11,12 @@ import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePubli
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean;
+import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
-import com.walmartlabs.components.scheduler.entities.EventRequest;
 import com.walmartlabs.components.scheduler.input.EventReceiver;
 import com.walmartlabs.components.scheduler.processors.EventProcessor;
 import com.walmartlabs.components.scheduler.services.BulkEventGeneration;

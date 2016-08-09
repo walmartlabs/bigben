@@ -1,12 +1,12 @@
 package com.walmartlabs.components.scheduler.core;
 
-import com.walmartlabs.components.scheduler.entities.Status;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse.Status;
 
 import java.time.ZonedDateTime;
 import java.util.BitSet;
 
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.PROCESSED;
 import static com.walmartlabs.components.scheduler.core.BucketManager.L;
-import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
 import static java.lang.String.format;
 
 /**

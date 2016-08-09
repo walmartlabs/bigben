@@ -11,7 +11,7 @@ import org.apache.log4j.Logger;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.google.common.util.concurrent.Futures.transformAsync;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
-import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.PROCESSED;
 
 /**
  * Created by smalik3 on 8/7/16

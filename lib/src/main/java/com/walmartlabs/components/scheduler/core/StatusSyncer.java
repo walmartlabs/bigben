@@ -3,10 +3,10 @@ package com.walmartlabs.components.scheduler.core;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse.Status;
 import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO;
-import com.walmartlabs.components.scheduler.entities.Status;
 import org.apache.log4j.Logger;
 
 import java.time.ZonedDateTime;

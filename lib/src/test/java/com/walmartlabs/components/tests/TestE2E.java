@@ -6,7 +6,7 @@ import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePubli
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean;
-import com.walmartlabs.components.scheduler.entities.EventRequest;
+import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;

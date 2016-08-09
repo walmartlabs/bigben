@@ -2,18 +2,18 @@ package com.walmartlabs.components.scheduler.input;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
-import com.walmartlabs.components.scheduler.entities.EventRequest;
+import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import static com.google.common.util.concurrent.Futures.*;
+import static com.walmart.marketplace.messages.v1_bigben.EventRequest.Mode.REMOVE;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.ERROR;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.REJECTED;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.services.common.util.JsonUtil.convertToObject;
-import static com.walmartlabs.components.scheduler.entities.EventRequest.Mode.REMOVE;
-import static com.walmartlabs.components.scheduler.entities.Status.ERROR;
-import static com.walmartlabs.components.scheduler.entities.Status.REJECTED;
 import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
 
 /**
@@ -41,7 +41,7 @@ public class MessageProcessor implements TopicMessageProcessor {
                     if (e == null) {
                         L.warn("null response received: " + record);
                         return FAIL;
-                    } else if (ERROR.name().equals(e.getStatus())) {
+                    } else if (ERROR.equals(e.getStatus())) {
                         L.error("failed to add event: " + e);
                         return FAIL;
                     }
@@ -55,11 +55,11 @@ public class MessageProcessor implements TopicMessageProcessor {
                     if (e == null) {
                         L.warn("null response received: " + record);
                         return FAIL;
-                    } else if (ERROR.name().equals(e.getStatus())) {
+                    } else if (ERROR.equals(e.getStatus())) {
                         L.error("failed to add event: " + e);
                         return FAIL;
                     }
-                    if (REJECTED.name().equals(e.getStatus())) {
+                    if (REJECTED.equals(e.getStatus())) {
                         L.warn("event was rejected, failure status: " + e.getStatus());
                         return transformAsync(processorRegistry.process(toEvent(e)), $ -> SUCCESS);
                     }

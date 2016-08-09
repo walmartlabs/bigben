@@ -1,8 +1,13 @@
 package com.walmartlabs.components.tests;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmartlabs.components.scheduler.entities.*;
+import com.walmart.marketplace.messages.v1_bigben.EventRequest;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse.Status;
+import com.walmartlabs.components.scheduler.entities.Bucket;
+import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.entities.EventLookup;
 import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
 import com.walmartlabs.components.scheduler.input.EventReceiver;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,8 +18,8 @@ import org.testng.annotations.Test;
 import java.time.ZonedDateTime;
 import java.util.concurrent.CountDownLatch;
 
-import static com.walmartlabs.components.scheduler.entities.EventRequest.Mode.ADD;
-import static com.walmartlabs.components.scheduler.entities.Status.*;
+import static com.walmart.marketplace.messages.v1_bigben.EventRequest.Mode.ADD;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.*;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
 import static java.lang.System.setProperty;
 import static java.time.ZonedDateTime.parse;
@@ -82,7 +87,7 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
         eventRequest.setEventTime(parse(eventRequest.getEventTime()).plusSeconds(1).toString());
         eventRequest.setPayload("payload345");
         final EventResponse updatedEventResponse1 = eventReceiver.addEvent(eventRequest).get();
-        assertEquals(updatedEventResponse1.getStatus(), UPDATED.name());
+        assertEquals(updatedEventResponse1.getStatus(), UPDATED);
         final EventLookup eventLookup1 = lookupManager.get(eventLookupKey);
 
         assertEquals(eventLookup.id().getXrefId(), eventLookup1.id().getXrefId());
@@ -94,7 +99,7 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
 
         //delete:
         final EventResponse eventResponse1 = eventReceiver.removeEvent(eventRequest.getId(), eventRequest.getTenant()).get();
-        assertEquals(eventResponse1.getStatus(), DELETED.name());
+        assertEquals(eventResponse1.getStatus(), DELETED);
         assertEquals(eventResponse1.getId(), eventRequest.getId());
         assertEquals(eventResponse1.getTenant(), eventRequest.getTenant());
         assertNull(lookupManager.get(eventLookupKey));
@@ -123,7 +128,7 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
     private void compareRequestAndResponse(EventRequest eventRequest, EventResponse eventResponse, Status status) {
         assertNull(eventResponse.getErrors());
         assertTrue(eventResponse.getEventId() != null);
-        assertEquals(eventResponse.getStatus(), status.name());
+        assertEquals(eventResponse.getStatus(), status);
         assertEquals(eventResponse.getTenant(), eventRequest.getTenant());
         assertEquals(eventResponse.getMode(), eventRequest.getMode());
         assertEquals(eventResponse.getEventTime(), eventRequest.getEventTime());

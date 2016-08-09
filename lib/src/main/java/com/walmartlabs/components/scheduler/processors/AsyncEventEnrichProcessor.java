@@ -4,19 +4,19 @@ import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventLookup;
 import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
-import com.walmartlabs.components.scheduler.entities.EventResponse;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.log4j.Logger;
 
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.raw;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.PROCESSED;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.PROCESSING;
 import static com.walmart.services.common.util.JsonUtil.convertToObject;
-import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
-import static com.walmartlabs.components.scheduler.entities.Status.PROCESSING;
 import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.nowUTC;
 
@@ -58,7 +58,7 @@ public class AsyncEventEnrichProcessor extends EventEnrichProcessor implements E
         try {
             final EventResponse eventResponse = convertToObject(record.value(), EventResponse.class);
             eventResponse.setProcessedAt(nowUTC().toString());
-            eventResponse.setStatus(PROCESSING.name());
+            eventResponse.setStatus(PROCESSING);
             final Event event = toEvent(eventResponse);
             event.setTenant(event.getPayload());
             return transformAsync(super.process(event), e -> {

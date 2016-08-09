@@ -6,7 +6,7 @@ import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventResponseMixin;
 import org.apache.log4j.Logger;
 
-import static com.walmartlabs.components.scheduler.entities.Status.PROCESSED;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.PROCESSED;
 
 /**
  * Created by smalik3 on 6/21/16

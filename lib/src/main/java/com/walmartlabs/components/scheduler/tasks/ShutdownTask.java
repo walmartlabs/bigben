@@ -3,8 +3,8 @@ package com.walmartlabs.components.scheduler.tasks;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
-import com.walmartlabs.components.scheduler.entities.ObjectFactory;
 import com.walmartlabs.components.scheduler.core.ScheduleScanner;
+import com.walmartlabs.components.scheduler.entities.ObjectFactory;
 
 import java.io.IOException;
 import java.util.concurrent.Callable;

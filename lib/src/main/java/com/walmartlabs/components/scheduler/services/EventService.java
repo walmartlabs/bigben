@@ -7,14 +7,15 @@ import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.jobs.SerializableCallable;
+import com.walmart.marketplace.messages.v1_bigben.EventRequest;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse;
+import com.walmart.marketplace.messages.v1_bigben.EventResponse.Status;
 import com.walmart.platform.kernel.exception.error.Error;
 import com.walmartlabs.components.core.services.Service;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.entities.EventLookup;
 import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
-import com.walmartlabs.components.scheduler.entities.EventRequest;
-import com.walmartlabs.components.scheduler.entities.EventResponse;
 import com.walmartlabs.components.scheduler.input.EventReceiver;
 import com.walmartlabs.components.scheduler.processors.ProcessorConfig;
 import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
@@ -41,17 +42,16 @@ import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
+import static com.walmart.marketplace.messages.v1_bigben.EventRequest.Mode.ADD;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.REJECTED;
 import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICATION;
 import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static com.walmartlabs.components.scheduler.core.ScheduleScanner.EVENT_SCHEDULER;
-import static com.walmartlabs.components.scheduler.entities.EventRequest.Mode.ADD;
-import static com.walmartlabs.components.scheduler.entities.EventResponse.fromRequest;
-import static com.walmartlabs.components.scheduler.entities.EventResponse.toResponse;
-import static com.walmartlabs.components.scheduler.entities.Status.ACCEPTED;
-import static com.walmartlabs.components.scheduler.entities.Status.REJECTED;
 import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
+import static com.walmartlabs.components.scheduler.utils.EventUtils.fromRequest;
+import static com.walmartlabs.components.scheduler.utils.EventUtils.toResponse;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
 import static java.time.ZonedDateTime.parse;
@@ -119,7 +119,7 @@ public class EventService {
             final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
                     e -> e.getMode() == ADD ? eventReceiver.addEvent(e) : eventReceiver.removeEvent(e.getId(), e.getTenant())
             ).collect(toList())).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
-            long errors = eventResponses.stream().filter(er -> REJECTED.name().equals(er.getStatus())).count();
+            long errors = eventResponses.stream().filter(er -> REJECTED.equals(er.getStatus())).count();
             if (errors == eventResponses.size()) return status(BAD_REQUEST).entity(eventResponses).build();
             else if (errors > 0) return status(PARTIAL_CONTENT).entity(eventResponses).build();
             else return ok().entity(eventResponses).build();
@@ -149,7 +149,7 @@ public class EventService {
             eventRequest.setId(randomUUID().toString());
             final ListenableFuture<EventResponse> f = eventReceiver.addEvent(eventRequest);
             return transformAsync(f, e -> {
-                if (!ACCEPTED.name().equals(e.getStatus())) {
+                if (!Status.ACCEPTED.equals(e.getStatus())) {
                     processorRegistry.process(toEvent(e));
                 }
                 return f;

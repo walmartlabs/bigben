@@ -34,6 +34,10 @@
             <groupId>com.walmart.services</groupId>
             <artifactId>gmp-ingestion-platform</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.walmart.services.gmp</groupId>
+            <artifactId>ingestion-pipeline-messages</artifactId>
+        </dependency>
     </dependencies>
 
 </project>
