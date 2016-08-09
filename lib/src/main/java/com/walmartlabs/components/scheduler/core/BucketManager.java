@@ -190,7 +190,7 @@ public class BucketManager {
             if (buckets.size() <= maxBuckets)
                 L.info("nothing to purge");
 
-            L.info("initiating purge check for buckets: " + this.buckets);
+            L.debug("initiating purge check for buckets: " + this.buckets);
             addCallback(successfulAsList(newArrayList(this.buckets.keySet()).stream().
                     sorted().limit(buckets.size() - maxBuckets).map(b -> {
                 //buckets.get(b).count() > 0 || buckets.get(b).processing().cardinality() > 0

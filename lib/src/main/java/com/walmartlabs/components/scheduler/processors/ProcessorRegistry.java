@@ -86,9 +86,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                     PROPS.getInteger("event.processor.backoff.multiplier", 2),
                     SECONDS
             ), (Function<Event, Event>) $ -> {
-                if (!TRIGGERED.name().equals(event.getStatus()))
-                    return event;
-                else {
+                if (TRIGGERED.name().equals(event.getStatus())) {
                     if (event.getError() != null)
                         event.setStatus(ERROR.name());
                     else event.setStatus(PROCESSED.name());
