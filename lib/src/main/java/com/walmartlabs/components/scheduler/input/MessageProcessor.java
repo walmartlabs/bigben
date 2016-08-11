@@ -10,11 +10,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.marketplace.messages.v1_bigben.EventRequest.Mode.REMOVE;
-import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.ERROR;
-import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.REJECTED;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.*;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.services.common.util.JsonUtil.convertToObject;
 import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
+import static java.lang.String.format;
 
 /**
  * Created by smalik3 on 6/22/16
@@ -60,7 +60,10 @@ public class MessageProcessor implements TopicMessageProcessor {
                         return FAIL;
                     }
                     if (REJECTED.equals(e.getStatus())) {
-                        L.warn("event was rejected, failure status: " + e.getStatus());
+                        L.warn(format("event was rejected, event id: %s, tenant: %s", e.getId(), e.getTenant()));
+                        return transformAsync(processorRegistry.process(toEvent(e)), $ -> SUCCESS);
+                    } else if (TRIGGERED.equals(e.getStatus())) {
+                        L.warn(format("event was triggered immediately (likely lapsed), event id: %s, tenant: %s", e.getId(), e.getTenant()));
                         return transformAsync(processorRegistry.process(toEvent(e)), $ -> SUCCESS);
                     }
                     return SUCCESS;

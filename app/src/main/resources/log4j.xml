@@ -17,7 +17,12 @@
         <appender-ref ref="console"/>
     </root>
 
-    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka" additivity="false">
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="console"/>
+    </logger>
+
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets" additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
     </logger>
