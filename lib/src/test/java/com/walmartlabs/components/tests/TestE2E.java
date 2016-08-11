@@ -11,6 +11,8 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.HashMap;
@@ -129,6 +131,10 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
         final KafkaConsumerBean consumer = new KafkaConsumerBean("bigben_promo_kafka", tmp);
         consumer.afterPropertiesSet();
         new CountDownLatch(1).await();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(ZonedDateTime.ofInstant(Instant.ofEpochMilli(1470941174743L), ZoneOffset.systemDefault()));
     }
 
 }
