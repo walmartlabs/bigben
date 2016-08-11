@@ -130,7 +130,7 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
                 L.debug(format("%s, processed event: %s", executionKey, e.id()));
                 return e;
             }), Exception.class, ex -> {
-                L.error(format("%s, error in processing event, marking it %s", executionKey, ERROR));
+                L.error(format("%s, error in processing event, marking it %s", executionKey, ERROR), getRootCause(ex));
                 if (e.getStatus() == null) {
                     e.setStatus(ERROR.name());
                     e.setError(getStackTraceString(getRootCause(ex)));
@@ -138,7 +138,7 @@ public class ShardTask implements Callable<ListenableFuture<ShardStatus>> {
                 return e;
             });
         } catch (Throwable t) {
-            L.error(format("%s, error in processing event: %s", executionKey, e.id()));
+            L.error(format("%s, error in processing event: %s", executionKey, e.id()), getRootCause(t));
             e.setStatus(ERROR.name());
             e.setError(getStackTraceString(getRootCause(t)));
             return immediateFuture(e);

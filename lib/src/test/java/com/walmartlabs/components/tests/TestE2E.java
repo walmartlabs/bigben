@@ -134,7 +134,7 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
     }
 
     public static void main(String[] args) {
-        System.out.println(ZonedDateTime.ofInstant(Instant.ofEpochMilli(1470941174743L), ZoneOffset.systemDefault()));
+        System.out.println(ZonedDateTime.ofInstant(Instant.ofEpochMilli(1470939425758L), ZoneOffset.UTC));
     }
 
 }
