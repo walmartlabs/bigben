@@ -1,12 +1,8 @@
 package com.walmartlabs.components.tests;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmart.gmp.ingestion.platform.framework.data.core.idcodecs.EntityIdFactory;
 import com.walmart.gmp.ingestion.platform.framework.data.model.FeedItemStatusKey;
 import com.walmart.gmp.ingestion.platform.framework.data.model.ItemStatusEntity;
-import com.walmart.services.nosql.data.CqlDAO;
-import info.archinnov.achilles.persistence.AsyncBatch;
-import info.archinnov.achilles.persistence.AsyncManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
@@ -16,15 +12,8 @@ import org.testng.annotations.Test;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.google.common.util.concurrent.Futures.successfulAsList;
-import static com.walmart.gmp.ingestion.platform.framework.core.FeedType.ITEM;
-import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.raw;
-import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V1;
-import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V2;
-import static java.lang.System.currentTimeMillis;
 import static java.lang.System.setProperty;
 import static java.util.UUID.randomUUID;
-import static java.util.stream.Collectors.toList;
 
 /**
  * Created by smalik3 on 7/28/16
@@ -54,7 +43,7 @@ public class TestBatchPerf extends AbstractTestNGSpringContextTests {
 
     @Test(dataProvider = "data", invocationCount = 10)
     public void test(String mode, int total, int batchSize, int shardSize) throws Exception {
-        final String feedId = EntityIdFactory.createFeedId(ITEM, V2);
+        /*final String feedId = EntityIdFactory.createFeedId(ITEM, V2);
 
         // warm up:
         System.out.println("warming up");
@@ -133,7 +122,7 @@ public class TestBatchPerf extends AbstractTestNGSpringContextTests {
             default:
                 throw new IllegalArgumentException("unknown mode: " + mode);
         }
-        System.out.println("----------------------------------------");
+        System.out.println("----------------------------------------");*/
     }
 
     private List<ItemStatusEntity> next(String feedId, int shard, int size) {

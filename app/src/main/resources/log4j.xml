@@ -13,9 +13,14 @@
     </appender>
 
     <root>
-        <level value="INFO"/>
+        <level value="PERF"/>
         <appender-ref ref="console"/>
     </root>
+
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka" additivity="false">
+        <level value="PERF"/>
+        <appender-ref ref="console"/>
+    </logger>
 
     <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer" additivity="false">
         <level value="DEBUG"/>

@@ -9,7 +9,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePublisher;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
-import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
+import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.processors.TopicMessageProcessor;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean;
 import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import com.walmart.services.nosql.data.CqlDAO;

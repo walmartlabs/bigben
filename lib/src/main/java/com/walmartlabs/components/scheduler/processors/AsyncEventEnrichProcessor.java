@@ -3,7 +3,7 @@ package com.walmartlabs.components.scheduler.processors;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
+import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.processors.TopicMessageProcessor;
 import com.walmart.marketplace.messages.v1_bigben.EventResponse;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventLookup;

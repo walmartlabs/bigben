@@ -1,7 +1,7 @@
 package com.walmartlabs.components.scheduler.input;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
+import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.processors.TopicMessageProcessor;
 import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;

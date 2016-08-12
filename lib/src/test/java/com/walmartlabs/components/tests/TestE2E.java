@@ -4,7 +4,7 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePublisher;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
-import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.TopicMessageProcessor;
+import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.processors.TopicMessageProcessor;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean;
 import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import org.springframework.test.context.ContextConfiguration;
