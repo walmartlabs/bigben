@@ -13,21 +13,24 @@
     </appender>
 
     <root>
-        <level value="PERF"/>
+        <level value="WARN"/>
         <appender-ref ref="console"/>
     </root>
 
-    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka" additivity="false">
-        <level value="PERF"/>
-        <appender-ref ref="console"/>
-    </logger>
-
-    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer" additivity="false">
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.MicroBatchingKafkaConsumer.OffsetManager"
+            additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
     </logger>
 
-    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets" additivity="false">
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets.OffsetManager"
+            additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="console"/>
+    </logger>
+
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.partitions.PartitionRebalancer"
+            additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
     </logger>
