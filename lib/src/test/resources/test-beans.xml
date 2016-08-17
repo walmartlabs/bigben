@@ -13,7 +13,7 @@
     <import resource="classpath*:platform-minimal.xml"/>
 
     <bean id="dataManager" class="com.walmartlabs.components.scheduler.utils.BigbenDataManager">
-        <constructor-arg index="0" value="file://dm-config.json"/>
+        <constructor-arg index="0" value="ccm://bigbenProps/dm-config"/>
     </bean>
 
     <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
@@ -21,7 +21,7 @@
     </bean>
 
     <bean id="processRegistry" class="com.walmartlabs.components.scheduler.processors.ProcessorRegistry">
-        <constructor-arg index="0" value="file://processors.json"/>
+        <constructor-arg index="0" value="ccm://bigbenProps/processors"/>
         <constructor-arg index="1" value="false"/>
     </bean>
 </beans>

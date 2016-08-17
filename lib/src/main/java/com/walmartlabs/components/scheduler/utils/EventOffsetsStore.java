@@ -37,10 +37,10 @@ public class EventOffsetsStore implements OffsetStore {
     private static final Selector<EventLookupKey, EventLookup> selector = selector(EventLookup.class, EventLookup::getPayload);
 
     @Override
-    public ListenableFuture<?> store(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public ListenableFuture<?> store(String tenant, Map<TopicPartition, OffsetAndMetadata> offsets) {
         L.debug("storing offsets: " + offsets);
         return successfulAsList(offsets.entrySet().stream().map(e -> {
-            final EventLookup entity = entity(EventLookup.class, new EventLookupKey("" + e.getKey().partition(), e.getKey().topic()));
+            final EventLookup entity = entity(EventLookup.class, new EventLookupKey("" + e.getKey().partition(), tenant + "/" + e.getKey().topic()));
             entity.setPayload("" + e.getValue().offset());
             entity.setShard(-1);
             return dm.saveAsync(entity);
@@ -48,17 +48,17 @@ public class EventOffsetsStore implements OffsetStore {
     }
 
     @Override
-    public ListenableFuture<Map<TopicPartition, OffsetAndMetadata>> load(List<TopicPartition> partitions) {
+    public ListenableFuture<Map<TopicPartition, OffsetAndMetadata>> load(String tenant, List<TopicPartition> partitions) {
         return transform(allAsList(partitions.stream().map(p ->
-                        dm.getAsync(new EventLookupKey("" + p.partition(), p.topic()), selector)).collect(toList())),
+                        dm.getAsync(new EventLookupKey("" + p.partition(), tenant + "/" + p.topic()), selector)).collect(toList())),
                 (Function<List<EventLookup>, Map<TopicPartition, OffsetAndMetadata>>) l -> {
                     if (l == null || l.isEmpty()) return EMPTY_MAP;
                     final Map<TopicPartition, OffsetAndMetadata> map = new HashMap<>();
-                    l.stream().filter(el -> el != null && el.getPayload() != null).forEach(el -> map.put(new TopicPartition(el.id().getTenant(), parseInt(el.id().getXrefId())), new OffsetAndMetadata(parseLong(el.getPayload()))));
+                    l.stream().filter(el -> el != null && el.getPayload() != null).forEach(el ->
+                            map.put(new TopicPartition(el.id().getTenant().substring((tenant + "/").length()),
+                                    parseInt(el.id().getXrefId())), new OffsetAndMetadata(parseLong(el.getPayload()))));
                     partitions.stream().filter(partition -> !map.containsKey(partition)).forEach(partition -> map.put(partition, new OffsetAndMetadata(-1)));
                     return map;
                 });
     }
-
-
 }

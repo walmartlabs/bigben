@@ -179,7 +179,7 @@ public class EventReceiver implements InitializingBean {
             final EventResponse eventResponse = fromRequest(eventRequest);
             eventResponse.setStatus(TRIGGERED);
             eventResponse.setTriggeredAt(nowUTC().toString());
-            L.warn(format("lapsed event received, marking it %s, eventRequest: %s", PROCESSED, eventRequest));
+            L.debug(format("lapsed event received, marking it %s, eventRequest: %s", TRIGGERED, eventRequest));
             return immediateFuture(eventResponse);
         }
         return null;

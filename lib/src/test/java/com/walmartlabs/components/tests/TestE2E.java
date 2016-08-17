@@ -4,15 +4,13 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePublisher;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
-import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.processors.TopicMessageProcessor;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean;
+import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.processors.TopicMessageProcessor;
 import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
 
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.HashMap;
@@ -41,11 +39,10 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class TestE2E extends AbstractTestNGSpringContextTests {
 
     static {
-        setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.entities");
         setProperty("com.walmart.platform.config.runOnEnv", "prod");
-        setProperty("event.shard.size", "10");
-        setProperty("hazelcast.slow.operation.detector.stacktrace.logging.enabled", "true");
         setProperty("com.walmart.platform.config.appName", "gmp-solr-consumer");
+        setProperty("ccmProps", "bigbenProps");
+        setProperty("hz.config", "hz_local");
     }
 
     @Test
@@ -58,7 +55,7 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
         final int numEvents = 1_000_000;
         final int initialDelay = 4;
 
-        final MessagePublisher<String, EventRequest, Object> publisher = new PublisherFactory("promo_evt_inbound", "bigben_kafka", true).create();
+        final MessagePublisher<String, EventRequest, Object> publisher = new PublisherFactory("promo_outbound_group", "bigben_promo_kafka", true).create();
         final ZonedDateTime now = now(UTC);
         final ZonedDateTime time = now.plusMinutes(initialDelay).withSecond(0).withNano(0);
         final Random random = new Random();
@@ -132,9 +129,4 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
         consumer.afterPropertiesSet();
         new CountDownLatch(1).await();
     }
-
-    public static void main(String[] args) {
-        System.out.println(ZonedDateTime.ofInstant(Instant.ofEpochMilli(1470939425758L), ZoneOffset.UTC));
-    }
-
 }
