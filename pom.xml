@@ -17,7 +17,7 @@
   </parent>
   <properties>
     <ignite.version>1.5.0.final</ignite.version>
-    <gmp-ingestion-platform.version>1.82</gmp-ingestion-platform.version>
+    <gmp-ingestion-platform.version>1.83</gmp-ingestion-platform.version>
     <hazelcast.version>3.6.3</hazelcast.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <ingestion-pipeline-messages.version>0.7</ingestion-pipeline-messages.version>
