@@ -10,6 +10,7 @@ import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
+import org.testng.collections.ListMultiMap;
 
 import java.time.ZonedDateTime;
 import java.util.Date;
@@ -128,5 +129,32 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
         final KafkaConsumerBean consumer = new KafkaConsumerBean("bigben_promo_kafka", tmp);
         consumer.afterPropertiesSet();
         new CountDownLatch(1).await();
+    }
+
+    public static void main(String[] args) {
+        final ZonedDateTime zdt = ZonedDateTime.parse("2016-08-17T05:00Z");
+        int size = 10;
+        final ListMultiMap<Object, Object> dist = ListMultiMap.create();
+        for (int i = 0; i < 60; i++) {
+            final ZonedDateTime s = zdt.plusMinutes(i);
+            int min = s.getMinute();
+            System.out.println("using time: " + s);
+            final int p = Math.abs(min + (int) Math.sqrt(min)) % size;
+            if (p == 0 && min == 53)
+                dist.put(9, min);
+            else if (p == 3 && min == 56)
+                dist.put(5, min);
+            else if(p == 0 && min == 8)
+                dist.put(1, min);
+            else if(p == 2 && min == 9)
+                dist.put(1, min);
+            else if(p == 4 && min == 11)
+                dist.put(0, min);
+            else if(p == 6 && min == 13)
+                dist.put(9, min);
+            else dist.put(p, min);
+        }
+        dist.getEntrySet().stream().forEach(e -> System.out.println(e.getKey() + " : " + e.getValue().size()));
+        dist.getEntrySet().stream().forEach(e -> System.out.println(e.getKey() + " : " + e.getValue()));
     }
 }
