@@ -10,13 +10,9 @@ import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
-import org.testng.collections.ListMultiMap;
 
 import java.time.ZonedDateTime;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -24,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.walmart.gmp.ingestion.platform.framework.messaging.kafka.Constants.APP_NAME;
+import static java.lang.Integer.MAX_VALUE;
 import static java.lang.Runtime.getRuntime;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.setProperty;
@@ -31,6 +28,7 @@ import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static java.util.concurrent.Executors.unconfigurableExecutorService;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -131,7 +129,7 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
         new CountDownLatch(1).await();
     }
 
-    public static void main(String[] args) {
+    /*public static void main(String[] args) {
         final ZonedDateTime zdt = ZonedDateTime.parse("2016-08-17T05:00Z");
         int size = 10;
         final ListMultiMap<Object, Object> dist = ListMultiMap.create();
@@ -156,5 +154,25 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
         }
         dist.getEntrySet().stream().forEach(e -> System.out.println(e.getKey() + " : " + e.getValue().size()));
         dist.getEntrySet().stream().forEach(e -> System.out.println(e.getKey() + " : " + e.getValue()));
+    }*/
+
+    public static void main(String[] args) {
+        class X {
+            int p;
+
+            public X(int p) {
+                this.p = p;
+            }
+        }
+        final PriorityQueue<X> queue = new PriorityQueue<>(((o1, o2) -> o1.p - o2.p));
+        queue.add(new X(0));
+        queue.add(new X(0));
+        queue.add(new X(MAX_VALUE));
+        queue.add(new X(100));
+        queue.add(new X(1));
+        queue.add(new X(100));
+        queue.add(new X(0));
+        while (!queue.isEmpty())
+            System.out.println(queue.poll().p);
     }
 }

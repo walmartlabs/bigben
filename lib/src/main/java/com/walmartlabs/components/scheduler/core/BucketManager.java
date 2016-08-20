@@ -7,6 +7,7 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableScheduledFuture;
 import com.hazelcast.core.IMap;
+import com.walmart.gmp.ingestion.platform.framework.shutdown.SupportsShutdown;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.marketplace.messages.v1_bigben.EventResponse.Status;
@@ -14,6 +15,7 @@ import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.BucketDO;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
+import com.walmartlabs.components.scheduler.entities.EventLookup;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 
@@ -27,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.gmp.ingestion.platform.framework.shutdown.ShutdownRegistry.SHUTDOWN_REGISTRY;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.*;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
@@ -40,7 +43,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * Created by smalik3 on 6/29/16
  */
-public class BucketManager {
+public class BucketManager implements SupportsShutdown {
 
     static final Logger L = Logger.getLogger(BucketManager.class);
 
@@ -87,6 +90,7 @@ public class BucketManager {
             L.info("saving checkpoint during shutdown");
             saveCheckpoint();
         }));
+        SHUTDOWN_REGISTRY.register(this);
     }
 
     private static final Selector<ZonedDateTime, Bucket> selector = fullSelector(nowUTC());
@@ -187,9 +191,10 @@ public class BucketManager {
 
     private synchronized void purgeIfNeeded() {
         try {
-            if (buckets.size() <= maxBuckets)
+            if (buckets.size() <= maxBuckets) {
                 L.info("nothing to purge");
-
+                return;
+            }
             L.debug("initiating purge check for buckets: " + this.buckets);
             addCallback(successfulAsList(newArrayList(this.buckets.keySet()).stream().
                     sorted().limit(buckets.size() - maxBuckets).map(b -> {
@@ -227,9 +232,9 @@ public class BucketManager {
         }
     }
 
-    synchronized void saveCheckpoint() {
+    synchronized ListenableFuture<EventLookup> saveCheckpoint() {
         purgeIfNeeded();
-        checkpointHelper.saveCheckpoint(buckets);
+        return checkpointHelper.saveCheckpoint(buckets);
     }
 
     int getMaxProcessingTime() {
@@ -250,5 +255,20 @@ public class BucketManager {
         bucketDO.setStatus(EMPTY.name());
         bucketDO.setCount(0);
         return bucketDO;
+    }
+
+    @Override
+    public int priority() {
+        return 1;
+    }
+
+    @Override
+    public String name() {
+        return "BucketManager";
+    }
+
+    @Override
+    public ListenableFuture<?> shutdown() {
+        return saveCheckpoint();
     }
 }

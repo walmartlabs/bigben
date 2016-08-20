@@ -7,6 +7,7 @@ import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.jobs.SerializableCallable;
+import com.walmart.gmp.ingestion.platform.framework.shutdown.SupportsShutdown;
 import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import com.walmart.marketplace.messages.v1_bigben.EventResponse;
 import com.walmart.marketplace.messages.v1_bigben.EventResponse.Status;
@@ -75,7 +76,7 @@ import static org.apache.commons.lang3.tuple.Pair.of;
 @Path("/events")
 @Consumes(APPLICATION_JSON)
 @Produces(APPLICATION_JSON)
-public class EventService {
+public class EventService implements SupportsShutdown {
 
     private static final Logger L = Logger.getLogger(EventService.class);
 
@@ -100,6 +101,7 @@ public class EventService {
     @GET
     @Path("/cluster")
     public Map<String, String> cluster() {
+        ensureNotShutdown();
         final Map<Member, Future<String>> results = hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(new StatusTask(service.name()));
         final Map<String, String> map = new HashMap<>();
         for (Map.Entry<Member, Future<String>> entry : results.entrySet()) {
@@ -115,6 +117,7 @@ public class EventService {
     @POST
     @Path("/submit")
     public Response process(List<EventRequest> eventRequests) throws Exception {
+        ensureNotShutdown();
         try {
             final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
                     e -> e.getMode() == ADD ? eventReceiver.addEvent(e) : eventReceiver.removeEvent(e.getId(), e.getTenant())
@@ -134,6 +137,7 @@ public class EventService {
     @POST
     @Path("/generate")
     public Map<ZonedDateTime, Integer> generateEvents(BulkEventGeneration bEG) throws Exception {
+        ensureNotShutdown();
         final ThreadLocalRandom random = ThreadLocalRandom.current();
         final ZonedDateTime t1 = parse(bEG.getStartTime());
         final ZonedDateTime t2 = t1.plusMinutes(bEG.getPeriod());
@@ -170,7 +174,8 @@ public class EventService {
 
     @POST
     @Path("/shutdown")
-    public Map<String, String> shutdown() {
+    public Map<String, String> shutdownAPI() {
+        ensureNotShutdown();
         final Map<Member, Future<Boolean>> results = hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(SHUTDOWN_TASK);
         return results.entrySet().stream().map(e -> {
             try {
@@ -185,6 +190,7 @@ public class EventService {
     @POST
     @Path("/register")
     public Response registerProcessor(ProcessorConfig config) {
+        ensureNotShutdown();
         try {
             successfulAsList(transformValues(
                     hz.hz().getExecutorService(EVENT_SCHEDULER).submitToAllMembers(
@@ -205,6 +211,7 @@ public class EventService {
     @GET
     @Path("/processorRegistry")
     public Response registeredTenants() {
+        ensureNotShutdown();
         return ok().entity(processorRegistry.registeredConfigs()).build();
     }
 
@@ -217,6 +224,7 @@ public class EventService {
     @GET
     @Path("/find")
     public Response find(@QueryParam("id") String id, @QueryParam("tenant") String tenant) {
+        ensureNotShutdown();
         final EventRequest eventRequest = new EventRequest();
         eventRequest.setId(id);
         eventRequest.setTenant(tenant);
@@ -226,6 +234,7 @@ public class EventService {
     @POST
     @Path("/dryrun")
     public Response dryrun(@QueryParam("id") String id, @QueryParam("tenant") String tenant) {
+        ensureNotShutdown();
         final EventRequest eventRequest = new EventRequest();
         eventRequest.setId(id);
         eventRequest.setTenant(tenant);
@@ -233,6 +242,7 @@ public class EventService {
     }
 
     private Response find(EventRequest eventRequest, boolean fire) {
+        ensureNotShutdown();
         final EventResponse eventResponse = fromRequest(eventRequest);
         if (eventRequest != null && eventRequest.getId() != null && eventRequest.getId().trim().length() > 0) {
             final EventLookupKey eventLookupKey = new EventLookupKey(eventRequest.getId(), eventRequest.getTenant());
@@ -263,8 +273,32 @@ public class EventService {
     @Path("/_receive_")
     @Produces(TEXT_PLAIN)
     public String receive(EventResponse eventResponse, @Context HttpHeaders httpHeaders) {
+        ensureNotShutdown();
         L.debug("received event response: " + eventResponse);
         System.out.println(httpHeaders);
         return "done";
+    }
+
+    @Override
+    public String name() {
+        return "EventService";
+    }
+
+    @Override
+    public int priority() {
+        return 0;
+    }
+
+    private volatile boolean isShutdown = false;
+
+    @Override
+    public ListenableFuture<?> shutdown() {
+        isShutdown = true;
+        return immediateFuture(null);
+    }
+
+    private void ensureNotShutdown() {
+        if (isShutdown)
+            throw new WebApplicationException(status(400).entity("system has been shutdown").build());
     }
 }

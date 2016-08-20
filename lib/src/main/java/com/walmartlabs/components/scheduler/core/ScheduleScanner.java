@@ -1,7 +1,7 @@
 package com.walmartlabs.components.scheduler.core;
 
+import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.TreeMultimap;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
@@ -10,8 +10,10 @@ import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
+import com.walmart.gmp.ingestion.platform.framework.shutdown.SupportsShutdown;
 import com.walmartlabs.components.core.services.Service;
 import com.walmartlabs.components.scheduler.entities.Bucket;
+import com.walmartlabs.components.scheduler.entities.EventLookup;
 import com.walmartlabs.components.scheduler.tasks.BulkShardTask;
 import com.walmartlabs.components.scheduler.tasks.ShardStatus;
 import com.walmartlabs.components.scheduler.tasks.ShardStatusList;
@@ -36,6 +38,7 @@ import static com.google.common.util.concurrent.Futures.*;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static com.walmart.gmp.ingestion.platform.framework.core.ListenableFutureAdapter.adapt;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.gmp.ingestion.platform.framework.shutdown.ShutdownRegistry.SHUTDOWN_REGISTRY;
 import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.ERROR;
 import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.PROCESSED;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
@@ -47,6 +50,7 @@ import static java.time.Instant.ofEpochMilli;
 import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.time.ZonedDateTime.ofInstant;
+import static java.util.Collections.shuffle;
 import static java.util.concurrent.TimeUnit.*;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
@@ -55,7 +59,7 @@ import static org.apache.commons.lang3.tuple.Pair.of;
 /**
  * Created by smalik3 on 3/8/16
  */
-public class ScheduleScanner implements Service {
+public class ScheduleScanner implements Service, SupportsShutdown {
 
     public static final String BUCKET_CACHE = "bucketCache";
     public static final String EVENT_SCHEDULER = "event_scheduler";
@@ -100,6 +104,7 @@ public class ScheduleScanner implements Service {
         final TimeUnit checkpointIntervalUnits = TimeUnit.valueOf(PROPS.getProperty("event.bucket.manager.checkpoint.interval.units", MINUTES.name()));
         bucketManager = new BucketManager(lookbackRange, 2 * bucketWidth * 60, dataManager, bucketWidth * 60,
                 checkpointInterval, checkpointIntervalUnits, lookbackRange, hz.hz().getMap(BUCKET_CACHE));
+        SHUTDOWN_REGISTRY.register(this);
     }
 
     @Override
@@ -143,23 +148,16 @@ public class ScheduleScanner implements Service {
                                     return;
                                 }
                                 L.info(format("%s, shards to be processed: => %s", currentBucketId, shards));
-                                final List<Member> members = newArrayList(hz.hz().getCluster().getMembers());
-                                final List<Entry<ZonedDateTime, Integer>> entries = newArrayList(shards.entries());
-                                final Multimap<String, Pair<ZonedDateTime, Integer>> distro = TreeMultimap.create();
-                                final int size = members.size();
-                                for (int i = 0; i < entries.size(); i++) {
-                                    final Entry<ZonedDateTime, Integer> e = entries.get(i);
-                                    distro.put(members.get(i % size).getSocketAddress().toString(), of(e.getKey(), e.getValue()));
-                                }
+                                final LinkedHashMultimap<Member, Pair<ZonedDateTime, Integer>> distro = calculateDistro(shards);
                                 L.info(format("%s, schedule distribution: => " + distro, currentBucketId));
 
+                                final Map<Member, Collection<Pair<ZonedDateTime, Integer>>> map = distro.asMap();
+                                final Iterator<Member> iterator = cycle(map.keySet());
+
+                                final IExecutorService executorService = hz.hz().getExecutorService(EVENT_SCHEDULER);
                                 final int submitRetries = PROPS.getInteger("event.submit.max.retries", 10);
                                 final int submitInitialDelay = PROPS.getInteger("event.submit.initial.delay", 1);
                                 final int submitBackoff = PROPS.getInteger("event.submit.backoff.multiplier", 1);
-
-                                final IExecutorService executorService = hz.hz().getExecutorService(EVENT_SCHEDULER);
-                                final Iterator<Member> iterator = cycle(hz.hz().getCluster().getMembers());
-                                final Map<String, Collection<Pair<ZonedDateTime, Integer>>> map = distro.asMap();
 
                                 final ListenableFuture<List<List<ShardStatus>>> future = successfulAsList(map.entrySet().stream().map(e -> taskExecutor.async(() -> () ->
                                                 transform(submitShards(executorService, iterator.next(), e.getValue(), currentBucketId), ShardStatusList::getList),
@@ -207,6 +205,23 @@ public class ScheduleScanner implements Service {
         }
     }
 
+    private LinkedHashMultimap<Member, Pair<ZonedDateTime, Integer>> calculateDistro(Multimap<ZonedDateTime, Integer> shards) {
+        final Set<Member> ms = newHashSet(hz.hz().getCluster().getMembers());
+        ms.remove(hz.hz().getCluster().getLocalMember());
+        final List<Member> members = newArrayList(ms);
+        shuffle(members);
+        members.add(hz.hz().getCluster().getLocalMember());
+
+        final List<Entry<ZonedDateTime, Integer>> entries = newArrayList(shards.entries());
+        final LinkedHashMultimap<Member, Pair<ZonedDateTime, Integer>> distro = LinkedHashMultimap.create();
+        final int size = members.size();
+        for (int i = 0; i < entries.size(); i++) {
+            final Entry<ZonedDateTime, Integer> e = entries.get(i);
+            distro.put(members.get(i % size), of(e.getKey(), e.getValue()));
+        }
+        return distro;
+    }
+
     private ListenableFuture<ShardStatusList> submitShards(IExecutorService executorService, Member member, Collection<Pair<ZonedDateTime, Integer>> shardsData, ZonedDateTime bucket) {
         L.info(format("%s, submitting  for execution to member %s, shards: %s", bucket, member.getSocketAddress(), shardsData));
         bucketManager.registerForProcessing(shardsData);
@@ -234,15 +249,21 @@ public class ScheduleScanner implements Service {
 
     private final TaskExecutor taskExecutor = new TaskExecutor(newHashSet(Exception.class));
 
-    public void shutdown() {
+    @Override
+    public int priority() {
+        return 0;
+    }
+
+    @Override
+    public ListenableFuture<EventLookup> shutdown() {
         isShutdown.set(true);
-        bucketManager.saveCheckpoint();
         SCHEDULER.shutdown();
         try {
             SCHEDULER.awaitTermination(1, MINUTES);
         } catch (InterruptedException e) {
             L.warn("failed to shutdown the SCHEDULER", e);
         }
+        return null;
     }
 
     public boolean isShutdown() {

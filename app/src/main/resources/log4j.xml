@@ -77,8 +77,14 @@
         <appender-ref ref="console"/>
     </logger>-->
 
-    <logger name="com.datastax.driver.core">
+    <logger name="com.datastax.driver.core.Cluster" additivity="false">
         <level value="DEBUG"/>
+        <appender-ref ref="console"/>
+    </logger>
+
+    <logger name="com.datastax.driver.core.policies" additivity="false">
+        <level value="INFO"/>
+        <appender-ref ref="console"/>
     </logger>
 
 </log4j:configuration>

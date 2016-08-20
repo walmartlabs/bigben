@@ -1,6 +1,9 @@
 package com.walmartlabs.components.scheduler.core;
 
 import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.ListenableScheduledFuture;
+import com.walmart.gmp.ingestion.platform.framework.shutdown.SupportsShutdown;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
@@ -15,6 +18,7 @@ import java.util.function.Predicate;
 
 import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
+import static com.walmart.gmp.ingestion.platform.framework.shutdown.ShutdownRegistry.SHUTDOWN_REGISTRY;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.retryableExceptions;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.fullSelector;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
@@ -27,7 +31,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 /**
  * Created by smalik3 on 7/5/16
  */
-class BucketsLoader {
+class BucketsLoader implements SupportsShutdown {
 
     private static final Logger L = Logger.getLogger(BucketsLoader.class);
 
@@ -41,6 +45,7 @@ class BucketsLoader {
     private final int waitInterval;
     private final TaskExecutor taskExecutor = new TaskExecutor(retryableExceptions);
     private static final Selector<ZonedDateTime, Bucket> SELECTOR = fullSelector(now());
+    private final AtomicReference<ListenableScheduledFuture<?>> runningJob = new AtomicReference<>();
 
     BucketsLoader(int lookbackRange, int fetchSize, Consumer<Bucket> consumer,
                   Predicate<ZonedDateTime> predicate, int bucketWidth,
@@ -53,11 +58,12 @@ class BucketsLoader {
         this.dataManager = dataManager;
         this.bucketId = bucketId;
         waitInterval = PROPS.getInteger("buckets.background.load.wait.interval.seconds", 15);
+        SHUTDOWN_REGISTRY.register(this);
     }
 
     void start() {
         L.info(format("starting the background load of buckets at a rate of %d buckets per %d seconds until %d buckets are loaded", fetchSize, waitInterval, lookbackRange));
-        SCHEDULER.schedule(() -> load(0), 0, SECONDS);
+        runningJob.set(SCHEDULER.schedule(() -> load(0), 0, SECONDS));
     }
 
     private void load(int fromIndex) {
@@ -98,10 +104,27 @@ class BucketsLoader {
                     break;
                 }
             }
-            SCHEDULER.schedule(() -> load(currentBucketIndex.get()), !atLeastOne.get() ? 0 : waitInterval, SECONDS);
+            runningJob.set(SCHEDULER.schedule(() -> load(currentBucketIndex.get()), !atLeastOne.get() ? 0 : waitInterval, SECONDS));
         } catch (Exception e) {
             L.error("could not load buckets: " + this, e);
         }
+    }
+
+    @Override
+    public String name() {
+        return "BucketLoader";
+    }
+
+    @Override
+    public int priority() {
+        return 0;
+    }
+
+    @Override
+    public ListenableFuture<?> shutdown() {
+        if (runningJob.get() != null)
+            runningJob.get().cancel(true);
+        return runningJob.get();
     }
 
     @Override
