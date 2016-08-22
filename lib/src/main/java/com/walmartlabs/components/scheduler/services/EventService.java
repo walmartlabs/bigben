@@ -256,8 +256,8 @@ public class EventService implements SupportsShutdown {
                     eventResponse.setEventTime(eventLookup.getEventTime().toString());
                     return status(NOT_FOUND).entity(eventResponse).build();
                 } else {
+                    event.setPayload(eventLookup.getPayload());
                     if (fire) {
-                        event.setPayload(eventLookup.getPayload());
                         processorRegistry.process(event);
                     }
                     return status(OK).entity(toResponse(event)).build();
