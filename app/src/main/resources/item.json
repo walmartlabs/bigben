@@ -1,7 +1,8 @@
 {
   "entityPackages": [
     "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
-    "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item"
+    "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+    "com.walmart.gmp.feeds"
   ],
   "primaryConfigs": {
     "V1": {

@@ -26,6 +26,7 @@ import java.util.Map.Entry;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V2;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.selector;
 import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.*;
 import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.INPROGRESS;
@@ -96,7 +97,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         L.debug("feed is already marked processed, nothing to do");
                         return immediateFuture(event);
                     case RECEIVED:
-                        L.warn(format("feed %s, is still in received status: %s, marking all items timed out", feedId, ERROR));
+                        L.warn(format("feed %s, is still in received status: %s, marking all items timed out", feedId, feedStatus));
                         entity.setSuccessCount(0);
                         entity.setSystemErrorCount(0);
                         entity.setDataErrorCount(0);
@@ -105,7 +106,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         entity.setModified_dtm(new Date());
                         return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $ -> event);
                     case INPROGRESS:
-                        L.warn(format("feed %s, is still in progress status: %s, initiating the time out procedure", feedId, ERROR));
+                        L.warn(format("feed %s, is still in progress status: %s, initiating the time out procedure", feedId, feedStatus));
                         final Map<ItemStatus, Integer> countsMap = new HashMap<>();
                         return transformAsync(calculateCounts(feedId, -1, countsMap), $ -> {
                             entity.setSuccessCount(countsMap.get(SUCCESS));
@@ -189,8 +190,8 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     @Override
     public void afterPropertiesSet() throws Exception {
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
-        final CqlDAO<?, ?> feedCqlDAO = (CqlDAO<?, ?>) itemDM.unwrap();
+        final CqlDAO<?, ?> feedCqlDAO = (CqlDAO<?, ?>) itemDM.getPrimaryDAO(V2).unwrap();
         itemAM = feedCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
-        fetchSize = PROPS.getInteger("feed.items.fetch.size");
+        fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
     }
 }
