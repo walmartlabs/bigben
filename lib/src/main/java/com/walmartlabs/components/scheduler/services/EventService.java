@@ -25,6 +25,7 @@ import com.walmartlabs.components.scheduler.tasks.StatusTask;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
@@ -216,9 +217,11 @@ public class EventService implements SupportsShutdown {
     }
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<EventKey, Event> eventDM;
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<EventLookupKey, EventLookup> lookUpDM;
 
     @GET

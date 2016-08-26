@@ -4,6 +4,7 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.model.FeedItemStatusKey;
 import com.walmart.gmp.ingestion.platform.framework.data.model.ItemStatusEntity;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.DataProvider;
@@ -30,6 +31,7 @@ public class TestBatchPerf extends AbstractTestNGSpringContextTests {
     }
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<FeedItemStatusKey, ItemStatusEntity> dataManager;
 
     @DataProvider

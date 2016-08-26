@@ -23,6 +23,7 @@ import com.walmartlabs.components.scheduler.services.BulkEventGeneration;
 import com.walmartlabs.components.scheduler.services.EventService;
 import info.archinnov.achilles.persistence.AsyncManager;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
@@ -68,9 +69,11 @@ public class TestEventScheduler extends AbstractTestNGSpringContextTests {
     }
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<EventKey, Event> dataManager;
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<ZonedDateTime, Bucket> bucketDM;
 
     @Autowired

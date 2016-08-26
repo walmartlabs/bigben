@@ -9,6 +9,7 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmartlabs.components.scheduler.utils.BigbenDataManager;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import javax.cache.integration.CacheLoaderException;
 import java.time.ZonedDateTime;
@@ -51,6 +52,7 @@ public class BucketStore implements MapStore<ZonedDateTime, Bucket> {
     private static final Logger L = Logger.getLogger(BucketStore.class);
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private transient DataManager<ZonedDateTime, Bucket> dataManager;
 
     @Override

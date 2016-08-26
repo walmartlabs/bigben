@@ -11,6 +11,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +33,7 @@ public class EventOffsetsStore implements OffsetStore {
     private static final Logger L = Logger.getLogger(EventOffsetsStore.class);
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<EventLookupKey, EventLookup> dm;
 
     private static final Selector<EventLookupKey, EventLookup> selector = selector(EventLookup.class, EventLookup::getPayload);

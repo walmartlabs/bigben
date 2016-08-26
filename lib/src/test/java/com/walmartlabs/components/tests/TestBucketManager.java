@@ -3,6 +3,7 @@ package com.walmartlabs.components.tests;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmartlabs.components.scheduler.core.BucketManager;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
@@ -16,6 +17,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class TestBucketManager extends AbstractTestNGSpringContextTests {
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<?, ?> dm;
 
     @Test

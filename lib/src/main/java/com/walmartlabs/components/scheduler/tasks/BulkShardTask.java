@@ -77,7 +77,7 @@ public class BulkShardTask implements Runnable, Callable<ShardStatusList>, Ident
         }
         final List<String> buckets = shards.stream().map(p -> p.getLeft() + "/" + p.getRight()).collect(toList());
         L.debug(format("%s, executing bulk event task for buckets/shards on node: %s", buckets, hz.getCluster().getLocalMember().getSocketAddress()));
-        final DataManager<?, ?> dm = spring().getBean(DataManager.class);
+        final DataManager<?, ?> dm = spring().getBean("bigbenDataManager", DataManager.class);
         final EventProcessor<Event> ep = spring().getBean(EventEnrichProcessor.class);
         final int maxEvents = PROPS.getInteger("event.max.events.in.memory", 100000);
         final int fetchSizeHint = maxEvents / shards.size();

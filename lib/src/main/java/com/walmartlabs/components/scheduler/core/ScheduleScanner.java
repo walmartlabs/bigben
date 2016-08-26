@@ -20,6 +20,7 @@ import com.walmartlabs.components.scheduler.tasks.ShardStatusList;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
@@ -73,6 +74,7 @@ public class ScheduleScanner implements Service, SupportsShutdown {
     }
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private transient DataManager<ZonedDateTime, Bucket> dataManager;
 
     @Autowired

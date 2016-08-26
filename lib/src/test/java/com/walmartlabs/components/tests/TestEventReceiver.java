@@ -11,6 +11,7 @@ import com.walmartlabs.components.scheduler.entities.EventLookup;
 import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
 import com.walmartlabs.components.scheduler.input.EventReceiver;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
@@ -46,12 +47,15 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
     private EventReceiver eventReceiver;
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<EventLookupKey, EventLookup> lookupManager;
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<EventKey, Event> eventDataManager;
 
     @Autowired
+    @Qualifier("bigbenDataManager")
     private DataManager<ZonedDateTime, Bucket> bucketDataManager;
 
     @Test
