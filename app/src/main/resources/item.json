@@ -1,0 +1,30 @@
+{
+  "entityPackages": [
+    "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+    "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item"
+  ],
+  "primaryConfigs": {
+    "V1": {
+      "ccmPath": "partner-data-ingestor-app/application/secondaryCassandraConfig",
+      "mode": "RW",
+      "tenancyConfigs": [
+        {
+          "ccmPath": "partner-data-ingestor-app/application/cassandraConfig_k3",
+          "type": "DB"
+        }
+      ],
+      "type": "DB"
+    },
+    "V2": {
+      "type": "DB",
+      "ccmPath": "partner-data-ingestor-app/application/secondaryCassandraConfig",
+      "mode": "RW",
+      "tenancyConfigs": [
+        {
+          "ccmPath": "partner-data-ingestor-app/application/cassandraConfig_k3",
+          "type": "DB"
+        }
+      ]
+    }
+  }
+}

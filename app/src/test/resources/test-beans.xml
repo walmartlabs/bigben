@@ -1,0 +1,18 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="itemDM" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
+        <constructor-arg value="file://item.json"/>
+    </bean>
+
+    <bean class="com.walmart.gmp.feeds.FeedStatusAndCountsChecker">
+        <constructor-arg>
+            <map>
+                <entry key="item" value-ref="itemDM"/>
+                <entry key="feed" value-ref="itemDM"/>
+            </map>
+        </constructor-arg>
+    </bean>
+</beans>

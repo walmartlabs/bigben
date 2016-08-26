@@ -53,7 +53,7 @@
 
     <bean class="com.walmartlabs.components.scheduler.processors.EventEnrichProcessor">
         <constructor-arg index="0" ref="processRegistry"/>
-        <constructor-arg index="1" ref="dataManager"/>
+        <constructor-arg index="1" ref="bigbenDataManager"/>
     </bean>
 
 </beans>

@@ -7,7 +7,7 @@
     <display-name>Distributed Event Scheduler App</display-name>
     <context-param>
         <param-name>contextConfigLocation</param-name>
-        <param-value>WEB-INF/beans.xml</param-value>
+        <param-value>classpath*:bigben.xml</param-value>
     </context-param>
 
     <listener>
@@ -16,7 +16,8 @@
 
     <servlet>
         <servlet-name>CXFServlet</servlet-name>
-        <servlet-class>com.walmart.gmp.ingestion.platform.framework.shutdown.ShutdownSupportingCXFServlet</servlet-class>
+        <servlet-class>com.walmart.gmp.ingestion.platform.framework.shutdown.ShutdownSupportingCXFServlet
+        </servlet-class>
         <load-on-startup>1</load-on-startup>
     </servlet>
 

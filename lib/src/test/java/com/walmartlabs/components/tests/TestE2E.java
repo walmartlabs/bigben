@@ -28,7 +28,6 @@ import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
-import static java.util.concurrent.Executors.unconfigurableExecutorService;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**

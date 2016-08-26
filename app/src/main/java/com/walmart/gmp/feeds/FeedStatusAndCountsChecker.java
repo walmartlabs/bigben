@@ -3,6 +3,7 @@ package com.walmart.gmp.feeds;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
+import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.gmp.ingestion.platform.framework.data.model.FeedItemStatusKey;
 import com.walmart.gmp.ingestion.platform.framework.data.model.FeedStatusEntity;
@@ -15,7 +16,6 @@ import com.walmartlabs.components.scheduler.processors.EventProcessor;
 import info.archinnov.achilles.persistence.AsyncManager;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -27,8 +27,8 @@ import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.selector;
-import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.ERROR;
-import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.PROCESSED;
+import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.*;
+import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.INPROGRESS;
 import static com.walmart.partnerapi.model.v2.ItemStatus.*;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
@@ -42,12 +42,6 @@ import static java.util.stream.Collectors.toList;
 public class FeedStatusAndCountsChecker implements EventProcessor<Event>, InitializingBean {
 
     private static final Logger L = Logger.getLogger(FeedStatusAndCountsChecker.class);
-
-    @Autowired
-    private DataManager<String, FeedStatusEntity> feedDM;
-
-    @Autowired
-    private DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM;
 
     private AsyncManager itemAM;
 
@@ -63,9 +57,21 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 e.getFeed_status();
             });
 
+    private final Map<String, DataManager<?, ?>> map;
+
+    public FeedStatusAndCountsChecker(Map<String, DataManager<?, ?>> map) {
+        this.map = map;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <K, T extends Entity<K>> DataManager<K, T> dm(String key) {
+        return (DataManager<K, T>) map.get(key);
+    }
+
     @Override
     public ListenableFuture<Event> process(Event event) {
         L.debug("processing feed event for status and counts: " + event.getPayload());
+        final DataManager<String, FeedStatusEntity> feedDM = dm("feed");
         try {
             final String feedId = event.getXrefId();
             return transformAsync(feedDM.getAsync(feedId, feedSelector), fes -> {
@@ -85,7 +91,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         return immediateFuture(event);
                     }
                 }
-                switch (FeedStatus.valueOf(feedStatus)) {
+                switch (FeedStatus.valueOf(feedStatus == null ? INPROGRESS.name() : feedStatus)) {
                     case PROCESSED:
                         L.debug("feed is already marked processed, nothing to do");
                         return immediateFuture(event);
@@ -137,6 +143,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     private static final ListenableFuture<List<StrippedItemDO>> DONE = immediateFuture(null);
 
     private ListenableFuture<List<StrippedItemDO>> calculateCounts(String feedId, int itemIndex, Map<ItemStatus, Integer> counts) {
+        final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
         @SuppressWarnings("unchecked")
         final ListenableFuture<List<StrippedItemDO>> f =
                 itemDM.async(() -> itemAM.sliceQuery(StrippedItemDO.class).forSelect().
@@ -174,12 +181,14 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             L.debug("marking item as timed out: " + k);
             entity.setItem_processing_status(TIMEOUT_ERROR.name());
             entity.setModified_dtm(new Date());
+            final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
             return itemDM.saveAsync(entity);
         }).collect(toList())), (Function<List<ItemStatusEntity>, List<StrippedItemDO>>) $ -> inprogress);
     }
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
         final CqlDAO<?, ?> feedCqlDAO = (CqlDAO<?, ?>) itemDM.unwrap();
         itemAM = feedCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
         fetchSize = PROPS.getInteger("feed.items.fetch.size");
