@@ -17,12 +17,11 @@ import info.archinnov.achilles.persistence.AsyncManager;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.InitializingBean;
 
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
 
+import static com.google.common.collect.Iterables.concat;
+import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
@@ -108,7 +107,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                     case INPROGRESS:
                         L.warn(format("feed %s, is still in progress status: %s, initiating the time out procedure", feedId, feedStatus));
                         final Map<ItemStatus, Integer> countsMap = new HashMap<>();
-                        return transformAsync(calculateCounts(feedId, -1, countsMap), $ -> {
+                        return transformAsync(calculateCounts(feedId, itemCount, PROPS.getInteger("feeds.shard.size", 1000), countsMap), $ -> {
                             entity.setSuccessCount(countsMap.get(SUCCESS));
                             entity.setSystemErrorCount(countsMap.get(SYSTEM_ERROR));
                             entity.setDataErrorCount(countsMap.get(DATA_ERROR));
@@ -143,12 +142,23 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
 
     private static final ListenableFuture<List<StrippedItemDO>> DONE = immediateFuture(null);
 
-    private ListenableFuture<List<StrippedItemDO>> calculateCounts(String feedId, int itemIndex, Map<ItemStatus, Integer> counts) {
+    private ListenableFuture<List<StrippedItemDO>> calculateCounts(String feedId, int itemCount, int shardSize, Map<ItemStatus, Integer> counts) {
+        int numShards = itemCount % shardSize == 0 ? itemCount / shardSize : 1 + itemCount / shardSize;
+        final List<Integer> shards = new ArrayList<>();
+        for (int i = 0; i < numShards; i++) {
+            shards.add(i);
+        }
+        L.info(format("calculating counts for feed Id: %s, spanning over shards: %s", feedId, shards));
+        return transform(allAsList(shards.stream().map(shard -> calculateCounts0(feedId, shard, -1, counts)).collect(toList())),
+                (Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>) ll -> newArrayList(concat(ll)));
+    }
+
+    private ListenableFuture<List<StrippedItemDO>> calculateCounts0(String feedId, int shard, int itemIndex, Map<ItemStatus, Integer> counts) {
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
         @SuppressWarnings("unchecked")
         final ListenableFuture<List<StrippedItemDO>> f =
                 itemDM.async(() -> itemAM.sliceQuery(StrippedItemDO.class).forSelect().
-                        withPartitionComponents(feedId).fromClusterings(itemIndex).withExclusiveBounds().
+                        withPartitionComponents(feedId, shard).fromClusterings(itemIndex).withExclusiveBounds().
                         limit(fetchSize).get(), "fetch-feed-items:" + feedId + "(" + itemIndex + ", Inf)");
         return transformAsync(f, l -> {
             final List<StrippedItemDO> inprogress = l.stream().filter(e -> "INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
@@ -164,8 +174,8 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             if (l.isEmpty() || l.size() < fetchSize) {
                 return inprogress.isEmpty() ? DONE : tof(inprogress);
             } else
-                return inprogress.isEmpty() ? calculateCounts(feedId, l.get(l.size() - 1).getId().getSkuIndex(), counts) :
-                        transform(allAsList(calculateCounts(feedId, l.get(l.size() - 1).getId().getSkuIndex(), counts), tof(inprogress)),
+                return inprogress.isEmpty() ? calculateCounts0(feedId, shard, l.get(l.size() - 1).getId().getSkuIndex(), counts) :
+                        transform(allAsList(calculateCounts0(feedId, shard, l.get(l.size() - 1).getId().getSkuIndex(), counts), tof(inprogress)),
                                 new Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>() {
                                     @Override
                                     public List<StrippedItemDO> apply(List<List<StrippedItemDO>> ll) {
