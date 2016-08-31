@@ -8,6 +8,8 @@ import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.gmp.ingestion.platform.framework.data.model.FeedItemStatusKey;
 import com.walmart.gmp.ingestion.platform.framework.data.model.FeedStatusEntity;
 import com.walmart.gmp.ingestion.platform.framework.data.model.ItemStatusEntity;
+import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexEntity;
+import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexKey;
 import com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus;
 import com.walmart.partnerapi.model.v2.ItemStatus;
 import com.walmart.services.nosql.data.CqlDAO;
@@ -125,6 +127,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                                 L.info(format("feed: %s has timed out, marking the final status and counts: %s", feedId, countsMap));
                                 entity.setTimeoutErrorCount(itemCount - nonTimeOuts);
                             }
+                            entity.setFeed_status(PROCESSED.name());
                             entity.setModified_dtm(new Date());
                             return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $$ -> event);
                         });
@@ -149,8 +152,8 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             shards.add(i);
         }
         L.info(format("calculating counts for feed Id: %s, spanning over shards: %s", feedId, shards));
-        return transform(allAsList(shards.stream().map(shard -> calculateCounts0(feedId, shard, -1, counts)).collect(toList())),
-                (Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>) ll -> newArrayList(concat(ll)));
+        return transform(allAsList(shards.stream().map(shard -> calculateCounts0(feedId, shard, -1, counts)).filter(out -> out != null).collect(toList())),
+                (Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>)  ll -> { if(ll == null) {  return null; } else{ return newArrayList(concat(ll.stream().filter(strippedItemDOs -> strippedItemDOs != null).collect(toList())));}});
     }
 
     private ListenableFuture<List<StrippedItemDO>> calculateCounts0(String feedId, int shard, int itemIndex, Map<ItemStatus, Integer> counts) {
@@ -162,15 +165,21 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         limit(fetchSize).get(), "fetch-feed-items:" + feedId + "(" + itemIndex + ", Inf)");
         return transformAsync(f, l -> {
             final List<StrippedItemDO> inprogress = l.stream().filter(e -> "INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
+            final List<StrippedItemDO> doneItems = l.stream().filter(e -> !"INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
+
             if (!inprogress.isEmpty()) {
                 L.warn(format("feedId: %s, following items are still in progress, marking them timed out: " + inprogress, feedId));
             }
-            l.forEach(e -> {
+            if(doneItems != null) {
+            doneItems.forEach(e -> {
                 final ItemStatus status = ItemStatus.valueOf(e.getItem_processing_status());
                 if (!counts.containsKey(status))
                     counts.put(status, 0);
                 counts.put(status, counts.get(status) + 1);
             });
+                updateSolr(doneItems);
+            }
+
             if (l.isEmpty() || l.size() < fetchSize) {
                 return inprogress.isEmpty() ? DONE : tof(inprogress);
             } else
@@ -193,8 +202,31 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             entity.setItem_processing_status(TIMEOUT_ERROR.name());
             entity.setModified_dtm(new Date());
             final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
-            return itemDM.saveAsync(entity);
+            return saveBothDM(entity);
         }).collect(toList())), (Function<List<ItemStatusEntity>, List<StrippedItemDO>>) $ -> inprogress);
+    }
+
+    private ListenableFuture<ItemStatusEntity> saveBothDM(ItemStatusEntity entity) {
+        final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
+        final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> item_index_dm = dm("item_index");
+        final V2ItemStatusIndexEntity v2entity =  entity(V2ItemStatusIndexEntity.class, V2ItemStatusIndexKey.from(FeedItemStatusKey.of(entity.id().getFeedId(), entity.id().getShard(), entity.id().getSku(), entity.id().getSkuIndex())));
+        L.debug("marking item as timed out: " + item_index_dm);
+        v2entity.setItem_processing_status(entity.getItem_processing_status());
+        v2entity.setModified_dtm(new Date());
+        item_index_dm.saveAsync(v2entity);
+        return itemDM.saveAsync(entity);
+    }
+
+
+    private ListenableFuture<List<StrippedItemDO>> updateSolr(List<StrippedItemDO> done) {
+        return transform(allAsList(done.stream().map(k -> {
+            final V2ItemStatusIndexEntity v2entity =  entity(V2ItemStatusIndexEntity.class, V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(), k.getId().getSku(), k.getId().getSkuIndex())));
+            L.debug("marking item as timed out: " + k);
+            v2entity.setItem_processing_status(k.getItem_processing_status());
+            v2entity.setModified_dtm(new Date());
+            final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> itemDM = dm("item_index");
+            return itemDM.saveAsync(v2entity);
+        }).collect(toList())), (Function<List<V2ItemStatusIndexEntity>, List<StrippedItemDO>>) $ -> done);
     }
 
     @Override
@@ -202,6 +234,6 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
         final CqlDAO<?, ?> feedCqlDAO = (CqlDAO<?, ?>) itemDM.getPrimaryDAO(V2).unwrap();
         itemAM = feedCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
-        fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
+       fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
     }
 }

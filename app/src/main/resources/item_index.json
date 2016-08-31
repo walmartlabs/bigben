@@ -1,0 +1,12 @@
+{
+  "entityPackages": [
+    "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index"
+  ],
+  "primaryConfigs": {
+    "V2": {
+      "type": "DB",
+      "ccmPath": "partner-data-ingestor-app/application/secondaryCassandraConfig",
+      "mode": "RW"
+    }
+  }
+}
