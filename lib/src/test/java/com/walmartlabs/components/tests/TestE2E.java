@@ -2,11 +2,17 @@ package com.walmartlabs.components.tests;
 
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.MessagePublisher;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.PublisherFactory;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean;
 import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.processors.TopicMessageProcessor;
 import com.walmart.marketplace.messages.v1_bigben.EventRequest;
+import com.walmartlabs.components.scheduler.entities.Event;
+import com.walmartlabs.components.scheduler.entities.EventDO;
+import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
+import com.walmartlabs.components.scheduler.utils.TimeUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
@@ -28,6 +34,7 @@ import static java.time.ZoneOffset.UTC;
 import static java.time.ZonedDateTime.now;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static java.util.concurrent.TimeUnit.HOURS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -41,6 +48,17 @@ public class TestE2E extends AbstractTestNGSpringContextTests {
         setProperty("com.walmart.platform.config.appName", "gmp-solr-consumer");
         setProperty("ccmProps", "bigbenProps");
         setProperty("hz.config", "hz_local");
+    }
+
+    @Autowired
+    private ProcessorRegistry processorRegistry;
+
+    @Test
+    public void testSerialization() throws InterruptedException, ExecutionException, TimeoutException {
+        Event sandeep = DataManager.raw(DataManager.entity(Event.class, EventDO.EventKey.of(TimeUtils.nowUTC(), 1, now(), "sandeep")));
+        sandeep.setTenant("PROMO/STG");
+        sandeep.setPayload("{x:y}");
+        processorRegistry.process(sandeep).get(2, HOURS);
     }
 
     @Test
