@@ -51,7 +51,7 @@
         <appender-ref ref="console"/>
     </logger>
 
-    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.BatchProcessor"
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.processors.BatchProcessor"
             additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
