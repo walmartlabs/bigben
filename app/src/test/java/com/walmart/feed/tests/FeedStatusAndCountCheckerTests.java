@@ -24,6 +24,7 @@ public class FeedStatusAndCountCheckerTests extends AbstractTestNGSpringContextT
     static {
         System.setProperty("dm.entity.packages.scan", "com.walmart.gmp.ingestion.platform.framework.data.model");
         System.setProperty("com.walmart.platform.config.runOnEnv", "stg0");
+        System.setProperty("com.walmart.platform.config.appName", "event-scheduler-app");
     }
 
     @Autowired
