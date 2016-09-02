@@ -114,7 +114,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         entity.setModified_dtm(new Date());
                         return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $ -> event);
                     case INPROGRESS:
-                        L.warn(format("feed %s, is still in progress status: %s, initiating the time out procedure", feedId, feedStatus));
+                        L.info(format("feed %s, is still in progress status: %s, initiating the time out procedure", feedId, feedStatus));
                         final Map<ItemStatus, Integer> countsMap = new HashMap<>();
                         return transformAsync(calculateCounts(feedId, itemCount, PROPS.getInteger("feeds.shard.size", 1000), countsMap), $ -> {
                             entity.setSuccessCount(countsMap.get(SUCCESS));
@@ -128,7 +128,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                                 else timeOuts += e.getValue();
                             }
                             if (nonTimeOuts + timeOuts == itemCount) {
-                                L.warn(format("feed: %s, was done, but counts were not synced up, syncing them, counts are: %s", feedId, countsMap));
+                                L.info(format("feed: %s, was done, but counts were not synced up, syncing them, counts are: %s", feedId, countsMap));
                                 entity.setTimeoutErrorCount(countsMap.get(TIMEOUT_ERROR));
                             } else {
                                 L.info(format("feed: %s has timed out, marking the final status and counts: %s", feedId, countsMap));
