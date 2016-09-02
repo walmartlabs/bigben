@@ -24,12 +24,10 @@ import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
 import info.archinnov.achilles.persistence.AsyncManager;
 import info.archinnov.achilles.type.Empty;
 import org.apache.log4j.Logger;
-import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 
-import javax.cache.processor.EntryProcessorException;
 import java.io.IOException;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -144,7 +142,6 @@ public class EventReceiver implements InitializingBean {
         });
     }
 
-    @Nullable
     private ListenableFuture<EventResponse> validate(EventRequest eventRequest) {
         if (eventRequest.getTenant() == null) {
             final EventResponse eventResponse = fromRequest(eventRequest);
@@ -190,7 +187,7 @@ public class EventReceiver implements InitializingBean {
 
     private static class CountIncrementer extends AbstractIDSGMPEntryProcessor<ZonedDateTime, Bucket> {
         @Override
-        public Long process(Entry<ZonedDateTime, Bucket> entry) throws EntryProcessorException {
+        public Long process(Entry<ZonedDateTime, Bucket> entry) {
             final Bucket b = entry.getValue() == null ? new BucketDO() : entry.getValue();
             b.setCount(b.getCount() + 1);
             b.setUpdatedAt(nowUTC());

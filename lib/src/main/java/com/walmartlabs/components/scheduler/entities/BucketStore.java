@@ -11,7 +11,6 @@ import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 
-import javax.cache.integration.CacheLoaderException;
 import java.time.ZonedDateTime;
 import java.util.Collection;
 import java.util.HashMap;
@@ -121,7 +120,7 @@ public class BucketStore implements MapStore<ZonedDateTime, Bucket> {
         }
     }
 
-    private ListenableFuture<Bucket> load0(ZonedDateTime key) throws CacheLoaderException {
+    private ListenableFuture<Bucket> load0(ZonedDateTime key) {
         L.debug("loading data for key " + key);
         return transform(dataManager.getAsync(key, fullSelector(key)), //TODO: don't use full selector, no need to load the error
                 (com.google.common.base.Function<Bucket, Bucket>) DataManager::raw);
