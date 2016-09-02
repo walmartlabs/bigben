@@ -6,7 +6,7 @@
     <import resource="classpath*:scheduler-beans.xml"/>
 
     <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
-        <constructor-arg index="0" value="bbSimulationCodes.json"/>
+        <constructor-arg index="0" value="WEB-INF/bbSimulationCodes.json"/>
     </bean>
 
     <bean id="processRegistry" class="com.walmartlabs.components.scheduler.processors.ProcessorRegistry">
