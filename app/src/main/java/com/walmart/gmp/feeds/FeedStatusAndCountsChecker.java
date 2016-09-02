@@ -59,10 +59,17 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 e.getFeed_status();
             });
 
-    private final Map<String, DataManager<?, ?>> map;
+    private final Map<String, DataManager<?, ?>> map = new HashMap<>();
 
-    public FeedStatusAndCountsChecker(Map<String, DataManager<?, ?>> map) {
-        this.map = map;
+    public FeedStatusAndCountsChecker(Map<String, Object> properties) throws Exception {
+        createDM(properties.get("feedDMCCMPath"), "feed");
+        createDM(properties.get("itemDMCCMPath"), "item");
+        createDM(properties.get("itemIndexDMCCMPath"), "item_index");
+    }
+
+    public void createDM(Object ccmPath, Object dmName) throws Exception {
+        final DataManager<Object, Entity<Object>> dm = new DataManager<>(ccmPath.toString());
+        map.put(dmName.toString(), dm);
     }
 
     @SuppressWarnings("unchecked")
@@ -153,7 +160,13 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         }
         L.info(format("calculating counts for feed Id: %s, spanning over shards: %s", feedId, shards));
         return transform(allAsList(shards.stream().map(shard -> calculateCounts0(feedId, shard, -1, counts)).filter(out -> out != null).collect(toList())),
-                (Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>)  ll -> { if(ll == null) {  return null; } else{ return newArrayList(concat(ll.stream().filter(strippedItemDOs -> strippedItemDOs != null).collect(toList())));}});
+                (Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>) ll -> {
+                    if (ll == null) {
+                        return null;
+                    } else {
+                        return newArrayList(concat(ll.stream().filter(strippedItemDOs -> strippedItemDOs != null).collect(toList())));
+                    }
+                });
     }
 
     private ListenableFuture<List<StrippedItemDO>> calculateCounts0(String feedId, int shard, int itemIndex, Map<ItemStatus, Integer> counts) {
@@ -170,13 +183,13 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             if (!inprogress.isEmpty()) {
                 L.warn(format("feedId: %s, following items are still in progress, marking them timed out: " + inprogress, feedId));
             }
-            if(doneItems != null) {
-            doneItems.forEach(e -> {
-                final ItemStatus status = ItemStatus.valueOf(e.getItem_processing_status());
-                if (!counts.containsKey(status))
-                    counts.put(status, 0);
-                counts.put(status, counts.get(status) + 1);
-            });
+            if (doneItems != null) {
+                doneItems.forEach(e -> {
+                    final ItemStatus status = ItemStatus.valueOf(e.getItem_processing_status());
+                    if (!counts.containsKey(status))
+                        counts.put(status, 0);
+                    counts.put(status, counts.get(status) + 1);
+                });
                 updateSolr(doneItems);
             }
 
@@ -209,7 +222,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     private ListenableFuture<ItemStatusEntity> saveBothDM(ItemStatusEntity entity) {
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
         final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> item_index_dm = dm("item_index");
-        final V2ItemStatusIndexEntity v2entity =  entity(V2ItemStatusIndexEntity.class, V2ItemStatusIndexKey.from(FeedItemStatusKey.of(entity.id().getFeedId(), entity.id().getShard(), entity.id().getSku(), entity.id().getSkuIndex())));
+        final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class, V2ItemStatusIndexKey.from(FeedItemStatusKey.of(entity.id().getFeedId(), entity.id().getShard(), entity.id().getSku(), entity.id().getSkuIndex())));
         L.debug("marking item as timed out: " + item_index_dm);
         v2entity.setItem_processing_status(entity.getItem_processing_status());
         v2entity.setModified_dtm(new Date());
@@ -220,7 +233,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
 
     private ListenableFuture<List<StrippedItemDO>> updateSolr(List<StrippedItemDO> done) {
         return transform(allAsList(done.stream().map(k -> {
-            final V2ItemStatusIndexEntity v2entity =  entity(V2ItemStatusIndexEntity.class, V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(), k.getId().getSku(), k.getId().getSkuIndex())));
+            final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class, V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(), k.getId().getSku(), k.getId().getSkuIndex())));
             L.debug("marking item as timed out: " + k);
             v2entity.setItem_processing_status(k.getItem_processing_status());
             v2entity.setModified_dtm(new Date());
@@ -234,6 +247,6 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
         final CqlDAO<?, ?> feedCqlDAO = (CqlDAO<?, ?>) itemDM.getPrimaryDAO(V2).unwrap();
         itemAM = feedCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
-       fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
+        fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
     }
 }

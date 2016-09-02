@@ -20,6 +20,7 @@ import org.apache.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -181,7 +182,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                             @SuppressWarnings("unchecked")
                             final Class<EventProcessor<Event>> eventProcessorClass =
                                     (Class<EventProcessor<Event>>) Class.forName(processorConfig.getProperties().get("eventProcessorClass").toString());
-                            return eventProcessorClass.newInstance();
+                            return eventProcessorClass.getConstructor(Map.class).newInstance(processorConfig.getProperties());
                         } catch (Exception ex) {
                             throw new RuntimeException(ex);
                         }

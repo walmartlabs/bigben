@@ -27,5 +27,33 @@
         }
       ]
     }
+  },
+  "secondaryConfigs": {
+    "V1": [
+      {
+        "ccmPath": "partner-data-ingestor-app/application/cassandraConfigQA",
+        "mode": "RW",
+        "tenancyConfigs": [
+          {
+            "ccmPath": "partner-data-ingestor-app/application/cassandraConfig_k3",
+            "type": "DB"
+          }
+        ],
+        "type": "DB"
+      }
+    ],
+    "V2": [
+      {
+        "type": "DB",
+        "ccmPath": "partner-data-ingestor-app/application/cassandraConfigQA",
+        "mode": "RW",
+        "tenancyConfigs": [
+          {
+            "ccmPath": "partner-data-ingestor-app/application/cassandraConfigQA",
+            "type": "DB"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,0 +1,22 @@
+[
+  {
+    "tenant": "GMP/KAFKA/FEED_STATUS/stg0",
+    "type": "CUSTOM_CLASS",
+    "properties": {
+      "eventProcessorClass": "com.walmart.gmp.feeds.FeedStatusAndCountsChecker",
+      "feedDMCCMPath": "file://feed.json",
+      "itemDMCCMPath": "file://item.json",
+      "itemIndexDMCCMPath": "file://item_index.json"
+    }
+  },
+  {
+    "tenant": "GMP/KAFKA/FEED_STATUS/dev",
+    "type": "CUSTOM_CLASS",
+    "properties": {
+      "eventProcessorClass": "com.walmart.gmp.feeds.FeedStatusAndCountsChecker",
+      "feedDMCCMPath": "",
+      "itemDMCCMPath": "",
+      "itemIndexDMCCMPath": ""
+    }
+  }
+]
