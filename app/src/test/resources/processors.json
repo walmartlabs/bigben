@@ -4,9 +4,9 @@
     "type": "CUSTOM_CLASS",
     "properties": {
       "eventProcessorClass": "com.walmart.gmp.feeds.FeedStatusAndCountsChecker",
-      "feedDMCCMPath": "file://feed.json",
-      "itemDMCCMPath": "file://item.json",
-      "itemIndexDMCCMPath": "file://item_index.json"
+      "feedDMCCMPath": "ccm://feedstatus/feed",
+      "itemDMCCMPath": "ccm://feedstatus/item",
+      "itemIndexDMCCMPath": "ccm://feedstatus/item_index"
     }
   },
   {
