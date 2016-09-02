@@ -5,33 +5,13 @@
 
     <import resource="classpath*:scheduler-beans.xml"/>
 
-    <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
+   <bean class="com.walmart.gmp.ingestion.platform.simulations.SimulationCodes">
         <constructor-arg index="0" value="bbSimulationCodes.json"/>
     </bean>
 
     <bean id="processRegistry" class="com.walmartlabs.components.scheduler.processors.ProcessorRegistry">
         <constructor-arg index="0" value="ccm://bigbenProps/processors"/>
         <constructor-arg index="1" value="false"/>
-    </bean>
-
-    <bean id="itemDM" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
-        <constructor-arg value="file://item.json"/>
-    </bean>
-    <bean id="feedDM" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
-        <constructor-arg value="file://feed.json"/>
-    </bean>
-    <bean id="itemIndexDM" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
-        <constructor-arg value="file://item_index.json"/>
-    </bean>
-
-    <bean class="com.walmart.gmp.feeds.FeedStatusAndCountsChecker">
-        <constructor-arg>
-            <map>
-                <entry key="item" value-ref="itemDM"/>
-                <entry key="feed" value-ref="feedDM"/>
-                <entry key="item_index" value-ref="itemIndexDM"/>
-            </map>
-        </constructor-arg>
     </bean>
 
     <bean id="provider" class="com.walmart.platform.soa.common.providers.SOAJSONJAXBProvider"/>

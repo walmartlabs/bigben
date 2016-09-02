@@ -3,16 +3,6 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
 
-    <!--<bean id="itemDM" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
-        <constructor-arg value="file://item.json"/>
-    </bean>
-    <bean id="feedDM" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
-        <constructor-arg value="file://feed.json"/>
-    </bean>
-    <bean id="itemIndexDM" class="com.walmart.gmp.ingestion.platform.framework.data.core.DataManager">
-        <constructor-arg value="file://item_index.json"/>
-    </bean>-->
-
     <bean id="processRegistry" class="com.walmartlabs.components.scheduler.processors.ProcessorRegistry">
         <constructor-arg index="0" value="file://processors.json"/>
         <constructor-arg index="1" value="false"/>
