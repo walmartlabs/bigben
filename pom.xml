@@ -3,7 +3,7 @@
   <groupId>com.walmartlabs.components</groupId>
   <artifactId>dis-evt-sch</artifactId>
   <packaging>pom</packaging>
-  <version>0.16-SNAPSHOT</version>
+  <version>0.17-SNAPSHOT</version>
   <modules>
     <module>lib</module>
     <module>app</module>
