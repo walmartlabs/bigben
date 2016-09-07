@@ -151,8 +151,9 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                                 public Response onCompleted(Response response) throws Exception {
                                     final int code = response.getStatusCode();
                                     if ((code >= 200 && code < 300) || (code >= 400 && code < 500)) {
-                                        if (code < 400 && L.isDebugEnabled()) {
-                                            L.debug(format("event processed successfully, response code: %d, response body: %s, event: %s", code, response.getResponseBody(), e));
+                                        if (code < 400) {
+                                            if (L.isDebugEnabled())
+                                                L.debug(format("event processed successfully, response code: %d, response body: %s, event: %s", code, response.getResponseBody(), e));
                                         } else {
                                             L.warn(format("got a 'bad request' response with status code: %d, event will not be retried anymore", code));
                                             e.setError(response.getResponseBody());
