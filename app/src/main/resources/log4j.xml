@@ -34,11 +34,15 @@
     </logger>
 
     <logger name="com.walmartlabs.components.scheduler.utils.EventOffsetsStore"
+                     additivity="false">
+    <level value="DEBUG"/>
+    <appender-ref ref="console"/>
+</logger>
+    <logger name="com.walmart.gmp.feeds.FeedStatusAndCountsChecker"
             additivity="false">
-        <level value="DEBUG"/>
+        <level value="PERF"/>
         <appender-ref ref="console"/>
     </logger>
-
     <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets.OffsetManager"
             additivity="false">
         <level value="DEBUG"/>
