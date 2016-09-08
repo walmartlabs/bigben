@@ -294,12 +294,14 @@ public class EventReceiver implements InitializingBean {
         });
     }
 
-    private static final EventKey EMPTY_KEY = new EventKey();
-
     public static Event toEvent(EventResponse e) {
-        final Event event = raw(entity(Event.class, EMPTY_KEY));
+        final ZonedDateTime eventTime = parse(e.getEventTime());
+        final EventKey eventKey = EventKey.of(utc(bucketize(eventTime.toInstant().toEpochMilli(), PROPS.getInteger("event.schedule.scan.interval.minutes", 1))), -1, eventTime, e.getEventId() == null ? e.getId() : e.getEventId());
+        final Event event = raw(entity(Event.class, eventKey));
         event.setTenant(e.getTenant());
         event.setError(null);
+        event.setPayload(e.getPayload());
+        event.setXrefId(e.getId());
         ((EventResponseMixin) event).setEventResponse(e);
         e.setTriggeredAt(nowUTC().toString());
         return event;

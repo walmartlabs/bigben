@@ -79,6 +79,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
     public ListenableFuture<Event> process(Event event) {
         try {
             event.setStatus(TRIGGERED.name());
+            event.setError(null);
             event.setProcessedAt(now(UTC));
             return catchingAsync(transform(taskExecutor.async(() -> getOrCreate(event.getTenant()).process(event), "processor-event-id:" + event.id(),
                     PROPS.getInteger("event.processor.max.retries", 3),
@@ -177,14 +178,14 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                         return future;
                     });
                 case CUSTOM_CLASS:
-                   return  processorCache.get(tenant, () -> {
+                    return processorCache.get(tenant, () -> {
                         try {
                             @SuppressWarnings("unchecked")
                             final Class<EventProcessor<Event>> eventProcessorClass =
                                     (Class<EventProcessor<Event>>) Class.forName(processorConfig.getProperties().get("eventProcessorClass").toString());
                             return eventProcessorClass.getConstructor(Map.class).newInstance(processorConfig.getProperties());
                         } catch (Exception ex) {
-                            throw new RuntimeException(ex);
+                            throw new RuntimeException(getRootCause(ex));
                         }
                     });
                 case CUSTOM_BEAN:
