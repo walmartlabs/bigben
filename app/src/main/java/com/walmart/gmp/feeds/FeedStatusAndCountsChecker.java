@@ -65,6 +65,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         createDM(properties.get("feedDMCCMPath"), "feed");
         createDM(properties.get("itemDMCCMPath"), "item");
         createDM(properties.get("itemIndexDMCCMPath"), "item_index");
+        afterPropertiesSet();
     }
 
     public void createDM(Object ccmPath, Object dmName) throws Exception {

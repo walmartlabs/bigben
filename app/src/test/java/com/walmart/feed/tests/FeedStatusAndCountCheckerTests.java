@@ -22,7 +22,7 @@ import static java.util.concurrent.TimeUnit.HOURS;
 public class FeedStatusAndCountCheckerTests extends AbstractTestNGSpringContextTests {
 
     static {
-        String packages = "com.walmartlabs.components.scheduler.entities,com.walmart.gmp.ingestion.platform.framework.data.model.impl";
+        String packages = "com.walmartlabs.components.scheduler.entities,com.walmart.gmp.ingestion.platform.framework.data.model.impl,com.walmart.gmp.feeds";
         System.setProperty("dm.entity.packages.scan", packages);
         System.setProperty("com.walmart.platform.config.runOnEnv", "stg0");
         System.setProperty("com.walmart.platform.config.appName", "event-scheduler-app");
@@ -34,9 +34,9 @@ public class FeedStatusAndCountCheckerTests extends AbstractTestNGSpringContextT
     @Test
     public void testFeedStatus() throws ExecutionException, InterruptedException, TimeoutException {
         final EventDO eventDO = new EventDO();
-        eventDO.setXrefId("4ED9379B92CF4EF7B5974594BE2FEE82@AQYBAAA");
+        eventDO.setXrefId("54547BE79897404A9F34D5AB2DF484BC@AQMBAQA");
         eventDO.setTenant("GMP/KAFKA/FEED_STATUS/stg0");
-        eventDO.setPayload("4ED9379B92CF4EF7B5974594BE2FEE82@AQYBAAA");
+        eventDO.setPayload("54547BE79897404A9F34D5AB2DF484BC@AQMBAQA");
         processorRegistry.process(eventDO).get(2, HOURS);
         System.out.println("here");
     }
