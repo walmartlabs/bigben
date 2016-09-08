@@ -11,7 +11,9 @@ import com.walmart.gmp.ingestion.platform.framework.data.model.ItemStatusEntity;
 import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexEntity;
 import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexKey;
 import com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus;
+import com.walmart.partnerapi.error.GatewayError;
 import com.walmart.partnerapi.model.v2.ItemStatus;
+import com.walmart.services.common.util.JsonUtil;
 import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.processors.EventProcessor;
@@ -94,6 +96,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                     if (!ERROR.name().equals(feedStatus) || !PROCESSED.name().equals(feedStatus)) {
                         L.warn(format("feed %s was not marked %s or %s, marking it as %s", feedId, ERROR, PROCESSED, ERROR));
                         entity.setFeed_status(ERROR.name());
+                        entity.setError_code(JsonUtil.convertToString(createGatewayError()));
                         entity.setModified_dtm(new Date());
                         return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $ -> event);
                     } else {
@@ -111,7 +114,8 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         entity.setSystemErrorCount(0);
                         entity.setDataErrorCount(0);
                         entity.setTimeoutErrorCount(itemCount);
-                        entity.setFeed_status(PROCESSED.name());
+                        entity.setError_code(JsonUtil.convertToString(createGatewayError()));
+                        entity.setFeed_status(ERROR.name());
                         entity.setModified_dtm(new Date());
                         return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $ -> event);
                     case INPROGRESS:
@@ -149,6 +153,16 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             event.setError(getStackTraceString(cause));
             return immediateFuture(event);
         }
+    }
+
+    private GatewayError createGatewayError() {
+        GatewayError gatewayError = new GatewayError();
+        gatewayError.setCode("ERR_PDI_0001");
+        gatewayError.setType("SYSTEM_ERROR");
+        gatewayError.setInfo("Feed Processing was not started within SLA time."); // TODO: 9/8/16  Check with PM for message.
+        gatewayError.setDescription("Feed Processing was not started within SLA time. It may be system is under load and couldn't start processing this feed on time.");
+        gatewayError.setComponent("BigBen");
+        return gatewayError;
     }
 
     private static final ListenableFuture<List<StrippedItemDO>> DONE = immediateFuture(null);
@@ -215,7 +229,6 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             L.debug("marking item as timed out: " + k);
             entity.setItem_processing_status(TIMEOUT_ERROR.name());
             entity.setModified_dtm(new Date());
-            final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
             return saveBothDM(entity);
         }).collect(toList())), (Function<List<ItemStatusEntity>, List<StrippedItemDO>>) $ -> inprogress);
     }
@@ -223,7 +236,9 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     private ListenableFuture<ItemStatusEntity> saveBothDM(ItemStatusEntity entity) {
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
         final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> item_index_dm = dm("item_index");
-        final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class, V2ItemStatusIndexKey.from(FeedItemStatusKey.of(entity.id().getFeedId(), entity.id().getShard(), entity.id().getSku(), entity.id().getSkuIndex())));
+        final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class,
+                V2ItemStatusIndexKey.from(FeedItemStatusKey.of(entity.id().getFeedId(), entity.id().getShard(),
+                        entity.id().getSku(), entity.id().getSkuIndex())));
         L.debug("marking item as timed out: " + item_index_dm);
         v2entity.setItem_processing_status(entity.getItem_processing_status());
         v2entity.setModified_dtm(new Date());
@@ -234,7 +249,9 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
 
     private ListenableFuture<List<StrippedItemDO>> updateSolr(List<StrippedItemDO> done) {
         return transform(allAsList(done.stream().map(k -> {
-            final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class, V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(), k.getId().getSku(), k.getId().getSkuIndex())));
+            final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class,
+                    V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(),
+                            k.getId().getSku(), k.getId().getSkuIndex())));
             L.debug("marking item as timed out: " + k);
             v2entity.setItem_processing_status(k.getItem_processing_status());
             v2entity.setModified_dtm(new Date());
