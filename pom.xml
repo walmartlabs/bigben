@@ -31,7 +31,7 @@
       <dependency>
         <groupId>com.walmartlabs.components</groupId>
         <artifactId>event-scheduler-lib</artifactId>
-        <version>0.16-SNAPSHOT</version>
+        <version>0.17-SNAPSHOT</version>
       </dependency>
       <dependency>
         <groupId>com.walmart.services.gmp</groupId>
