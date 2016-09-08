@@ -177,7 +177,7 @@ public class ProcessorRegistry implements EventProcessor<Event> {
                         return future;
                     });
                 case CUSTOM_CLASS:
-                    processorCache.get(tenant, () -> {
+                   return  processorCache.get(tenant, () -> {
                         try {
                             @SuppressWarnings("unchecked")
                             final Class<EventProcessor<Event>> eventProcessorClass =
