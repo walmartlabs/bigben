@@ -106,7 +106,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 }
                 switch (FeedStatus.valueOf(feedStatus == null ? INPROGRESS.name() : feedStatus)) {
                     case PROCESSED:
-                        L.debug("feed is already marked processed, nothing to do");
+                        L.debug("feed is already marked PROCESSED, nothing to do");
                         return immediateFuture(event);
                     case RECEIVED:
                         L.warn(format("feed %s, is still in received status: %s, marking all items timed out", feedId, feedStatus));
@@ -143,6 +143,9 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                             entity.setModified_dtm(new Date());
                             return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $$ -> event);
                         });
+                    case ERROR:
+                        L.debug("feed is already marked ERROR, nothing to do");
+                        return immediateFuture(event);
                     default:
                         throw new IllegalArgumentException(format("unknown feed status: %s for feedId: %s", feedStatus, feedId));
                 }
