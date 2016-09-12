@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
+import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
 import com.walmart.gmp.ingestion.platform.framework.data.model.FeedItemStatusKey;
 import com.walmart.gmp.ingestion.platform.framework.data.model.FeedStatusEntity;
 import com.walmart.gmp.ingestion.platform.framework.data.model.ItemStatusEntity;
@@ -29,6 +30,7 @@ import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.entity;
+import static com.walmart.gmp.ingestion.platform.framework.data.core.DataManager.retryableExceptions;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersion.V2;
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.selector;
 import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.*;
@@ -38,6 +40,8 @@ import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRo
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static java.lang.Integer.parseInt;
 import static java.lang.String.format;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 
 /**
@@ -187,13 +191,15 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 });
     }
 
+    private final TaskExecutor taskExecutor = new TaskExecutor(retryableExceptions);
+
     private ListenableFuture<List<StrippedItemDO>> calculateCounts0(String feedId, int shard, int itemIndex, Map<ItemStatus, Integer> counts) {
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
         @SuppressWarnings("unchecked")
         final ListenableFuture<List<StrippedItemDO>> f =
-                itemDM.async(() -> itemAM.sliceQuery(StrippedItemDO.class).forSelect().
+                taskExecutor.async(() -> itemAM.sliceQuery(StrippedItemDO.class).forSelect().
                         withPartitionComponents(feedId, shard).fromClusterings(itemIndex).withExclusiveBounds().
-                        limit(fetchSize).get(), "fetch-feed-items:" + feedId + "(" + itemIndex + ", Inf)");
+                        limit(fetchSize).get(), "fetch-feed-items:" + feedId + "(" + itemIndex + ", Inf)", 3, 1000, 2, MILLISECONDS);
         return transformAsync(f, l -> {
             final List<StrippedItemDO> inprogress = l.stream().filter(e -> "INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
             final List<StrippedItemDO> doneItems = l.stream().filter(e -> !"INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
