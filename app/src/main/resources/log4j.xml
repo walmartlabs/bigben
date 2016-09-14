@@ -17,39 +17,38 @@
         <appender-ref ref="console"/>
     </root>
 
-    <!--<logger name="com.walmartlabs.components.scheduler.input.EventReceiver" additivity="false">
-        <level value="ERROR"/>
+    <logger name="com.walmartlabs.components.scheduler.input.EventReceiver" additivity="false">
+        <level value="DEBUG"/>
         <appender-ref ref="console"/>
     </logger>
 
-    <logger name="com.walmartlabs.components.scheduler.input.MessageProcessor" additivity="false">
+    <!--<logger name="com.walmartlabs.components.scheduler.input.MessageProcessor" additivity="false">
         <level value="ERROR"/>
         <appender-ref ref="console"/>
     </logger>-->
 
-    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.MicroBatchingKafkaConsumer"
-            additivity="false">
+    <!-- <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.MicroBatchingKafkaConsumer"
+             additivity="false">
+         <level value="DEBUG"/>
+         <appender-ref ref="console"/>
+     </logger>
+
+     <logger name="com.walmartlabs.components.scheduler.utils.EventOffsetsStore"
+             additivity="false">
+         <level value="DEBUG"/>
+         <appender-ref ref="console"/>
+     </logger>-->
+    <logger name="com.walmart.gmp.feeds.FeedStatusAndCountsChecker" additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
     </logger>
-
-    <logger name="com.walmartlabs.components.scheduler.utils.EventOffsetsStore"
-                     additivity="false">
-    <level value="DEBUG"/>
-    <appender-ref ref="console"/>
-</logger>
-    <logger name="com.walmart.gmp.feeds.FeedStatusAndCountsChecker"
-            additivity="false">
-        <level value="PERF"/>
-        <appender-ref ref="console"/>
-    </logger>
-    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets.OffsetManager"
+    <!--<logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets.OffsetManager"
             additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
-    </logger>
+    </logger>-->
 
-    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.partitions.PartitionRebalancer"
+    <!--<logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.partitions.PartitionRebalancer"
             additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
@@ -59,7 +58,7 @@
             additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
-    </logger>
+    </logger>-->
 
     <!--<logger name="com.walmartlabs.components.scheduler.core.ScheduleScanner" additivity="false">
         <level value="INFO"/>
