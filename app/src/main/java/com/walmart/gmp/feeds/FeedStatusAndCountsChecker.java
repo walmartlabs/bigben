@@ -87,7 +87,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
 
     @Override
     public ListenableFuture<Event> process(Event event) {
-        L.debug("processing feed event for status and counts: " + event.getPayload());
+        L.info(format("feedId: %s, processing event for status and counts: ", event.getXrefId()));
         final DataManager<String, FeedStatusEntity> feedDM = dm("feed");
         try {
             final String feedId = event.getXrefId();
@@ -97,24 +97,24 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 final int itemCount = fes.getEntity_count() == null ? 0 : parseInt(fes.getEntity_count());
                 final String feedStatus = fes.getFeed_status();
                 if (itemCount == 0) {
-                    L.debug(format("feed %s has item count as 0", feedId));
+                    L.debug(format("feedId: %s has item count as 0", feedId));
                     if (!ERROR.name().equals(feedStatus) || !PROCESSED.name().equals(feedStatus)) {
-                        L.warn(format("feed %s was not marked %s or %s, marking it as %s", feedId, ERROR, PROCESSED, ERROR));
+                        L.warn(format("feedId: %s was not marked %s or %s, marking it as %s", feedId, ERROR, PROCESSED, ERROR));
                         entity.setFeed_status(ERROR.name());
                         entity.setError_code(convertToString(createGatewayError()));
                         entity.setModified_dtm(new Date());
                         return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $ -> event);
                     } else {
-                        L.info(format("feed %s was already marked as %s, nothing to do", feedId, feedStatus));
+                        L.info(format("feedId: %s was already marked as %s, nothing to do", feedId, feedStatus));
                         return immediateFuture(event);
                     }
                 }
                 switch (FeedStatus.valueOf(feedStatus == null ? INPROGRESS.name() : feedStatus)) {
                     case PROCESSED:
-                        L.info("feed is already marked PROCESSED, nothing to do");
+                        L.info(format("feedId: %s is already marked PROCESSED, nothing to do", feedId));
                         return immediateFuture(event);
                     case RECEIVED:
-                        L.warn(format("feed %s, is still in received status: %s, marking all items timed out", feedId, feedStatus));
+                        L.warn(format("feedId: %s, is still in received status: %s, marking all items timed out", feedId, feedStatus));
                         entity.setSuccessCount(0);
                         entity.setSystemErrorCount(0);
                         entity.setDataErrorCount(0);
@@ -124,7 +124,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         entity.setModified_dtm(new Date());
                         return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $ -> event);
                     case INPROGRESS:
-                        L.warn(format("feed %s, is still in progress status: %s, initiating the time out procedure", feedId, feedStatus));
+                        L.warn(format("feedId: %s, is still in progress status: %s, initiating the time out procedure", feedId, feedStatus));
                         final Map<ItemStatus, Integer> countsMap = new HashMap<>();
                         return transformAsync(calculateCounts(feedId, itemCount, PROPS.getInteger("feeds.shard.size", 1000), countsMap), $ -> {
                             entity.setSuccessCount(countsMap.get(SUCCESS));
@@ -138,10 +138,10 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                                 else timeOuts += e.getValue();
                             }
                             if (nonTimeOuts + timeOuts == itemCount) {
-                                L.warn(format("feed: %s, was processed, but counts were not synced up, syncing them, counts are: %s", feedId, countsMap));
+                                L.warn(format("feedId: %s, was processed, but counts were not synced up, syncing them, counts are: %s", feedId, countsMap));
                                 entity.setTimeoutErrorCount(countsMap.get(TIMEOUT_ERROR));
                             } else {
-                                L.warn(format("feed: %s has timed out, marking the final status and counts: %s", feedId, countsMap));
+                                L.warn(format("feedId: %s has timed out, marking the final status and counts: %s", feedId, countsMap));
                                 entity.setTimeoutErrorCount(itemCount - nonTimeOuts);
                             }
                             entity.setFeed_status(PROCESSED.name());
@@ -149,7 +149,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                             return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $$ -> event);
                         });
                     case ERROR:
-                        L.info("feed is already marked ERROR, nothing to do");
+                        L.info(format("feedId: %s is already marked ERROR, nothing to do", feedId));
                         return immediateFuture(event);
                     default:
                         throw new IllegalArgumentException(format("unknown feed status: %s for feedId: %s", feedStatus, feedId));
@@ -157,17 +157,19 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             }), Exception.class, ex -> {
                 final Throwable cause = getRootCause(ex);
                 if (retryableExceptions.contains(cause.getClass())) {
-                    L.warn("event failed with a retryable error" + event, cause);
+                    L.warn(format("feedId: %s, event failed with a retryable error" + event, event.getXrefId()), cause);
                     event.setError(getStackTraceString(cause));
-                } else L.error("event failed with a non-retryable error, will not be tried again: " + event, cause);
+                } else
+                    L.error(format("feedId: %s, event failed with a non-retryable error, will not be tried again: " + event, event.getXrefId()), cause);
                 return event;
             }), "feed-status-count-checker");
         } catch (Exception e) {
             final Throwable cause = getRootCause(e);
             if (retryableExceptions.contains(cause.getClass())) {
-                L.warn("event failed with a retryable error" + event, cause);
+                L.warn(format("feedId: %s, event failed with a retryable error" + event, event.getXrefId()), cause);
                 event.setError(getStackTraceString(cause));
-            } else L.error("event failed with a non-retryable error, will not be tried again: " + event, cause);
+            } else
+                L.error(format("feedId: %s, event failed with a non-retryable error, will not be tried again: " + event, event.getXrefId()), cause);
             return immediateFuture(event);
         }
     }
@@ -190,7 +192,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         for (int i = 0; i < numShards; i++) {
             shards.add(i);
         }
-        L.info(format("calculating counts for feed Id: %s, spanning over shards: %s", feedId, shards));
+        L.info(format("feedId: %s, calculating counts, spanning over shards: %s", feedId, shards));
         return transform(allAsList(shards.stream().map(shard -> calculateCounts0(feedId, shard, -1, counts)).filter(out -> out != null).collect(toList())),
                 (Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>) ll -> {
                     if (ll == null) {
@@ -226,12 +228,12 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 addCallback(updateIndexDB(doneItems), new FutureCallback<List<StrippedItemDO>>() {
                     @Override
                     public void onSuccess(List<StrippedItemDO> result) {
-                        L.info(format("feedId %s, item status updated successfully in solr: " + doneItems, feedId));
+                        L.info(format("feedId: %s, item status updated successfully in solr: " + doneItems, feedId));
                     }
 
                     @Override
                     public void onFailure(Throwable t) {
-                        L.error(format("feed Id: %s, failed to update item status in solr: " + doneItems, feedId), getRootCause(t));
+                        L.error(format("feedId: %s, failed to update item status in solr: " + doneItems, feedId), getRootCause(t));
                     }
                 });
             }
@@ -276,12 +278,12 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             @Override
             public void onSuccess(V2ItemStatusIndexEntity result) {
                 if (L.isDebugEnabled())
-                    L.debug(format("feedId %s, successfully updated status in index DB: %s", feedId, result.id()));
+                    L.debug(format("feedId: %s, successfully updated status in index DB: %s", feedId, result.id()));
             }
 
             @Override
             public void onFailure(Throwable t) {
-                L.error(format("feedId %s, failed to update status in index DB", feedId), getRootCause(t));
+                L.error(format("feedId: %s, failed to update status in index DB", feedId), getRootCause(t));
             }
         });
         return itemDM.saveAsync(entity);
@@ -293,7 +295,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class,
                     V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(),
                             k.getId().getSku(), k.getId().getSkuIndex())));
-            L.debug("syncing item status in solr: " + k);
+            L.debug(format("feedId: %s, syncing item status in solr: " + k, k.getId().getFeedId()));
             v2entity.setItem_processing_status(k.getItem_processing_status());
             v2entity.setModified_dtm(new Date());
             final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> itemIndexDM = dm("item_index");
