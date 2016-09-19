@@ -27,11 +27,11 @@
         <appender-ref ref="console"/>
     </logger>
 
-    <!--<logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets.OffsetManager"
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets.OffsetManager"
             additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
-    </logger>-->
+    </logger>
 
     <!--<logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.partitions.PartitionRebalancer"
             additivity="false">
