@@ -295,7 +295,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class,
                     V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(),
                             k.getId().getSku(), k.getId().getSkuIndex())));
-            L.debug(format("feedId: %s, syncing item status in solr: " + k, k.getId().getFeedId()));
+            L.debug(format("feedId: %s, syncing item status in solr: %s", k.getId().getFeedId(), k));
             v2entity.setItem_processing_status(k.getItem_processing_status());
             v2entity.setModified_dtm(new Date());
             final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> itemIndexDM = dm("item_index");
