@@ -17,6 +17,11 @@
         <appender-ref ref="console"/>
     </root>
 
+    <logger name="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.offsets.OffsetManager" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="console"/>
+    </logger>
+
     <logger name="com.walmartlabs.components.scheduler.input.EventReceiver" additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>

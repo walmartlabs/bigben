@@ -30,25 +30,10 @@
     </bean>
 
     <bean id="eventProcessor" class="com.walmartlabs.components.scheduler.input.MessageProcessor"/>
-    <bean id="offsetStore" class="com.walmartlabs.components.scheduler.utils.EventOffsetsStore"/>
     <bean id="kafkaConsumer"
           class="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean">
         <constructor-arg index="0" value="bigbenProps"/>
-        <constructor-arg index="1">
-            <map>
-                <entry key="*" value-ref="eventProcessor"/>
-            </map>
-        </constructor-arg>
-        <constructor-arg index="2">
-            <null/>
-        </constructor-arg>
-        <constructor-arg index="3">
-            <null/>
-        </constructor-arg>
-        <constructor-arg index="4" ref="offsetStore"/>
-        <constructor-arg index="5">
-            <null/>
-        </constructor-arg>
+        <constructor-arg index="1" ref="eventProcessor"/>
     </bean>
 
     <bean class="com.walmartlabs.components.scheduler.processors.EventEnrichProcessor">
