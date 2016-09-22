@@ -3,7 +3,7 @@
     <parent>
         <artifactId>dis-evt-sch</artifactId>
         <groupId>com.walmartlabs.components</groupId>
-        <version>0.34</version>
+        <version>0.35-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
