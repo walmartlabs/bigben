@@ -3,7 +3,7 @@
   <groupId>com.walmartlabs.components</groupId>
   <artifactId>dis-evt-sch</artifactId>
   <packaging>pom</packaging>
-  <version>0.31-SNAPSHOT</version>
+  <version>0.35-SNAPSHOT</version>
   <modules>
     <module>lib</module>
     <module>app</module>
@@ -16,7 +16,7 @@
     <version>14.3.8</version>
   </parent>
   <properties>
-    <gmp-ingestion-platform.version>1.90</gmp-ingestion-platform.version>
+    <gmp-ingestion-platform.version>1.97</gmp-ingestion-platform.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <ingestion-pipeline-messages.version>0.8</ingestion-pipeline-messages.version>
     <cassandra-driver-core.version>2.1.10.3</cassandra-driver-core.version>
@@ -31,7 +31,7 @@
       <dependency>
         <groupId>com.walmartlabs.components</groupId>
         <artifactId>event-scheduler-lib</artifactId>
-        <version>0.31-SNAPSHOT</version>
+        <version>0.35-SNAPSHOT</version>
       </dependency>
       <dependency>
         <groupId>com.walmart.services.gmp</groupId>
