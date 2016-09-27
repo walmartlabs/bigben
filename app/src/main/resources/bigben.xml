@@ -10,7 +10,7 @@
     </bean>
 
     <bean id="processRegistry" class="com.walmartlabs.components.scheduler.processors.ProcessorRegistry">
-        <constructor-arg index="0" value="ccm://bigbenProps/processors"/>
+        <constructor-arg index="0" value="ccm://${ccmProps}/processors"/>
         <constructor-arg index="1" value="false"/>
     </bean>
 
