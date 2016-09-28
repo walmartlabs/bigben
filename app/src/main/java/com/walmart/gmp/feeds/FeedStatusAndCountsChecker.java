@@ -3,22 +3,23 @@ package com.walmart.gmp.feeds;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.walmart.gmp.ingestion.platform.framework.core.FeedType;
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
 import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
 import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
-import com.walmart.gmp.ingestion.platform.framework.data.model.FeedItemStatusKey;
-import com.walmart.gmp.ingestion.platform.framework.data.model.FeedStatusEntity;
-import com.walmart.gmp.ingestion.platform.framework.data.model.ItemStatusEntity;
-import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexEntity;
-import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexKey;
+import com.walmart.gmp.ingestion.platform.framework.data.model.*;
+import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.*;
 import com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus;
+import com.walmart.marketplace.messages.v1_feedstatus.Feedstatus;
 import com.walmart.partnerapi.error.GatewayError;
 import com.walmart.partnerapi.model.v2.ItemStatus;
+import com.walmart.services.common.util.JsonUtil;
 import com.walmart.services.nosql.data.CqlDAO;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.processors.EventProcessor;
 import info.archinnov.achilles.persistence.AsyncManager;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.InitializingBean;
 
@@ -47,16 +48,24 @@ import static java.util.stream.Collectors.toList;
 
 /**
  * Created by smalik3 on 8/24/16
+ * Modified by cshah for adding Solr sync and inventory feed handling.
  */
 public class FeedStatusAndCountsChecker implements EventProcessor<Event>, InitializingBean {
 
     private static final Logger L = Logger.getLogger(FeedStatusAndCountsChecker.class);
 
-    private AsyncManager itemAM;
+    AsyncManager itemAM;
+    AsyncManager itemInventoryAM;
 
     private int fetchSize;
 
-    private final Selector<String, FeedStatusEntity> feedSelector =
+    public static final String FEED = "feed";
+    public static final String ITEM = "item";
+    public static final String ITEM_INDEX = "item_index";
+    public static final String INVENTORY = "inventory";
+    public static final String INVENTORY_INDEX = "inventory_index";
+
+    public static final Selector<String, FeedStatusEntity> feedSelector =
             selector(FeedStatusEntity.class, e -> {
                 e.getEntity_count();
                 e.getSystemErrorCount();
@@ -66,12 +75,14 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 e.getFeed_status();
             });
 
-    private final Map<String, DataManager<?, ?>> map = new HashMap<>();
+    public final Map<String, DataManager<?, ?>> map = new HashMap<>();
 
     public FeedStatusAndCountsChecker(Map<String, Object> properties) throws Exception {
-        createDM(properties.get("feedDMCCMPath"), "feed");
-        createDM(properties.get("itemDMCCMPath"), "item");
-        createDM(properties.get("itemIndexDMCCMPath"), "item_index");
+        createDM(properties.get("feedDMCCMPath"), FEED);
+        createDM(properties.get("itemDMCCMPath"), ITEM);
+        createDM(properties.get("itemIndexDMCCMPath"), ITEM_INDEX);
+        createDM(properties.get("inventoryItemIndexDMCCMPath"), INVENTORY_INDEX);
+        createDM(properties.get("inventoryItemDMCCMPath"), INVENTORY);
         afterPropertiesSet();
     }
 
@@ -81,14 +92,20 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     }
 
     @SuppressWarnings("unchecked")
-    private <K, T extends Entity<K>> DataManager<K, T> dm(String key) {
+    public <K, T extends Entity<K>> DataManager<K, T> dm(String key) {
         return (DataManager<K, T>) map.get(key);
     }
 
     @Override
     public ListenableFuture<Event> process(Event event) {
         L.info(format("feedId: %s, processing event for status and counts: ", event.getXrefId()));
-        final DataManager<String, FeedStatusEntity> feedDM = dm("feed");
+        String payload = event.getPayload();
+        Feedstatus feedstatus =  getEventFeedStatus(payload);
+        FeedType feedType = getFeedType(feedstatus == null ? FeedType.ITEM.name() : feedstatus.getFeedType());
+        final DataManager<String, FeedStatusEntity> feedDM = dm(FEED);
+        final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm(ITEM);
+        final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> itemIndexDM = dm(ITEM_INDEX);
+
         try {
             final String feedId = event.getXrefId();
             return measure(feedId, L, () -> catching(transformAsync(feedDM.getAsync(feedId, feedSelector), fes -> {
@@ -126,7 +143,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                     case INPROGRESS:
                         L.warn(format("feedId: %s, is still in progress status: %s, initiating the time out procedure", feedId, feedStatus));
                         final Map<ItemStatus, Integer> countsMap = new HashMap<>();
-                        return transformAsync(calculateCounts(feedId, itemCount, PROPS.getInteger("feeds.shard.size", 1000), countsMap), $ -> {
+                        return transformAsync(calculateCounts(feedId, itemCount, PROPS.getInteger("feeds.shard.size", 1000), countsMap, feedType), $ -> {
                             entity.setSuccessCount(countsMap.get(SUCCESS));
                             entity.setSystemErrorCount(countsMap.get(SYSTEM_ERROR));
                             entity.setDataErrorCount(countsMap.get(DATA_ERROR));
@@ -174,6 +191,19 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         }
     }
 
+
+    private FeedType getFeedType(String feedTypeStr) {
+
+        if(StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.INVENTORY.name())) {
+            return FeedType.INVENTORY;
+        }
+        else if(StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PRICE.name())) {
+            return FeedType.PRICE;
+        }
+        else {
+            return FeedType.ITEM;
+        }
+    }
     private GatewayError createGatewayError() {
         GatewayError gatewayError = new GatewayError();
         gatewayError.setCode("ERR_PDI_0001");
@@ -184,17 +214,17 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         return gatewayError;
     }
 
-    private static final ListenableFuture<List<StrippedItemDO>> DONE = immediateFuture(null);
+    private static final ListenableFuture<List<StrippedItemEntity>> DONE = immediateFuture(null);
 
-    private ListenableFuture<List<StrippedItemDO>> calculateCounts(String feedId, int itemCount, int shardSize, Map<ItemStatus, Integer> counts) {
+    private ListenableFuture<List<StrippedItemEntity>> calculateCounts(String feedId, int itemCount, int shardSize, Map<ItemStatus, Integer> counts, FeedType feedType) {
         int numShards = itemCount % shardSize == 0 ? itemCount / shardSize : 1 + itemCount / shardSize;
         final List<Integer> shards = new ArrayList<>();
         for (int i = 0; i < numShards; i++) {
             shards.add(i);
         }
         L.info(format("feedId: %s, calculating counts, spanning over shards: %s", feedId, shards));
-        return transform(allAsList(shards.stream().map(shard -> calculateCounts0(feedId, shard, -1, counts)).filter(out -> out != null).collect(toList())),
-                (Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>) ll -> {
+        return transform(allAsList(shards.stream().map(shard -> calculateCounts0(feedId, shard, -1, counts, feedType)).filter(out -> out != null).collect(toList())),
+                (Function<List<List<StrippedItemEntity>>, List<StrippedItemEntity>>) ll -> {
                     if (ll == null) {
                         return null;
                     } else {
@@ -205,16 +235,25 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
 
     private final TaskExecutor taskExecutor = new TaskExecutor(retryableExceptions);
 
-    private ListenableFuture<List<StrippedItemDO>> calculateCounts0(String feedId, int shard, int itemIndex, Map<ItemStatus, Integer> counts) {
-        @SuppressWarnings("unchecked")
-        final ListenableFuture<List<StrippedItemDO>> f =
-                taskExecutor.async(() -> itemAM.sliceQuery(StrippedItemDO.class).forSelect().
-                        withPartitionComponents(feedId, shard).fromClusterings(itemIndex).withExclusiveBounds().
-                        limit(fetchSize).get(), "fetch-feed-items:" + feedId + "(" + itemIndex + ", Inf)", 3, 1000, 2, MILLISECONDS);
-        return transformAsync(f, l -> {
-            final List<StrippedItemDO> inprogress = l.stream().filter(e -> "INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
-            final List<StrippedItemDO> doneItems = l.stream().filter(e -> !"INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
+    private ListenableFuture<List<StrippedItemEntity>> calculateCounts0(String feedId, int shard, int itemIndex, Map<ItemStatus, Integer> counts, FeedType feedType) {
+        ListenableFuture<List<StrippedItemDO>> f = immediateFuture(null);
+       if(feedType != null && feedType.equals(FeedType.INVENTORY)) {
+           f = taskExecutor.async(() -> itemInventoryAM.sliceQuery(StrippedItemDO.class).forSelect().
+                   withPartitionComponents(feedId, shard).fromClusterings(itemIndex).withExclusiveBounds().
+                   limit(fetchSize).get(), "fetch-feed-items-inventory:" + feedId + "(" + itemIndex + ", Inf)", 3, 1000, 2, MILLISECONDS);
+       }
+       else {
+            f = taskExecutor.async(() -> itemAM.sliceQuery(StrippedItemDO.class).forSelect().
+                            withPartitionComponents(feedId, shard).fromClusterings(itemIndex).withExclusiveBounds().
+                            limit(fetchSize).get(), "fetch-feed-items:" + feedId + "(" + itemIndex + ", Inf)", 3, 1000, 2, MILLISECONDS);
+        }
+       return processFeedCounts(feedId, shard, counts, feedType, f);
+    }
 
+    private ListenableFuture<List<StrippedItemEntity>> processFeedCounts(final String feedId, int shard, Map<ItemStatus, Integer> counts, FeedType feedType, ListenableFuture<List<StrippedItemDO>> f) {
+        return transformAsync(f, l -> {
+            final List<StrippedItemEntity> inprogress = l.stream().filter(e -> "INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
+            final List<StrippedItemEntity> doneItems = l.stream().filter(e -> !"INPROGRESS".equals(e.getItem_processing_status())).collect(toList());
             if (!inprogress.isEmpty()) {
                 L.warn(format("feedId: %s, following items are still in progress, marking them timed out: " + inprogress, feedId));
             }
@@ -225,48 +264,94 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         counts.put(status, 0);
                     counts.put(status, counts.get(status) + 1);
                 });
-                addCallback(updateIndexDB(doneItems), new FutureCallback<List<StrippedItemDO>>() {
+                addCallback(updateIndexDB(doneItems,feedType), new FutureCallback<List<StrippedItemEntity>>() {
                     @Override
-                    public void onSuccess(List<StrippedItemDO> result) {
+                    public void onSuccess(List<StrippedItemEntity> result) {
                         L.info(format("feedId: %s, item status updated successfully in solr: " + doneItems, feedId));
                     }
-
                     @Override
                     public void onFailure(Throwable t) {
                         L.error(format("feedId: %s, failed to update item status in solr: " + doneItems, feedId), getRootCause(t));
                     }
                 });
             }
-
             if (l.isEmpty() || l.size() < fetchSize) {
-                return inprogress.isEmpty() ? DONE : tof(inprogress, feedId);
+                return inprogress.isEmpty() ? DONE : tof(inprogress, feedId, feedType);
             } else
-                return inprogress.isEmpty() ? calculateCounts0(feedId, shard, l.get(l.size() - 1).getId().getSkuIndex(), counts) :
-                        transform(allAsList(calculateCounts0(feedId, shard, l.get(l.size() - 1).getId().getSkuIndex(), counts), tof(inprogress, feedId)),
-                                new Function<List<List<StrippedItemDO>>, List<StrippedItemDO>>() {
+                return inprogress.isEmpty() ? calculateCounts0(feedId, shard, l.get(l.size() - 1).getId().getSkuIndex(), counts, feedType) :
+                        transform(allAsList(calculateCounts0(feedId, shard, l.get(l.size() - 1).getId().getSkuIndex(), counts, feedType), tof(inprogress, feedId, feedType)),
+                                new Function<List<List<StrippedItemEntity>>, List<StrippedItemEntity>>() {
                                     @Override
-                                    public List<StrippedItemDO> apply(List<List<StrippedItemDO>> ll) {
+                                    public List<StrippedItemEntity> apply(List<List<StrippedItemEntity>> ll) {
                                         return ll.get(0);
                                     }
                                 });
         });
     }
 
-    private ListenableFuture<List<StrippedItemDO>> tof(List<StrippedItemDO> inprogress, String feedId) {
-        return transform(allAsList(inprogress.stream().map(k -> {
+
+    private ListenableFuture<List<StrippedItemEntity>> tof(List<StrippedItemEntity> inprogress, String feedId, FeedType feedType) {
+        if(feedType != null && feedType.equals(FeedType.INVENTORY)) {
+            return collectInventoryItemEntity(inprogress,feedId);
+         }
+        return collectItemEntity(inprogress, feedId);
+    }
+
+
+    private ListenableFuture<List<StrippedItemEntity>> collectItemEntity(List<StrippedItemEntity> inprogress, String feedId) {
+            return transform(allAsList(inprogress.stream().map(k -> {
             final ItemStatusEntity entity = entity(ItemStatusEntity.class,
-                    FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(), k.getId().getSku(), k.getId().getSkuIndex()));
+                    FeedItemStatusKey.of(k.id().getFeedId(), k.id().getShard(), k.id().getSku(), k.id().getSkuIndex()));
             if (L.isDebugEnabled())
                 L.debug(format("feedId: %s, marking item as timed out: %s", feedId, inprogress));
             entity.setItem_processing_status(TIMEOUT_ERROR.name());
             entity.setModified_dtm(new Date());
             return updateBothDBs(entity, feedId);
-        }).collect(toList())), (Function<List<ItemStatusEntity>, List<StrippedItemDO>>) $ -> inprogress);
+        }).collect(toList())), (Function<List<ItemStatusEntity>, List<StrippedItemEntity>>) $ -> inprogress);
+    }
+
+    private ListenableFuture<List<StrippedItemEntity>> collectInventoryItemEntity(List<StrippedItemEntity> inprogress, String feedId) {
+        return transform(allAsList(inprogress.stream().map(k -> {
+            final InventoryFeedItemStatusEntity entity = entity(InventoryFeedItemStatusEntity.class,
+                    InventoryFeedItemStatusKey.of(k.id().getFeedId(), k.id().getShard(), k.id().getSku(), k.id().getSkuIndex()));
+            if (L.isDebugEnabled())
+                L.debug(format("feedId: %s, marking inventory item as timed out: %s", feedId, inprogress));
+            entity.setItemStatus(TIMEOUT_ERROR.name());
+            entity.setModifiedDtm(new Date());
+            return updateBothDBsInventory(entity,feedId);
+        }).collect(toList())), (Function<List<InventoryFeedItemStatusEntity>, List<StrippedItemEntity>>) $ -> inprogress);
+    }
+
+
+    private ListenableFuture<InventoryFeedItemStatusEntity> updateBothDBsInventory(InventoryFeedItemStatusEntity entity, String feedId) {
+
+        final DataManager<InventoryFeedItemStatusKey, InventoryFeedItemStatusEntity> itemDM = dm(INVENTORY);
+        final DataManager<V2InventoryStatusIndexKey, V2InventoryItemStatusIndexEntity> itemIndexDM = dm(INVENTORY_INDEX);
+        final V2InventoryItemStatusIndexEntity v2entity =  entity(V2InventoryItemStatusIndexEntity.class,
+                V2InventoryStatusIndexKey.from(InventoryFeedItemStatusKey.of(entity.id().getFeedId(), entity.id().getShard(),
+                        entity.id().getSku(), Integer.valueOf(entity.id().getItemIndex()))));
+        if (L.isDebugEnabled())
+            L.debug(format("feedId: %s, syncing inventory item status in in both DBs: %s", feedId, entity.id()));
+        v2entity.setItemStatus(entity.getItemStatus());
+        v2entity.setModifiedDtm(new Date());
+        addCallback(itemIndexDM.saveAsync(v2entity), new FutureCallback<V2InventoryItemStatusIndexEntity>() {
+            @Override
+            public void onSuccess(V2InventoryItemStatusIndexEntity result) {
+                if (L.isDebugEnabled())
+                    L.debug(format("feedId: %s, successfully updated status in index DB: %s", feedId, result.id()));
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                L.error(format("feedId: %s, failed to update status in index DB", feedId), getRootCause(t));
+            }
+        });
+        return itemDM.saveAsync(entity);
     }
 
     private ListenableFuture<ItemStatusEntity> updateBothDBs(ItemStatusEntity entity, String feedId) {
-        final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
-        final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> itemIndexDM = dm("item_index");
+            final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm(ITEM);
+            final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> itemIndexDM = dm(ITEM_INDEX);
         final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class,
                 V2ItemStatusIndexKey.from(FeedItemStatusKey.of(entity.id().getFeedId(), entity.id().getShard(),
                         entity.id().getSku(), entity.id().getSkuIndex())));
@@ -289,25 +374,57 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         return itemDM.saveAsync(entity);
     }
 
+    public ListenableFuture<List<StrippedItemEntity>> updateIndexDB(List<StrippedItemEntity> done, FeedType feedType) {
+        if(feedType.equals(FeedType.INVENTORY)) {
+            return updateInventoryIndexDB(done);
+        }
+        return updateIndexDB(done);
+    }
 
-    private ListenableFuture<List<StrippedItemDO>> updateIndexDB(List<StrippedItemDO> done) {
+    private ListenableFuture<List<StrippedItemEntity>> updateInventoryIndexDB(List<StrippedItemEntity> done) {
+        return transform(allAsList(done.stream().map(k -> {
+            final V2InventoryItemStatusIndexEntity v2entity = entity(V2InventoryItemStatusIndexEntity.class,
+                    V2InventoryStatusIndexKey.from(InventoryFeedItemStatusKey.of(k.id().getFeedId(), k.id().getShard(),
+                            k.id().getSku(), k.id().getSkuIndex())));
+            L.debug(format("feedId: %s, syncing inventory item status in solr: %s", k.id().getFeedId(), k));
+            v2entity.setItemStatus(k.getItem_processing_status());
+            v2entity.setModifiedDtm(new Date());
+            final DataManager<V2InventoryStatusIndexKey, V2InventoryItemStatusIndexEntity> itemIndexDM = dm(INVENTORY_INDEX);
+            return itemIndexDM.saveAsync(v2entity);
+        }).collect(toList())), (Function<List<V2InventoryItemStatusIndexEntity>, List<StrippedItemEntity>>) $ -> done);
+    }
+
+    private ListenableFuture<List<StrippedItemEntity>> updateIndexDB(List<StrippedItemEntity> done) {
         return transform(allAsList(done.stream().map(k -> {
             final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class,
-                    V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.getId().getFeedId(), k.getId().getShard(),
-                            k.getId().getSku(), k.getId().getSkuIndex())));
-            L.debug(format("feedId: %s, syncing item status in solr: %s", k.getId().getFeedId(), k));
+                    V2ItemStatusIndexKey.from(FeedItemStatusKey.of(k.id().getFeedId(), k.id().getShard(),
+                            k.id().getSku(), k.id().getSkuIndex())));
+            L.debug(format("feedId: %s, syncing item status in solr: %s", k.id().getFeedId(), k));
             v2entity.setItem_processing_status(k.getItem_processing_status());
             v2entity.setModified_dtm(new Date());
-            final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> itemIndexDM = dm("item_index");
+            final DataManager<V2ItemStatusIndexKey, V2ItemStatusIndexEntity> itemIndexDM = dm(ITEM_INDEX);
             return itemIndexDM.saveAsync(v2entity);
-        }).collect(toList())), (Function<List<V2ItemStatusIndexEntity>, List<StrippedItemDO>>) $ -> done);
+        }).collect(toList())), (Function<List<V2ItemStatusIndexEntity>, List<StrippedItemEntity>>) $ -> done);
     }
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm("item");
+        final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm(ITEM);
+        final DataManager<InventoryFeedItemStatusKey, InventoryFeedItemStatusEntity> itemInventoryDM = dm(INVENTORY);
         final CqlDAO<?, ?> feedCqlDAO = (CqlDAO<?, ?>) itemDM.getPrimaryDAO(V2).unwrap();
+        final CqlDAO<?, ?> feedCqlDAO0 = (CqlDAO<?, ?>) itemInventoryDM.getPrimaryDAO(V2).unwrap();
+        itemInventoryAM = feedCqlDAO0.cqlDriverConfig().getAsyncPersistenceManager();
         itemAM = feedCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
         fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
+    }
+
+    private Feedstatus getEventFeedStatus(String payload) {
+        try {
+            Feedstatus feedstatus = JsonUtil.convertToObject(payload, Feedstatus.class);
+            return feedstatus;
+        } catch (Exception e) {
+            L.error("Json conversion failed " + payload,  e);
+        }
+        return null;
     }
 }
