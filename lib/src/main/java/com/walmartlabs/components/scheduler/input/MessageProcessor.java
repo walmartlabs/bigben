@@ -8,10 +8,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import static com.google.common.base.Throwables.getRootCause;
 import static com.google.common.util.concurrent.Futures.*;
 import static com.walmart.marketplace.messages.v1_bigben.EventRequest.Mode.REMOVE;
 import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.*;
-import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.services.common.util.JsonUtil.convertToObject;
 import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
 import static com.walmartlabs.components.scheduler.utils.TimeUtils.nowUTC;
@@ -76,7 +76,7 @@ public class MessageProcessor implements TopicMessageProcessor {
                 });
             }
         } catch (Exception e) {
-            L.error("could not process record: " + record);
+            L.error("could not process record: " + record, getRootCause(e));
             return FAIL;
         }
     }
