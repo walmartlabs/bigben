@@ -2,6 +2,7 @@ package com.walmartlabs.components.scheduler.services;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.hazelcast.core.Member;
 import com.walmart.gmp.ingestion.platform.framework.core.Hz;
@@ -46,6 +47,7 @@ import static com.walmart.gmp.ingestion.platform.framework.core.Props.PROPS;
 import static com.walmart.gmp.ingestion.platform.framework.core.SpringContext.spring;
 import static com.walmart.marketplace.messages.v1_bigben.EventRequest.Mode.ADD;
 import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.REJECTED;
+import static com.walmart.marketplace.messages.v1_bigben.EventResponse.Status.TRIGGERED;
 import static com.walmart.platform.kernel.exception.error.ErrorCategory.APPLICATION;
 import static com.walmart.platform.kernel.exception.error.ErrorSeverity.ERROR;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
@@ -54,8 +56,8 @@ import static com.walmartlabs.components.scheduler.core.ScheduleScanner.EVENT_SC
 import static com.walmartlabs.components.scheduler.input.EventReceiver.toEvent;
 import static com.walmartlabs.components.scheduler.utils.EventUtils.fromRequest;
 import static com.walmartlabs.components.scheduler.utils.EventUtils.toResponse;
-import static com.walmartlabs.components.scheduler.utils.TimeUtils.bucketize;
-import static com.walmartlabs.components.scheduler.utils.TimeUtils.utc;
+import static com.walmartlabs.components.scheduler.utils.TimeUtils.*;
+import static java.lang.String.format;
 import static java.time.ZonedDateTime.parse;
 import static java.time.temporal.ChronoUnit.MILLIS;
 import static java.util.Collections.nCopies;
@@ -123,6 +125,21 @@ public class EventService implements SupportsShutdown {
             final List<EventResponse> eventResponses = successfulAsList(eventRequests.stream().map(
                     e -> e.getMode() == ADD ? eventReceiver.addEvent(e) : eventReceiver.removeEvent(e.getId(), e.getTenant())
             ).collect(toList())).get(PROPS.getInteger("event.service.response.max.wait.time", 60), SECONDS);
+            addCallback(allAsList(eventResponses.stream().filter(er -> TRIGGERED.equals(er.getStatus())).
+                    map(er -> processorRegistry.process(toEvent(er))).collect(toList())), new FutureCallback<List<Event>>() {
+                @Override
+                public void onSuccess(List<Event> result) {
+                    for (Event e : result) {
+                        L.warn(format("event was triggered immediately (likely lapsed), event id: %s, tenant: %s, " +
+                                "eventTime: %s, currentTime: %s", e.getXrefId(), e.getTenant(), e.id().getEventTime(), nowUTC()));
+                    }
+                }
+
+                @Override
+                public void onFailure(Throwable t) {
+                    L.error("error in triggering lapsed events: ", getRootCause(t));
+                }
+            });
             long errors = eventResponses.stream().filter(er -> REJECTED.equals(er.getStatus())).count();
             if (errors == eventResponses.size()) return status(BAD_REQUEST).entity(eventResponses).build();
             else if (errors > 0) return status(PARTIAL_CONTENT).entity(eventResponses).build();

@@ -74,10 +74,13 @@ public class EventReceiver implements InitializingBean {
     private ProcessorRegistry processorRegistry;
 
     private int scanInterval;
+    private int lapseOffset;
 
     @Override
     public void afterPropertiesSet() throws Exception {
         scanInterval = PROPS.getInteger("event.schedule.scan.interval.minutes", 1);
+        lapseOffset = PROPS.getInteger("event.lapse.offset.minutes", 0);
+        L.info("using event lapseOffset: " + lapseOffset + " minutes");
     }
 
     @Autowired
@@ -175,7 +178,7 @@ public class EventReceiver implements InitializingBean {
             L.error("event rejected, bad event time format, " + eventRequest);
             return immediateFuture(eventResponse);
         }
-        if (parse(eventRequest.getEventTime()).isBefore(nowUTC())) {
+        if (parse(eventRequest.getEventTime()).isBefore(nowUTC().plusMinutes(lapseOffset))) {
             final EventResponse eventResponse = fromRequest(eventRequest);
             eventResponse.setStatus(TRIGGERED);
             eventResponse.setTriggeredAt(nowUTC().toString());
