@@ -138,6 +138,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         entity.setDataErrorCount(0);
                         entity.setTimeoutErrorCount(itemCount);
                         entity.setError_code(convertToString(createGatewayError()));
+                        entity.setError_message(convertToString(createGatewayError()));
                         entity.setFeed_status(ERROR.name());
                         entity.setModified_dtm(new Date());
                         return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $ -> event);
