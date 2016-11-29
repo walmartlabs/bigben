@@ -115,10 +115,11 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 final String feedStatus = fes.getFeed_status();
                 if (itemCount == 0) {
                     L.debug(format("feedId: %s has item count as 0", feedId));
-                    if (!ERROR.name().equals(feedStatus) || !PROCESSED.name().equals(feedStatus)) {
+                    if (!ERROR.name().equals(feedStatus) && !PROCESSED.name().equals(feedStatus)) {
                         L.warn(format("feedId: %s was not marked %s or %s, marking it as %s", feedId, ERROR, PROCESSED, ERROR));
                         entity.setFeed_status(ERROR.name());
-                        entity.setError_code(convertToString(createGatewayError()));
+                        entity.setError_code(convertToString(createEntityCountGatewayError()));
+                        entity.setError_message(convertToString(createEntityCountGatewayError()));
                         entity.setModified_dtm(new Date());
                         return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $ -> event);
                     } else {
@@ -210,6 +211,15 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         gatewayError.setType("SYSTEM_ERROR");
         gatewayError.setInfo("Feed SLA violated");
         gatewayError.setDescription("Feed SLA violated. Please reach out to operations team to (possibly) re-ingest this feed");
+        gatewayError.setComponent("BigBen");
+        return gatewayError;
+    }
+    private GatewayError createEntityCountGatewayError() {
+        GatewayError gatewayError = new GatewayError();
+        gatewayError.setCode("ERR_PDI_0001");
+        gatewayError.setType("SYSTEM_ERROR");
+        gatewayError.setInfo("Feed SLA violated");
+        gatewayError.setDescription("Feed had not received any item. Please check your file or reach out to operations team to (possibly) re-ingest this feed");
         gatewayError.setComponent("BigBen");
         return gatewayError;
     }
