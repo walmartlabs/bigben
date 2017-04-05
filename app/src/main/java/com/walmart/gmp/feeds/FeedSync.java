@@ -138,10 +138,10 @@ public class FeedSync implements EventProcessor<Event>, InitializingBean {
     }
 
     private ListenableFuture<List<StrippedItemEntity>> updateItems(String feedId, int shard, FeedType feedType, ListenableFuture<List<StrippedItemDO>> f) {
-         transformAsync(f, l -> {
-            final List<StrippedItemEntity> items = l.stream().collect(toList());
-        //    return feedStatusAndCountsChecker.collectItemEntity(items, feedType);
-            });
+//         transformAsync(f, l -> {
+//            final List<StrippedItemEntity> items = l.stream().collect(toList());
+//        //    return feedStatusAndCountsChecker.collectItemEntity(items, feedType);
+//            });
         return immediateFuture(null);
     }
 
