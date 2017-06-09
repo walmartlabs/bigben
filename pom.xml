@@ -16,7 +16,7 @@
     <version>14.3.8</version>
   </parent>
   <properties>
-    <gmp-ingestion-platform.version>1.119</gmp-ingestion-platform.version>
+    <gmp-ingestion-platform.version>1.128.12.V4</gmp-ingestion-platform.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <ingestion-pipeline-messages.version>0.8</ingestion-pipeline-messages.version>
     <cassandra-driver-core.version>2.1.10.3</cassandra-driver-core.version>

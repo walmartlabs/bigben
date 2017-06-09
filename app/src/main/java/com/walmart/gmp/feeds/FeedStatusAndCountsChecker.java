@@ -3,10 +3,7 @@ package com.walmart.gmp.feeds;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.walmart.gmp.ingestion.platform.framework.core.FeedType;
-import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
-import com.walmart.gmp.ingestion.platform.framework.data.core.Entity;
-import com.walmart.gmp.ingestion.platform.framework.data.core.Selector;
-import com.walmart.gmp.ingestion.platform.framework.data.core.TaskExecutor;
+import com.walmart.gmp.ingestion.platform.framework.data.core.*;
 import com.walmart.gmp.ingestion.platform.framework.data.model.*;
 import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexEntity;
 import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexKey;
@@ -26,6 +23,7 @@ import org.springframework.beans.factory.InitializingBean;
 import java.util.*;
 import java.util.Map.Entry;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.concat;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.util.concurrent.Futures.*;
@@ -36,11 +34,13 @@ import static com.walmart.gmp.ingestion.platform.framework.data.core.EntityVersi
 import static com.walmart.gmp.ingestion.platform.framework.data.core.Selector.selector;
 import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.*;
 import static com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus.INPROGRESS;
+import static com.walmart.gmp.ingestion.platform.framework.utils.ConfigParser.parse;
 import static com.walmart.gmp.ingestion.platform.framework.utils.PerfUtils.measure;
 import static com.walmart.partnerapi.model.v2.ItemStatus.*;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getRootCause;
 import static com.walmart.platform.soa.common.exception.util.ExceptionUtil.getStackTraceString;
 import static com.walmart.services.common.util.JsonUtil.convertToString;
+import static java.lang.Class.forName;
 import static java.lang.Integer.parseInt;
 import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -88,8 +88,17 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     }
 
     public void createDM(Object ccmPath, Object dmName) throws Exception {
-        final DataManager<Object, Entity<Object>> dm = new DataManager<>(ccmPath.toString());
-        map.put(dmName.toString(), dm);
+        final DataManagerConfig dataManagerConfig = parse(ccmPath.toString(), DataManagerConfig.class);
+        if (dataManagerConfig.getConfigResolverBean() != null) { // Expects the canonical name of the ConfigResolver class
+            L.info("dataManagerConfig has configResolved, trying to get bean from spring applicationContext. ConfigResolverBean Name: " + dataManagerConfig.getConfigResolverBean());
+            ConfigResolver configBean = (ConfigResolver) forName(dataManagerConfig.getConfigResolverBean(), true, Thread.currentThread().getContextClassLoader()).newInstance();
+            checkNotNull(configBean, "Unable to find ConfigResolverBean in applicationContext");
+            final DataManager<Object, Entity<Object>> dm = new DataManager<>(dataManagerConfig, Collections.singletonMap(dataManagerConfig.getConfigResolverBean(), configBean));
+            map.put(dmName.toString(), dm);
+        } else {
+            final DataManager<Object, Entity<Object>> dm = new DataManager<>(dataManagerConfig);
+            map.put(dmName.toString(), dm);
+        }
     }
 
     @SuppressWarnings("unchecked")

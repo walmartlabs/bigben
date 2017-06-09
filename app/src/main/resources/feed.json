@@ -1,4 +1,5 @@
 {
+  "configResolverBean": "com.walmart.gmp.ingestion.platform.configresolver.MigrationConfigResolver",
   "entityPackages": [
     "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
     "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
@@ -11,7 +12,22 @@
       "tenancyConfigs": [
         {
           "ccmPath": "partner-data-ingestor-app/application/cassandraConfig_k3",
-          "type": "DB"
+          "type": "DB",
+          "entityPackages": [
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+            "com.walmart.gmp.feeds"
+          ]
+        },
+        {
+          "ccmPath": "partner-data-ingestor-app/application/supplierCassConfig",
+          "type": "DB",
+          "entityPackages": [
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+            "com.walmart.gmp.feeds",
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.supplier"
+          ]
         }
       ],
       "type": "DB"
@@ -23,9 +39,23 @@
       "tenancyConfigs": [
         {
           "ccmPath": "partner-data-ingestor-app/application/cassandraConfig_k3",
+          "entityPackages": [
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+            "com.walmart.gmp.feeds"
+          ],
           "type": "DB"
-        }
-      ]
+        },
+        {
+          "ccmPath": "partner-data-ingestor-app/application/supplierCassConfig",
+          "entityPackages": [
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+            "com.walmart.gmp.feeds",
+            "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.supplier"
+          ],
+          "type": "DB"
+        }]
     }
   },
   "secondaryConfigs": {
@@ -36,7 +66,22 @@
         "tenancyConfigs": [
           {
             "ccmPath": "partner-data-ingestor-app/application/cassandraConfig_k3",
-            "type": "DB"
+            "type": "DB",
+            "entityPackages": [
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+              "com.walmart.gmp.feeds"
+            ]
+          },
+          {
+            "ccmPath": "partner-data-ingestor-app/application/supplierCassConfig",
+            "type": "DB",
+            "entityPackages": [
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+              "com.walmart.gmp.feeds",
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.supplier"
+            ]
           }
         ],
         "type": "DB"
@@ -50,7 +95,22 @@
         "tenancyConfigs": [
           {
             "ccmPath": "partner-data-ingestor-app/application/cassandraConfigQA",
-            "type": "DB"
+            "type": "DB",
+            "entityPackages": [
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+              "com.walmart.gmp.feeds"
+            ]
+          },
+          {
+            "ccmPath": "partner-data-ingestor-app/application/supplierCassConfig",
+            "type": "DB",
+            "entityPackages": [
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.item",
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v1.item",
+              "com.walmart.gmp.feeds",
+              "com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.supplier"
+            ]
           }
         ]
       }
