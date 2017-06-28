@@ -58,6 +58,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     public static final String ITEM_INDEX = "item_index";
     public static final String INVENTORY = "inventory";
     public static final String INVENTORY_INDEX = "inventory_index";
+    public static final String SUPPLIER_ITEM = "supplier_item";
     public static final Selector<String, FeedStatusEntity> feedSelector =
             selector(FeedStatusEntity.class, e -> {
                 e.getEntity_count();
@@ -74,6 +75,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     AsyncManager itemAM;
     AsyncManager itemInventoryAM;
     AsyncManager itemPriceAM;
+    AsyncManager supplierItemAM;
     private int fetchSize;
 
     public FeedStatusAndCountsChecker(Map<String, Object> properties) throws Exception {
@@ -83,6 +85,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         createDM(properties.get("inventoryItemDMCCMPath"), INVENTORY);
         createDM(properties.get("itemIndexDMCCMPath"), ITEM_INDEX);
         createDM(properties.get("inventoryItemIndexDMCCMPath"), INVENTORY_INDEX);
+        createDM(properties.get("supplierItemDMCCMPath"), SUPPLIER_ITEM);
 
         afterPropertiesSet();
     }
@@ -209,6 +212,8 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         } else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PRICE.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PROMO_PRICE.name()) ||
                 StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.CPT_PRICE.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.CPT_SELLER_ELIGIBILITY.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.MP_ITEM_PRICE_UPDATE.name())) {
             return FeedType.PRICE;
+        } else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.SUPPLIER_FULL_ITEM.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.MERCHANT_BULK_ITEM.name())) {
+            return FeedType.SUPPLIER_FULL_ITEM;
         } else {
             return FeedType.ITEM;
         }
@@ -259,6 +264,10 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                     limit(fetchSize).get(), "fetch-feed-items-inventory:" + feedId + "(" + itemIndex + ", Inf)", 3, 1000, 2, MILLISECONDS);
         } else if (feedType != null && feedType.equals(FeedType.PRICE)) {
             f = taskExecutor.async(() -> itemPriceAM.sliceQuery(StrippedItemDO.class).forSelect().
+                    withPartitionComponents(feedId, shard).fromClusterings(itemIndex).withExclusiveBounds().
+                    limit(fetchSize).get(), "fetch-feed-items:" + feedId + "(" + itemIndex + ", Inf)", 3, 1000, 2, MILLISECONDS);
+        } else if (feedType != null && feedType.equals(FeedType.SUPPLIER_FULL_ITEM)) {
+            f = taskExecutor.async(() -> supplierItemAM.sliceQuery(StrippedItemDO.class).forSelect().
                     withPartitionComponents(feedId, shard).fromClusterings(itemIndex).withExclusiveBounds().
                     limit(fetchSize).get(), "fetch-feed-items:" + feedId + "(" + itemIndex + ", Inf)", 3, 1000, 2, MILLISECONDS);
         } else {
@@ -341,6 +350,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     private ListenableFuture<ItemStatusEntity> updateBothDBs(ItemStatusEntity entity, String feedId, FeedType feedType) {
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm(ITEM);
         final DataManager<FeedItemStatusKey, ItemStatusEntity> priceItemDM = dm(PRICE);
+        final DataManager<FeedItemStatusKey, ItemStatusEntity> supplierItemDM = dm(SUPPLIER_ITEM);
 
         final V2ItemStatusIndexEntity v2entity = entity(V2ItemStatusIndexEntity.class,
                 V2ItemStatusIndexKey.from(FeedItemStatusKey.of(entity.id().getFeedId(), entity.id().getShard(),
@@ -351,6 +361,8 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         v2entity.setModified_dtm(new Date());
         if (feedType != null && feedType.equals(FeedType.PRICE)) {
             return priceItemDM.saveAsync(entity);
+        } else if (feedType != null && feedType.equals(FeedType.SUPPLIER_FULL_ITEM)) {
+            return supplierItemDM.saveAsync(entity);
         } else {
             return itemDM.saveAsync(entity);
         }
@@ -361,13 +373,15 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         final DataManager<FeedItemStatusKey, ItemStatusEntity> itemDM = dm(ITEM);
         final DataManager<InventoryFeedItemStatusKey, InventoryFeedItemStatusEntity> itemInventoryDM = dm(INVENTORY);
         final DataManager<FeedItemStatusKey, ItemStatusEntity> priceItemDM = dm(PRICE);
+        final DataManager<FeedItemStatusKey, ItemStatusEntity> supplierItemDM = dm(SUPPLIER_ITEM);
         final CqlDAO<?, ?> feedCqlDAO = (CqlDAO<?, ?>) itemDM.getPrimaryDAO(V2).unwrap();
         final CqlDAO<?, ?> feedCqlDAO0 = (CqlDAO<?, ?>) itemInventoryDM.getPrimaryDAO(V2).unwrap();
         final CqlDAO<?, ?> feedCqlDAOPrice = (CqlDAO<?, ?>) priceItemDM.getPrimaryDAO(V2).unwrap();
-
+        final CqlDAO<?, ?> feedCqlDAOSupplierItem = (CqlDAO<?, ?>) supplierItemDM.getPrimaryDAO(V2).unwrap();
         itemInventoryAM = feedCqlDAO0.cqlDriverConfig().getAsyncPersistenceManager();
         itemPriceAM = feedCqlDAOPrice.cqlDriverConfig().getAsyncPersistenceManager();
         itemAM = feedCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
+        supplierItemAM = feedCqlDAOSupplierItem.cqlDriverConfig().getAsyncPersistenceManager();
         fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
     }
 

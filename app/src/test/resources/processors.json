@@ -8,7 +8,8 @@
       "itemDMCCMPath": "ccm://feedstatus/item",
       "itemIndexDMCCMPath": "ccm://feedstatus/item_index",
       "inventoryItemIndexDMCCMPath": "ccm://feedstatus/inventory_index",
-      "inventoryItemDMCCMPath": "ccm://feedstatus/inventory"
+      "inventoryItemDMCCMPath": "ccm://feedstatus/inventory",
+      "supplierItemDMCCMPath": "ccm://feedstatus/supplier_item"
     }
   },
   {
@@ -20,7 +21,8 @@
       "itemDMCCMPath": "ccm://feedstatus/item",
       "itemIndexDMCCMPath": "ccm://feedstatus/item_index",
       "inventoryItemIndexDMCCMPath": "ccm://feedstatus/inventory_index",
-      "inventoryItemDMCCMPath": "ccm://feedstatus/inventory"
+      "inventoryItemDMCCMPath": "ccm://feedstatus/inventory",
+      "supplierItemDMCCMPath": "ccm://feedstatus/supplier_item"
     }
   },
   {

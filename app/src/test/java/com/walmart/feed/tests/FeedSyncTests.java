@@ -24,7 +24,7 @@ public class FeedSyncTests extends AbstractTestNGSpringContextTests {
     static {
         String packages = "com.walmartlabs.components.scheduler.entities,com.walmart.gmp.ingestion.platform.framework.data.model.impl,com.walmart.gmp.feeds";
         System.setProperty("dm.entity.packages.scan", packages);
-        System.setProperty("com.walmart.platform.config.runOnEnv", "prod");
+        System.setProperty("com.walmart.platform.config.runOnEnv", "stg");
         System.setProperty("com.walmart.platform.config.appName", "event-scheduler-app");
     }
 
@@ -34,11 +34,11 @@ public class FeedSyncTests extends AbstractTestNGSpringContextTests {
     @Test
     public void testFeedStatus() throws Exception {
         final EventDO eventDO = new EventDO();
-        eventDO.setXrefId("40D4A13AA593404BB634AE40F5DF711D@AQkBAAA");
+        eventDO.setXrefId("7BD356B75EBE4321940616273BE94F04@ARgBAQA");
         eventDO.setTenant("GMP/KAFKA/FEED_SYNC");
         Feedstatus feedstatus  = new Feedstatus();
-        feedstatus.setFeedType(FeedType.INVENTORY.name());
-        feedstatus.setFeedId("40D4A13AA593404BB634AE40F5DF711D@AQkBAAA");
+        feedstatus.setFeedType(FeedType.ITEM.name());
+        feedstatus.setFeedId("7BD356B75EBE4321940616273BE94F04@ARgBAQA");
         eventDO.setPayload(JsonUtil.convertToString(feedstatus));
         processorRegistry.process(eventDO).get(2, HOURS);
         System.out.println("here");

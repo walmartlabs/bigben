@@ -1,6 +1,9 @@
 package com.walmart.feed.tests;
 
 import com.walmart.gmp.feeds.FeedStatusAndCountsChecker;
+import com.walmart.gmp.ingestion.platform.framework.core.FeedType;
+import com.walmart.marketplace.messages.v1_feedstatus.Feedstatus;
+import com.walmart.services.common.util.JsonUtil;
 import com.walmartlabs.components.scheduler.entities.EventDO;
 import com.walmartlabs.components.scheduler.processors.ProcessorRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +11,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -24,7 +28,7 @@ public class FeedStatusAndCountCheckerTests extends AbstractTestNGSpringContextT
     static {
         String packages = "com.walmartlabs.components.scheduler.entities,com.walmart.gmp.ingestion.platform.framework.data.model.impl,com.walmart.gmp.feeds";
         System.setProperty("dm.entity.packages.scan", packages);
-        System.setProperty("com.walmart.platform.config.runOnEnv", "stg0");
+        System.setProperty("com.walmart.platform.config.runOnEnv", "stg");
         System.setProperty("com.walmart.platform.config.appName", "event-scheduler-app");
     }
 
@@ -32,13 +36,17 @@ public class FeedStatusAndCountCheckerTests extends AbstractTestNGSpringContextT
     private ProcessorRegistry processorRegistry;
 
     @Test
-    public void testFeedStatus() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testFeedStatus() throws ExecutionException, InterruptedException, TimeoutException, IOException {
         final EventDO eventDO = new EventDO();
-        eventDO.setXrefId("54547BE79897404A9F34D5AB2DF484BC@AQMBAQA");
-        eventDO.setTenant("GMP/KAFKA/FEED_STATUS/stg0");
-        eventDO.setPayload("54547BE79897404A9F34D5AB2DF484BC@AQMBAQA");
+        eventDO.setXrefId("0A6345EAFCD54DE2A13B92404199A59D@ARcBAAA");
+        eventDO.setTenant("GMP/KAFKA/FEED_STATUS");
+        Feedstatus feedstatus  = new Feedstatus();
+        feedstatus.setFeedType(FeedType.SUPPLIER_FULL_ITEM.name());
+        feedstatus.setFeedId("0A6345EAFCD54DE2A13B92404199A59D@ARcBAAA");
+        eventDO.setPayload(JsonUtil.convertToString(feedstatus));
         processorRegistry.process(eventDO).get(2, HOURS);
         System.out.println("here");
+        Thread.sleep(5000l);
     }
 
     public static void main(String[] args) throws Exception {
