@@ -212,7 +212,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         } else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PRICE.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PROMO_PRICE.name()) ||
                 StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.CPT_PRICE.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.CPT_SELLER_ELIGIBILITY.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.MP_ITEM_PRICE_UPDATE.name())) {
             return FeedType.PRICE;
-        } else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.SUPPLIER_FULL_ITEM.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.MERCHANT_BULK_ITEM.name())) {
+        } else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.SUPPLIER_FULL_ITEM.name())) {
             return FeedType.SUPPLIER_FULL_ITEM;
         } else {
             return FeedType.ITEM;
