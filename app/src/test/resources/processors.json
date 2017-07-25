@@ -1,6 +1,6 @@
 [
   {
-    "tenant": "GMP/KAFKA/FEED_STATUS",
+    "tenant": "GMP/KAFKA/FEED_STATUS/stg0",
     "type": "CUSTOM_CLASS",
     "properties": {
       "eventProcessorClass": "com.walmart.gmp.feeds.FeedStatusAndCountsChecker",
@@ -8,11 +8,12 @@
       "itemDMCCMPath": "ccm://feedstatus/item",
       "itemIndexDMCCMPath": "ccm://feedstatus/item_index",
       "inventoryItemIndexDMCCMPath": "ccm://feedstatus/inventory_index",
-      "inventoryItemDMCCMPath": "ccm://feedstatus/inventory"
+      "inventoryItemDMCCMPath": "ccm://feedstatus/inventory",
+      "priceItemDMCCMPath":"ccm://feedstatus/price"
     }
   },
   {
-    "tenant": "GMP/KAFKA/FEED_SYNC",
+    "tenant": "GMP/KAFKA/FEED_SYNC_STG",
     "type": "CUSTOM_CLASS",
     "properties": {
       "eventProcessorClass": "com.walmart.gmp.feeds.FeedSync",
