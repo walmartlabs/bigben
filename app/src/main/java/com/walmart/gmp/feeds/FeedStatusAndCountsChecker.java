@@ -2,13 +2,19 @@ package com.walmart.gmp.feeds;
 
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.ning.http.client.AsyncCompletionHandler;
+import com.ning.http.client.AsyncHttpClient;
+import com.ning.http.client.Response;
 import com.walmart.gmp.ingestion.platform.framework.core.FeedType;
 import com.walmart.gmp.ingestion.platform.framework.data.core.*;
 import com.walmart.gmp.ingestion.platform.framework.data.model.*;
 import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexEntity;
 import com.walmart.gmp.ingestion.platform.framework.data.model.impl.v2.index.V2ItemStatusIndexKey;
 import com.walmart.gmp.ingestion.platform.framework.feed.FeedData.FeedStatus;
+import com.walmart.gmp.ingestion.platform.framework.messaging.kafka.Constants;
 import com.walmart.marketplace.messages.v1_feedstatus.Feedstatus;
+import com.walmart.partnerapi.common.message.FeedReplayFilter;
+import com.walmart.partnerapi.common.message.PartnerReplayFeedMessage;
 import com.walmart.partnerapi.error.GatewayError;
 import com.walmart.partnerapi.model.v2.ItemStatus;
 import com.walmart.services.common.util.JsonUtil;
@@ -43,6 +49,7 @@ import static com.walmart.services.common.util.JsonUtil.convertToString;
 import static java.lang.Class.forName;
 import static java.lang.Integer.parseInt;
 import static java.lang.String.format;
+import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.stream.Collectors.toList;
 
@@ -77,6 +84,10 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     AsyncManager itemPriceAM;
     AsyncManager supplierItemAM;
     private int fetchSize;
+    private String replayUrl;
+    private float replayFactor;
+    private Map<String,String> replayHeaders;
+    private static final AsyncHttpClient ASYNC_HTTP_CLIENT = new AsyncHttpClient();
 
     public FeedStatusAndCountsChecker(Map<String, Object> properties) throws Exception {
         createDM(properties.get("feedDMCCMPath"), FEED);
@@ -142,7 +153,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 switch (FeedStatus.valueOf(feedStatus == null ? INPROGRESS.name() : feedStatus)) {
                     case PROCESSED:
                         L.info(format("feedId: %s is already marked PROCESSED, nothing to do", feedId));
-                        return immediateFuture(event);
+                        return transform(replayItems(fes,feedType),(Function<FeedStatusEntity, Event>) $ -> event);
                     case RECEIVED:
                         L.warn(format("feedId: %s, is still in received status: %s, marking all items timed out", feedId, feedStatus));
                         entity.setSuccessCount(0);
@@ -177,7 +188,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                             }
                             entity.setFeed_status(PROCESSED.name());
                             entity.setModified_dtm(new Date());
-                            return transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, Event>) $$ -> event);
+                            return transform(transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, ListenableFuture<FeedStatusEntity>>) $$ -> replayItems(entity,feedType)), (Function<ListenableFuture<FeedStatusEntity>, Event>) $$ -> event);
                         });
                     case ERROR:
                         L.info(format("feedId: %s is already marked ERROR, nothing to do", feedId));
@@ -203,6 +214,56 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 L.error(format("feedId: %s, event failed with a non-retryable error, will not be tried again: " + event, event.getXrefId()), cause);
             return immediateFuture(event);
         }
+    }
+
+    private ListenableFuture<FeedStatusEntity> replayItems(FeedStatusEntity entity, FeedType feedType) {
+
+        try {
+            if (!FeedType.SUPPLIER_FULL_ITEM.equals(feedType)) {
+                L.info(format("no replay request for feedId: %s it is not a 1p feed.", entity.getFeed_id()));
+                return immediateFuture(entity);
+            }
+            if (entity.getSystemErrorCount() == null && entity.getSystemErrorCount() == null || entity.getSystemErrorCount() == 0 && entity.getSystemErrorCount() == 0) {
+                L.info(format("no replay request for feedId: %s system and timeout counts are zero", entity.getFeed_id()));
+                return immediateFuture(entity);
+            }
+            final int systemErrorCount = entity.getSystemErrorCount() != null ? entity.getSystemErrorCount() : 0;
+            final int timeoutErrorCount = entity.getTimeoutErrorCount() != null ? entity.getTimeoutErrorCount() : 0;
+
+            if (((float) systemErrorCount + timeoutErrorCount) / Integer.parseInt(entity.getEntity_count()) < replayFactor) {
+                L.info(format("no replay request for feedId: %s the timeout/system error threshold has not been met ", entity.getFeed_id()));
+                return immediateFuture(entity);
+            }
+
+            final PartnerReplayFeedMessage m = new PartnerReplayFeedMessage();
+            m.setFeedID(entity.getFeed_id());
+            final FeedReplayFilter f = new FeedReplayFilter();
+            f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
+            Set<String> filterValue = entity.getSystemErrorCount() > 0 && entity.getTimeoutErrorCount() > 0 ? new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())) : entity.getSystemErrorCount() > 0 ? new HashSet<>(asList(ItemStatus.SYSTEM_ERROR.name())) : new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name()));
+            f.setFilterValue(filterValue);
+            m.setFilter(asList(f));
+
+            final AsyncHttpClient.BoundRequestBuilder builder = ASYNC_HTTP_CLIENT.preparePut(replayUrl).setBody(convertToString(asList(m)));
+            replayHeaders.forEach(builder::addHeader);
+
+            builder.execute(new AsyncCompletionHandler<Response>() {
+                @Override
+                public Response onCompleted(Response response) throws Exception {
+                    if (response.getStatusCode() == 200) {
+                        if (L.isDebugEnabled())
+                            L.debug("replay request submitted successfully");
+                    } else {
+                        L.warn(format("replay request failed with status code: %s and error:  %s", response.getStatusCode(), response.getResponseBody()));
+                    }
+                    return response;
+                }
+
+            });
+
+        } catch (Exception e) {
+            L.error(format("replay processing failed with % s", getRootCause(e)));
+        }
+        return immediateFuture(entity);
     }
 
     private FeedType getFeedType(String feedTypeStr) {
@@ -383,6 +444,9 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         itemAM = feedCqlDAO.cqlDriverConfig().getAsyncPersistenceManager();
         supplierItemAM = feedCqlDAOSupplierItem.cqlDriverConfig().getAsyncPersistenceManager();
         fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
+        replayUrl =  PROPS.getProperty("replay.url");
+        replayHeaders=  Constants.OBJECT_MAPPER.readValue(PROPS.getProperty("replay.headers"), HashMap.class);
+        replayFactor = Float.parseFloat(PROPS.getProperty("replay.factor"));
     }
 
     private Feedstatus getEventFeedStatus(String payload) {

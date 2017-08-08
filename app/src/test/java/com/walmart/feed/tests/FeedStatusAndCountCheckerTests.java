@@ -12,7 +12,6 @@ import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import org.testng.annotations.Test;
 
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -30,6 +29,8 @@ public class FeedStatusAndCountCheckerTests extends AbstractTestNGSpringContextT
         System.setProperty("dm.entity.packages.scan", packages);
         System.setProperty("com.walmart.platform.config.runOnEnv", "stg");
         System.setProperty("com.walmart.platform.config.appName", "event-scheduler-app");
+        System.setProperty("ccmProps", "bigbenProps");
+
     }
 
     @Autowired
@@ -38,11 +39,11 @@ public class FeedStatusAndCountCheckerTests extends AbstractTestNGSpringContextT
     @Test
     public void testFeedStatus() throws ExecutionException, InterruptedException, TimeoutException, IOException {
         final EventDO eventDO = new EventDO();
-        eventDO.setXrefId("0A6345EAFCD54DE2A13B92404199A59D@ARcBAAA");
+        eventDO.setXrefId("95FE76AD3A894F9884767CCD9D4B0E84@ARgBAAA");
         eventDO.setTenant("GMP/KAFKA/FEED_STATUS");
         Feedstatus feedstatus  = new Feedstatus();
         feedstatus.setFeedType(FeedType.SUPPLIER_FULL_ITEM.name());
-        feedstatus.setFeedId("0A6345EAFCD54DE2A13B92404199A59D@ARcBAAA");
+        feedstatus.setFeedId("95FE76AD3A894F9884767CCD9D4B0E84@ARgBAAA");
         eventDO.setPayload(JsonUtil.convertToString(feedstatus));
         processorRegistry.process(eventDO).get(2, HOURS);
         System.out.println("here");
