@@ -251,9 +251,9 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 public Response onCompleted(Response response) throws Exception {
                     if (response.getStatusCode() == 200) {
                         if (L.isDebugEnabled())
-                            L.debug("replay request submitted successfully");
+                            L.debug(format("replay request submitted successfully for feed_id: %s ",entity.getFeed_id()));
                     } else {
-                        L.warn(format("replay request failed with status code: %s and error:  %s", response.getStatusCode(), response.getResponseBody()));
+                        L.warn(format("replay request failed for feed_id: %s  with status code: %s and error:  %s", entity.getFeed_id(),response.getStatusCode(), response.getResponseBody()));
                     }
                     return response;
                 }
