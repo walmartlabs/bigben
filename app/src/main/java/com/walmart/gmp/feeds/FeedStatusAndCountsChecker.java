@@ -223,7 +223,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 L.info(format("no replay request for feedId: %s it is not a 1p feed.", entity.getFeed_id()));
                 return immediateFuture(entity);
             }
-            if (entity.getSystemErrorCount() == null && entity.getSystemErrorCount() == null || entity.getSystemErrorCount() == 0 && entity.getSystemErrorCount() == 0) {
+            if (entity.getSystemErrorCount() == null && entity.getTimeoutErrorCount() == null || entity.getSystemErrorCount() == 0 && entity.getTimeoutErrorCount() == 0) {
                 L.info(format("no replay request for feedId: %s system and timeout counts are zero", entity.getFeed_id()));
                 return immediateFuture(entity);
             }
