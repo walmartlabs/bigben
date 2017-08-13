@@ -223,14 +223,17 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 L.info(format("no replay request for feedId: %s it is not a 1p feed.", entity.getFeed_id()));
                 return immediateFuture(entity);
             }
-            if (entity.getSystemErrorCount() == null && entity.getTimeoutErrorCount() == null || entity.getSystemErrorCount() == 0 && entity.getTimeoutErrorCount() == 0) {
-                L.info(format("no replay request for feedId: %s system and timeout counts are zero", entity.getFeed_id()));
-                return immediateFuture(entity);
-            }
             final int systemErrorCount = entity.getSystemErrorCount() != null ? entity.getSystemErrorCount() : 0;
             final int timeoutErrorCount = entity.getTimeoutErrorCount() != null ? entity.getTimeoutErrorCount() : 0;
 
-            if (((float) systemErrorCount + timeoutErrorCount) / Integer.parseInt(entity.getEntity_count()) < replayFactor) {
+            if(systemErrorCount + timeoutErrorCount == 0){
+                L.info(format("no replay request for feedId: %s system and timeout counts are zero", entity.getFeed_id()));
+                return immediateFuture(entity);
+            }
+            final int successCount = entity.getSuccessCount() !=null ? entity.getSuccessCount() : 0;
+            final int dataErrorCount = entity.getDataErrorCount() !=null ? entity.getDataErrorCount() : 0;
+
+            if (((float) systemErrorCount + timeoutErrorCount)/ (systemErrorCount +  timeoutErrorCount + successCount + dataErrorCount)  < replayFactor) {
                 L.info(format("no replay request for feedId: %s the timeout/system error threshold has not been met ", entity.getFeed_id()));
                 return immediateFuture(entity);
             }
@@ -239,7 +242,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             m.setFeedID(entity.getFeed_id());
             final FeedReplayFilter f = new FeedReplayFilter();
             f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
-            Set<String> filterValue = entity.getSystemErrorCount() > 0 && entity.getTimeoutErrorCount() > 0 ? new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())) : entity.getSystemErrorCount() > 0 ? new HashSet<>(asList(ItemStatus.SYSTEM_ERROR.name())) : new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name()));
+            Set<String> filterValue = systemErrorCount > 0 && timeoutErrorCount > 0 ? new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())) : systemErrorCount > 0 ? new HashSet<>(asList(ItemStatus.SYSTEM_ERROR.name())) : new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name()));
             f.setFilterValue(filterValue);
             m.setFilter(asList(f));
 
