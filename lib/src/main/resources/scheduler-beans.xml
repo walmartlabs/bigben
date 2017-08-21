@@ -30,6 +30,8 @@
     </bean>
 
     <bean id="eventProcessor" class="com.walmartlabs.components.scheduler.input.MessageProcessor"/>
+    <bean id="bulkEventProcessor" class="com.walmartlabs.components.scheduler.input.BulkMessageProcessor"/>
+
     <bean id="kafkaConsumer"
           class="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean">
         <constructor-arg index="0" value="${ccmProps}"/>
