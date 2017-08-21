@@ -1,19 +1,26 @@
 package com.walmartlabs.components.tests;
 
 import com.walmart.gmp.ingestion.platform.framework.data.core.DataManager;
+import com.walmart.marketplace.messages.v1_bigben.BulkEventRequest;
 import com.walmart.marketplace.messages.v1_bigben.EventRequest;
 import com.walmart.marketplace.messages.v1_bigben.EventResponse;
 import com.walmart.marketplace.messages.v1_bigben.EventResponse.Status;
+import com.walmart.services.common.util.JsonUtil;
 import com.walmartlabs.components.scheduler.entities.Bucket;
 import com.walmartlabs.components.scheduler.entities.Event;
 import com.walmartlabs.components.scheduler.entities.EventDO.EventKey;
 import com.walmartlabs.components.scheduler.entities.EventLookup;
+import com.walmartlabs.components.scheduler.entities.EventLookupDO;
 import com.walmartlabs.components.scheduler.entities.EventLookupDO.EventLookupKey;
+import com.walmartlabs.components.scheduler.input.BulkMessageProcessor;
 import com.walmartlabs.components.scheduler.input.EventReceiver;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.time.ZonedDateTime;
@@ -35,16 +42,19 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
 
     static {
         setProperty("dm.entity.packages.scan", "com.walmartlabs.components.scheduler.entities");
-        setProperty("com.walmart.platform.config.runOnEnv", "prod");
+        setProperty("com.walmart.platform.config.runOnEnv", "stg0");
         setProperty("event.shard.size", "10");
         setProperty("hazelcast.slow.operation.detector.stacktrace.logging.enabled", "true");
         setProperty("com.walmart.platform.config.appName", "gmp-solr-consumer");
         setProperty("hz.config", "hz_local");
-        setProperty("ccmProps", "bigbenProps");
+        setProperty("ccmProps", "bigben_demo");
     }
 
     @Autowired
     private EventReceiver eventReceiver;
+
+    @Autowired
+    private BulkMessageProcessor bulkMessageProcessor;
 
     @Autowired
     @Qualifier("bigbenDataManager")
@@ -58,7 +68,7 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
     @Qualifier("bigbenDataManager")
     private DataManager<ZonedDateTime, Bucket> bucketDataManager;
 
-    @Test
+    @Test()
     public void testEventReceiver() throws Exception {
         final EventRequest eventRequest = new EventRequest();
         eventRequest.setId(randomUUID().toString());
@@ -110,6 +120,33 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
         assertNull(eventDataManager.get(EventKey.of(eventLookup.getBucketId(), 0, eventLookup.getEventTime(), eventLookup.getEventId())));
 
         new CountDownLatch(1).await();
+    }
+
+
+
+    @Test
+    public void testBulkEventReceiver() throws Exception {
+        final BulkEventRequest bulkEventRequest = new BulkEventRequest();
+        for(int i = 0; i < 2; ++i) {
+            EventRequest eventRequest = new EventRequest();
+            eventRequest.setId(randomUUID().toString());
+            eventRequest.setTenant("$$TEST$$");
+            eventRequest.setPayload("payload123-" + i);
+            eventRequest.setMode(ADD);
+            eventRequest.setEventTime(nowUTC().plusMinutes(2).toString());
+            bulkEventRequest.getEvents().add(eventRequest);
+            bulkEventRequest.setSenderId("vudu");
+            bulkEventRequest.setId("vudu-test-2");
+        }
+        String bulkrequest = JsonUtil.convertToString(bulkEventRequest);
+        final EventResponse eventResponse;
+        final ConsumerRecord<String, String> strConsumerRecord = bulkMessageProcessor.apply("dummyTopic", new ConsumerRecord<String, String>("dummyTopic", 1, 100L, "mig1", bulkrequest)).get();
+
+
+        final EventLookupDO.EventLookupKey eventLookupKey = new EventLookupDO.EventLookupKey(bulkEventRequest.getId(), bulkEventRequest.getSenderId());
+        final EventLookup eventLookup = lookupManager.get(eventLookupKey);
+        String payload = eventLookup.getPayload();
+        Assert.assertEquals(StringUtils.contains(payload,bulkEventRequest.getEvents().get(0).getId()), true);
     }
 
     private void compareEvent(EventRequest eventRequest, EventLookup eventLookup) {

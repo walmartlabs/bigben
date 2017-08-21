@@ -38,46 +38,50 @@ public class MessageProcessor implements TopicMessageProcessor {
     public ListenableFuture<ConsumerRecord<String, String>> apply(String topic, ConsumerRecord<String, String> record) {
         try {
             final EventRequest eventRequest = convertToObject(record.value(), EventRequest.class);
-            if (eventRequest.getMode() == REMOVE) {
-                return catchingAsync(transformAsync(eventReceiver.removeEvent(eventRequest.getId(), eventRequest.getTenant()), e -> {
-                    if (e == null) {
-                        L.warn("null response received: " + record);
-                        return FAIL;
-                    } else if (ERROR.equals(e.getStatus())) {
-                        L.error("failed to add event: " + e);
-                        return FAIL;
-                    }
-                    return SUCCESS;
-                }), Exception.class, ex -> {
-                    L.error("error in removing event: " + record, getRootCause(ex));
-                    return FAIL;
-                });
-            } else {
-                return catchingAsync(transformAsync(eventReceiver.addEvent(eventRequest), e -> {
-                    if (e == null) {
-                        L.warn("null response received: " + record);
-                        return FAIL;
-                    } else if (ERROR.equals(e.getStatus())) {
-                        L.error("failed to add event: " + e);
-                        return FAIL;
-                    }
-                    if (REJECTED.equals(e.getStatus())) {
-                        L.warn(format("event was rejected, event id: %s, tenant: %s", e.getId(), e.getTenant()));
-                        return transformAsync(processorRegistry.process(toEvent(e)), $ -> SUCCESS);
-                    } else if (TRIGGERED.equals(e.getStatus())) {
-                        L.warn(format("event was triggered immediately (likely lapsed), event id: %s, tenant: %s, " +
-                                "eventTime: %s, currentTime: %s", e.getId(), e.getTenant(), parse(e.getEventTime()), nowUTC()));
-                        return transformAsync(processorRegistry.process(toEvent(e)), $ -> SUCCESS);
-                    }
-                    return SUCCESS;
-                }), Exception.class, ex -> {
-                    L.error("error in removing event: " + record, getRootCause(ex));
-                    return FAIL;
-                });
-            }
+            return updateEvent(record, eventRequest);
         } catch (Exception e) {
             L.error("could not process record: " + record, getRootCause(e));
             return FAIL;
+        }
+    }
+
+    public ListenableFuture<ConsumerRecord<String, String>> updateEvent(ConsumerRecord<String, String> record, EventRequest eventRequest) {
+        if (eventRequest.getMode() == REMOVE) {
+            return catchingAsync(transformAsync(eventReceiver.removeEvent(eventRequest.getId(), eventRequest.getTenant()), e -> {
+                if (e == null) {
+                    L.warn("null response received: " + record);
+                    return FAIL;
+                } else if (ERROR.equals(e.getStatus())) {
+                    L.error("failed to add event: " + e);
+                    return FAIL;
+                }
+                return SUCCESS;
+            }), Exception.class, ex -> {
+                L.error("error in removing event: " + record, getRootCause(ex));
+                return FAIL;
+            });
+        } else {
+            return catchingAsync(transformAsync(eventReceiver.addEvent(eventRequest), e -> {
+                if (e == null) {
+                    L.warn("null response received: " + record);
+                    return FAIL;
+                } else if (ERROR.equals(e.getStatus())) {
+                    L.error("failed to add event: " + e);
+                    return FAIL;
+                }
+                if (REJECTED.equals(e.getStatus())) {
+                    L.warn(format("event was rejected, event id: %s, tenant: %s", e.getId(), e.getTenant()));
+                    return transformAsync(processorRegistry.process(toEvent(e)), $ -> SUCCESS);
+                } else if (TRIGGERED.equals(e.getStatus())) {
+                    L.warn(format("event was triggered immediately (likely lapsed), event id: %s, tenant: %s, " +
+                            "eventTime: %s, currentTime: %s", e.getId(), e.getTenant(), parse(e.getEventTime()), nowUTC()));
+                    return transformAsync(processorRegistry.process(toEvent(e)), $ -> SUCCESS);
+                }
+                return SUCCESS;
+            }), Exception.class, ex -> {
+                L.error("error in removing event: " + record, getRootCause(ex));
+                return FAIL;
+            });
         }
     }
 }
