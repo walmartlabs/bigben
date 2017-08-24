@@ -38,6 +38,12 @@
         <constructor-arg index="1" ref="eventProcessor"/>
     </bean>
 
+    <bean id="bulkKafkaConsumer"
+          class="com.walmart.gmp.ingestion.platform.framework.messaging.kafka.consumer.KafkaConsumerBean">
+        <constructor-arg index="0" value="${bulkccmProps}"/>
+        <constructor-arg index="1" ref="bulkEventProcessor"/>
+    </bean>
+
     <bean class="com.walmartlabs.components.scheduler.processors.EventEnrichProcessor">
         <constructor-arg index="0" ref="processRegistry"/>
         <constructor-arg index="1" ref="bigbenDataManager"/>
