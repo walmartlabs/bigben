@@ -72,7 +72,7 @@ public class BulkMessageProcessor extends MessageProcessor implements Initializi
 
             return transformAsync(updateEventLookup(bulkEventRequest), $ -> {
                 final List<ListenableFuture<ConsumerRecord<String, String>>> allListenableFuture = new ArrayList<>();
-                bulkEventRequest.getEvents().forEach(r -> {
+                bulkEventRequest.getEventRequests().forEach(r -> {
                     ListenableFuture<ConsumerRecord<String, String>> singleListenableFuture = super.updateEvent(record, r);
                     allListenableFuture.add(singleListenableFuture);
                 });
@@ -90,8 +90,8 @@ public class BulkMessageProcessor extends MessageProcessor implements Initializi
         final ZonedDateTime bucketId = utc(bucketize(eventTimeMillis, scanInterval));
         final ListenableFuture<BulkEventRequest> bulkEventRequestListenableFuture = deleteEventLookup(bulkEventRequest);
         return transformAsync(bulkEventRequestListenableFuture, $ -> {
-            if (bulkEventRequest != null && bulkEventRequest.getEvents() != null)
-                bulkEventRequest.getEvents().forEach(s -> allEventRequestId.add(s.getId() + IDMERG + s.getTenant()));
+            if (bulkEventRequest != null && bulkEventRequest.getEventRequests() != null)
+                bulkEventRequest.getEventRequests().forEach(s -> allEventRequestId.add(s.getId() + IDMERG + s.getTenant()));
             final EventLookupDO.EventLookupKey eventLookupKey = new EventLookupDO.EventLookupKey(bulkEventRequest.getId(), bulkEventRequest.getSenderId());
             EventLookup eventLookupEntity = DataManager.entity(EventLookup.class, eventLookupKey);
             eventLookupEntity.setPayload(String.join("$$,$$", allEventRequestId));
@@ -105,7 +105,7 @@ public class BulkMessageProcessor extends MessageProcessor implements Initializi
     }
 
     private ListenableFuture<BulkEventRequest> deleteEventLookup(BulkEventRequest bulkEventRequest) {
-        if (bulkEventRequest != null && bulkEventRequest.getEvents() != null) {
+        if (bulkEventRequest != null && bulkEventRequest.getEventRequests() != null) {
             final EventLookupDO.EventLookupKey eventLookupKey = new EventLookupDO.EventLookupKey(bulkEventRequest.getId(), bulkEventRequest.getSenderId());
             EventLookup eventLookupEntity = lookupDataManager.get(eventLookupKey);
             final List<ListenableFuture<EventResponse>> allListenableFuture = new ArrayList<>();

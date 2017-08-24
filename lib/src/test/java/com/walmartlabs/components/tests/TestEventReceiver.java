@@ -134,7 +134,7 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
             eventRequest.setPayload("payload123-" + i);
             eventRequest.setMode(ADD);
             eventRequest.setEventTime(nowUTC().plusMinutes(2).toString());
-            bulkEventRequest.getEvents().add(eventRequest);
+            bulkEventRequest.getEventRequests().add(eventRequest);
             bulkEventRequest.setSenderId("vudu");
             bulkEventRequest.setId("vudu-test-2");
         }
@@ -146,7 +146,7 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
         final EventLookupDO.EventLookupKey eventLookupKey = new EventLookupDO.EventLookupKey(bulkEventRequest.getId(), bulkEventRequest.getSenderId());
         final EventLookup eventLookup = lookupManager.get(eventLookupKey);
         String payload = eventLookup.getPayload();
-        Assert.assertEquals(StringUtils.contains(payload,bulkEventRequest.getEvents().get(0).getId()), true);
+        Assert.assertEquals(StringUtils.contains(payload,bulkEventRequest.getEventRequests().get(0).getId()), true);
     }
 
     private void compareEvent(EventRequest eventRequest, EventLookup eventLookup) {
