@@ -49,7 +49,7 @@ public class BulkMessageProcessor extends MessageProcessor implements Initializi
     private final ListenableFuture<BulkEventRequest> SUCCESS_EVENT = immediateFuture(null);
     ListenableFuture<BulkEventRequest> FAIL_EVENT = immediateFailedFuture(exception);
 
-    private final String IDMERG = "$$||$$";
+    private final String IDMERG = "##!!##";
     private int scanInterval;
     private int lapseOffset;
 
