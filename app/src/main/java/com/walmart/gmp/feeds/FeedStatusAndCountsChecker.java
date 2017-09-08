@@ -85,7 +85,6 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
     AsyncManager supplierItemAM;
     private int fetchSize;
     private String replayUrl;
-    private float replayFactor;
     private Map<String,String> replayHeaders;
     private static final AsyncHttpClient ASYNC_HTTP_CLIENT = new AsyncHttpClient();
 
@@ -225,18 +224,6 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             }
             final int systemErrorCount = entity.getSystemErrorCount() != null ? entity.getSystemErrorCount() : 0;
             final int timeoutErrorCount = entity.getTimeoutErrorCount() != null ? entity.getTimeoutErrorCount() : 0;
-
-            if(systemErrorCount + timeoutErrorCount == 0){
-                L.info(format("no replay request for feedId: %s system and timeout counts are zero", entity.getFeed_id()));
-                return immediateFuture(entity);
-            }
-            final int successCount = entity.getSuccessCount() !=null ? entity.getSuccessCount() : 0;
-            final int dataErrorCount = entity.getDataErrorCount() !=null ? entity.getDataErrorCount() : 0;
-
-            if (((float) systemErrorCount + timeoutErrorCount)/ (systemErrorCount +  timeoutErrorCount + successCount + dataErrorCount)  < replayFactor) {
-                L.info(format("no replay request for feedId: %s the timeout/system error threshold has not been met ", entity.getFeed_id()));
-                return immediateFuture(entity);
-            }
 
             final PartnerReplayFeedMessage m = new PartnerReplayFeedMessage();
             m.setFeedID(entity.getFeed_id());
@@ -449,7 +436,6 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         fetchSize = PROPS.getInteger("feed.items.fetch.size", 400);
         replayUrl =  PROPS.getProperty("replay.url");
         replayHeaders=  Constants.OBJECT_MAPPER.readValue(PROPS.getProperty("replay.headers"), HashMap.class);
-        replayFactor = Float.parseFloat(PROPS.getProperty("replay.factor"));
     }
 
     private Feedstatus getEventFeedStatus(String payload) {
