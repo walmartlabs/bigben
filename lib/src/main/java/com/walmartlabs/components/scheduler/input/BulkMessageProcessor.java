@@ -50,6 +50,7 @@ public class BulkMessageProcessor extends MessageProcessor implements Initializi
     ListenableFuture<BulkEventRequest> FAIL_EVENT = immediateFailedFuture(exception);
 
     private final String IDMERG = "##!!##";
+    private final String PAYLOAD_MERG = "##__##";
     private int scanInterval;
     private int lapseOffset;
 
@@ -94,7 +95,7 @@ public class BulkMessageProcessor extends MessageProcessor implements Initializi
                 bulkEventRequest.getEventRequests().forEach(s -> allEventRequestId.add(s.getId() + IDMERG + s.getTenant()));
             final EventLookupDO.EventLookupKey eventLookupKey = new EventLookupDO.EventLookupKey(bulkEventRequest.getId(), bulkEventRequest.getSenderId());
             EventLookup eventLookupEntity = DataManager.entity(EventLookup.class, eventLookupKey);
-            eventLookupEntity.setPayload(String.join("$$,$$", allEventRequestId));
+            eventLookupEntity.setPayload(String.join(PAYLOAD_MERG, allEventRequestId));
             eventLookupEntity.setCreatedAt(TimeUtils.nowUTC());
             eventLookupEntity.setModifiedAt(TimeUtils.nowUTC());
             eventLookupEntity.setEventId(bulkEventRequest.getMessageId());
@@ -112,7 +113,7 @@ public class BulkMessageProcessor extends MessageProcessor implements Initializi
             if (eventLookupEntity != null) {
                 String payload = eventLookupEntity.getPayload();
                 if (payload != null) {
-                    final List<String> listofEventToDelete = Arrays.asList(payload.split("$$,$$"));
+                    final List<String> listofEventToDelete = Arrays.asList(payload.split(PAYLOAD_MERG));
                     for (String eventId : listofEventToDelete) {
                         final String[] split = eventId.split(IDMERG);
                         if (split != null && split.length > 1) {

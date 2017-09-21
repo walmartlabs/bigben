@@ -48,6 +48,7 @@ public class TestEventReceiver extends AbstractTestNGSpringContextTests {
         setProperty("com.walmart.platform.config.appName", "gmp-solr-consumer");
         setProperty("hz.config", "hz_local");
         setProperty("ccmProps", "bigben_demo");
+        setProperty("bulkccmProps", "bulk_bigben_prop");
     }
 
     @Autowired
