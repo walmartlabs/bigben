@@ -45,9 +45,9 @@ public class BulkMessageProcessor extends MessageProcessor implements Initializi
     Exception exception = new Exception("immediate failed future as one of the listnable future failed to process");
 
     private final ListenableFuture<ConsumerRecord<String, String>> SUCCESS = immediateFuture(null);
-    private final ListenableFuture<ConsumerRecord<String, String>> FAIL = immediateFailedFuture(exception);
+    private final ListenableFuture<ConsumerRecord<String, String>> FAIL = immediateFuture(null);
     private final ListenableFuture<BulkEventRequest> SUCCESS_EVENT = immediateFuture(null);
-    ListenableFuture<BulkEventRequest> FAIL_EVENT = immediateFailedFuture(exception);
+    ListenableFuture<BulkEventRequest> FAIL_EVENT = immediateFuture(null);
 
     private final String IDMERG = "##!!##";
     private final String PAYLOAD_MERG = "##__##";
