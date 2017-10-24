@@ -260,7 +260,9 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
 
         if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.INVENTORY.name())) {
             return FeedType.INVENTORY;
-        } else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PRICE.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PROMO_PRICE.name()) ||
+        } else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.LAGTIME.name())) {
+            return FeedType.LAGTIME;
+        }else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PRICE.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.PROMO_PRICE.name()) ||
                 StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.CPT_PRICE.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.CPT_SELLER_ELIGIBILITY.name()) || StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.MP_ITEM_PRICE_UPDATE.name())) {
             return FeedType.PRICE;
         } else if (StringUtils.equalsIgnoreCase(feedTypeStr, FeedType.SUPPLIER_FULL_ITEM.name())) {
@@ -309,7 +311,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
 
     private ListenableFuture<List<StrippedItemEntity>> calculateCounts0(String feedId, int shard, int itemIndex, Map<ItemStatus, Integer> counts, FeedType feedType) {
         ListenableFuture<List<StrippedItemDO>> f = immediateFuture(null);
-        if (feedType != null && feedType.equals(FeedType.INVENTORY)) {
+        if (feedType != null && (feedType.equals(FeedType.INVENTORY) || feedType.equals(FeedType.LAGTIME))) {
             f = taskExecutor.async(() -> itemInventoryAM.sliceQuery(StrippedItemDO.class).forSelect().
                     withPartitionComponents(feedId, shard).fromClusterings(itemIndex).withExclusiveBounds().
                     limit(fetchSize).get(), "fetch-feed-items-inventory:" + feedId + "(" + itemIndex + ", Inf)", 3, 1000, 2, MILLISECONDS);
@@ -360,7 +362,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
 
 
     private ListenableFuture<List<StrippedItemEntity>> tof(List<StrippedItemEntity> inprogress, String feedId, FeedType feedType) {
-        if (feedType != null && feedType.equals(FeedType.INVENTORY)) {
+        if (feedType != null && (feedType.equals(FeedType.INVENTORY) || feedType.equals(FeedType.LAGTIME))) {
             return collectInventoryItemEntity(inprogress, feedId);
         }
         return collectItemEntity(inprogress, feedId, feedType);
