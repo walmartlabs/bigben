@@ -140,6 +140,11 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                     if (!ERROR.name().equals(feedStatus) && !PROCESSED.name().equals(feedStatus)) {
                         L.warn(format("feedId: %s was not marked %s or %s, marking it as %s", feedId, ERROR, PROCESSED, ERROR));
                         entity.setFeed_status(ERROR.name());
+                        entity.setSuccessCount(0);
+                        entity.setSystemErrorCount(0);
+                        entity.setDataErrorCount(0);
+                        entity.setEntity_count(String.valueOf(itemCount));
+                        entity.setTimeoutErrorCount(itemCount);
                         entity.setError_code(convertToString(createEntityCountGatewayError()));
                         entity.setError_message(convertToString(createEntityCountGatewayError()));
                         entity.setModified_dtm(new Date());
