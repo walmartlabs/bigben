@@ -140,11 +140,6 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                     if (!ERROR.name().equals(feedStatus) && !PROCESSED.name().equals(feedStatus)) {
                         L.warn(format("feedId: %s was not marked %s or %s, marking it as %s", feedId, ERROR, PROCESSED, ERROR));
                         entity.setFeed_status(ERROR.name());
-                        entity.setSuccessCount(0);
-                        entity.setSystemErrorCount(0);
-                        entity.setDataErrorCount(0);
-                        entity.setEntity_count(String.valueOf(itemCount));
-                        entity.setTimeoutErrorCount(itemCount);
                         entity.setError_code(convertToString(createEntityCountGatewayError()));
                         entity.setError_message(convertToString(createEntityCountGatewayError()));
                         entity.setModified_dtm(new Date());
@@ -228,20 +223,31 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 L.info(format("no replay request for feedId: %s it is not a 1p feed.", entity.getFeed_id()));
                 return immediateFuture(entity);
             }
-            final int systemErrorCount = entity.getSystemErrorCount() != null ? entity.getSystemErrorCount() : 0;
-            final int timeoutErrorCount = entity.getTimeoutErrorCount() != null ? entity.getTimeoutErrorCount() : 0;
-
             final PartnerReplayFeedMessage m = new PartnerReplayFeedMessage();
             m.setFeedID(entity.getFeed_id());
             final FeedReplayFilter f = new FeedReplayFilter();
-            if(entity.getEntity_count() !=null &&  entity.getTimeoutErrorCount() !=null  && Integer.parseInt(entity.getEntity_count()) == entity.getTimeoutErrorCount()){
-                f.setFilterName(FeedReplayFilter.ReplayFilterType.ALL);
-                m.setFilter(asList(f));
-            } else {
-                f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
-                Set<String> filterValue = systemErrorCount > 0 && timeoutErrorCount > 0 ? new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())) : systemErrorCount > 0 ? new HashSet<>(asList(ItemStatus.SYSTEM_ERROR.name())) :  new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name()));
-                f.setFilterValue(filterValue);
-                m.setFilter(asList(f));
+
+            if (PROCESSED.name().equalsIgnoreCase(entity.getFeed_status())) {
+                if (entity.getEntity_count() != null && entity.getTimeoutErrorCount() != null && Integer.parseInt(entity.getEntity_count()) == entity.getTimeoutErrorCount()) {
+                    f.setFilterName(FeedReplayFilter.ReplayFilterType.ALL);
+                    m.setFilter(asList(f));
+                } else {
+                    f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
+                    f.setFilterValue(new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())));
+                    m.setFilter(asList(f));
+                }
+            } else if (ERROR.name().equalsIgnoreCase(entity.getFeed_status())) {
+                try {
+                    if (entity.getEntity_count() != null && entity.getTimeoutErrorCount() != null && Integer.parseInt(entity.getEntity_count()) == entity.getTimeoutErrorCount()) {
+                        f.setFilterName(FeedReplayFilter.ReplayFilterType.ALL);
+                        m.setFilter(asList(f));
+                    }
+                } catch (Exception e) {} //try ALL option first
+                if (f.getFilterName() == null) {
+                    f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
+                    f.setFilterValue(new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())));
+                    m.setFilter(asList(f));
+                }
             }
 
             final AsyncHttpClient.BoundRequestBuilder builder = ASYNC_HTTP_CLIENT.preparePut(replayUrl).setBody(convertToString(asList(m)));
