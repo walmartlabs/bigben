@@ -228,14 +228,9 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             final FeedReplayFilter f = new FeedReplayFilter();
 
             if (PROCESSED.name().equalsIgnoreCase(entity.getFeed_status())) {
-                if (entity.getEntity_count() != null && entity.getTimeoutErrorCount() != null && Integer.parseInt(entity.getEntity_count()) == entity.getTimeoutErrorCount()) {
-                    f.setFilterName(FeedReplayFilter.ReplayFilterType.ALL);
-                    m.setFilter(asList(f));
-                } else {
-                    f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
-                    f.setFilterValue(new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())));
-                    m.setFilter(asList(f));
-                }
+                f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
+                f.setFilterValue(new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())));
+                m.setFilter(asList(f));
             } else if (ERROR.name().equalsIgnoreCase(entity.getFeed_status())) {
                 try {
                     if (entity.getEntity_count() != null && entity.getTimeoutErrorCount() != null && Integer.parseInt(entity.getEntity_count()) == entity.getTimeoutErrorCount()) {
