@@ -143,7 +143,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                         entity.setError_code(convertToString(createEntityCountGatewayError()));
                         entity.setError_message(convertToString(createEntityCountGatewayError()));
                         entity.setModified_dtm(new Date());
-                        return transform(transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, ListenableFuture<FeedStatusEntity>>) $$ -> replayItems(entity,feedType)), (Function<ListenableFuture<FeedStatusEntity>, Event>) $$ -> event);
+                        return transform(transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, ListenableFuture<FeedStatusEntity>>) $$ -> replayItems(entity,feedType,RECEIVED)), (Function<ListenableFuture<FeedStatusEntity>, Event>) $$ -> event);
                     } else {
                         L.info(format("feedId: %s was already marked as %s, nothing to do", feedId, feedStatus));
                         return immediateFuture(event);
@@ -152,19 +152,18 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                 switch (FeedStatus.valueOf(feedStatus == null ? INPROGRESS.name() : feedStatus)) {
                     case PROCESSED:
                         L.info(format("feedId: %s is already marked PROCESSED, nothing to do", feedId));
-                        return transform(replayItems(fes,feedType),(Function<FeedStatusEntity, Event>) $ -> event);
+                        return transform(replayItems(fes,feedType,PROCESSED),(Function<FeedStatusEntity, Event>) $ -> event);
                     case RECEIVED:
                         L.warn(format("feedId: %s, is still in received status: %s, marking all items timed out", feedId, feedStatus));
                         entity.setSuccessCount(0);
                         entity.setSystemErrorCount(0);
                         entity.setDataErrorCount(0);
-                        entity.setEntity_count(String.valueOf(0));
                         entity.setTimeoutErrorCount(itemCount);
                         entity.setError_code(convertToString(createGatewayError()));
                         entity.setError_message(convertToString(createGatewayError()));
                         entity.setFeed_status(ERROR.name());
                         entity.setModified_dtm(new Date());
-                        return transform(transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, ListenableFuture<FeedStatusEntity>>) $$ -> replayItems(entity,feedType)), (Function<ListenableFuture<FeedStatusEntity>, Event>) $$ -> event);
+                        return transform(transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, ListenableFuture<FeedStatusEntity>>) $$ -> replayItems(entity,feedType,RECEIVED)), (Function<ListenableFuture<FeedStatusEntity>, Event>) $$ -> event);
                     case INPROGRESS:
                         L.warn(format("feedId: %s, is still in progress status: %s, initiating the time out procedure", feedId, feedStatus));
                         final Map<ItemStatus, Integer> countsMap = new HashMap<>();
@@ -188,11 +187,11 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
                             }
                             entity.setFeed_status(PROCESSED.name());
                             entity.setModified_dtm(new Date());
-                            return transform(transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, ListenableFuture<FeedStatusEntity>>) $$ -> replayItems(entity,feedType)), (Function<ListenableFuture<FeedStatusEntity>, Event>) $$ -> event);
+                            return transform(transform(feedDM.saveAsync(entity), (Function<FeedStatusEntity, ListenableFuture<FeedStatusEntity>>) $$ -> replayItems(entity,feedType,INPROGRESS)), (Function<ListenableFuture<FeedStatusEntity>, Event>) $$ -> event);
                         });
                     case ERROR:
                         L.info(format("feedId: %s is already marked ERROR, nothing to do", feedId));
-                        return transform(replayItems(fes,feedType),(Function<FeedStatusEntity, Event>) $ -> event);
+                        return transform(replayItems(fes,feedType,ERROR),(Function<FeedStatusEntity, Event>) $ -> event);
                     default:
                         throw new IllegalArgumentException(format("unknown feed status: %s for feedId: %s", feedStatus, feedId));
                 }
@@ -216,7 +215,7 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
         }
     }
 
-    private ListenableFuture<FeedStatusEntity> replayItems(FeedStatusEntity entity, FeedType feedType) {
+    private ListenableFuture<FeedStatusEntity> replayItems(FeedStatusEntity entity, FeedType feedType,FeedStatus previousFeedStatus) {
 
         try {
             if (!FeedType.SUPPLIER_FULL_ITEM.equals(feedType)) {
@@ -227,22 +226,13 @@ public class FeedStatusAndCountsChecker implements EventProcessor<Event>, Initia
             m.setFeedID(entity.getFeed_id());
             final FeedReplayFilter f = new FeedReplayFilter();
 
-            if (PROCESSED.name().equalsIgnoreCase(entity.getFeed_status())) {
+           if (RECEIVED.equals(previousFeedStatus)) {
+                f.setFilterName(FeedReplayFilter.ReplayFilterType.ALL);
+                m.setFilter(asList(f));
+            } else {
                 f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
                 f.setFilterValue(new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())));
                 m.setFilter(asList(f));
-            } else if (ERROR.name().equalsIgnoreCase(entity.getFeed_status())) {
-                try {
-                    if (entity.getEntity_count() != null && entity.getTimeoutErrorCount() != null && Integer.parseInt(entity.getEntity_count()) == entity.getTimeoutErrorCount()) {
-                        f.setFilterName(FeedReplayFilter.ReplayFilterType.ALL);
-                        m.setFilter(asList(f));
-                    }
-                } catch (Exception e) {} //try ALL option first
-                if (f.getFilterName() == null) {
-                    f.setFilterName(FeedReplayFilter.ReplayFilterType.STATUS_FILTER);
-                    f.setFilterValue(new HashSet<>(asList(ItemStatus.TIMEOUT_ERROR.name(), ItemStatus.SYSTEM_ERROR.name())));
-                    m.setFilter(asList(f));
-                }
             }
 
             final AsyncHttpClient.BoundRequestBuilder builder = ASYNC_HTTP_CLIENT.preparePut(replayUrl).setBody(convertToString(asList(m)));
