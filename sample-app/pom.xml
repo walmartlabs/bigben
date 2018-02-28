@@ -6,13 +6,13 @@
         <version>1.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>event-scheduler-app</artifactId>
+    <artifactId>bigben-sample-app</artifactId>
     <packaging>war</packaging>
-    <name>event-scheduler-app</name>
+    <name>BigBen - Sample App</name>
     <url>http://maven.apache.org</url>
     <dependencies>
         <dependency>
-            <groupId>com.walmartlabs.components</groupId>
+            <groupId>com.walmartlabs.opensource.bigben</groupId>
             <artifactId>bigben-lib</artifactId>
             <version>1.0-SNAPSHOT</version>
             <exclusions>

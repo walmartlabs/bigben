@@ -9,6 +9,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>bigben-lib</artifactId>
+    <name>BigBen - Core Lib</name>
 
     <dependencies>
         <dependency>
@@ -22,6 +23,14 @@
         <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ning</groupId>
+            <artifactId>async-http-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>javax.ws.rs</groupId>
+            <artifactId>javax.ws.rs-api</artifactId>
         </dependency>
         <dependency>
             <groupId>com.datastax.cassandra</groupId>

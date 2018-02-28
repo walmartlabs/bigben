@@ -1,29 +1,89 @@
 package com.walmartlabs.opensource.bigben.entities
 
+import com.hazelcast.nio.ObjectDataInput
+import com.hazelcast.nio.ObjectDataOutput
+import com.hazelcast.nio.serialization.IdentifiedDataSerializable
 import com.walmartlabs.opensource.bigben.entities.Mode.UPSERT
+import com.walmartlabs.opensource.bigben.hz.HzObjectFactory
+import com.walmartlabs.opensource.bigben.hz.HzObjectFactory.OBJECT_ID.SHARD_STATUS
+import com.walmartlabs.opensource.bigben.hz.HzObjectFactory.OBJECT_ID.SHARD_STATUS_LIST
+import java.time.Instant.ofEpochMilli
+import java.time.ZoneOffset.UTC
 import java.time.ZonedDateTime
+import java.time.ZonedDateTime.ofInstant
 
 /**
  * Created by smalik3 on 2/21/18
  */
 enum class EventStatus { PROCESSED, ERROR, UN_PROCESSED, PROCESSING, TRIGGERED, EMPTY, REJECTED, ACCEPTED, UPDATED, DELETED }
 
-data class Bucket(var id: ZonedDateTime? = null, var status: EventStatus? = null, var count: Long? = null, var processedAt: ZonedDateTime? = null, var updatedAt: ZonedDateTime? = null)
+interface Bucket {
+    var id: ZonedDateTime?
+    var status: EventStatus?
+    var count: Long?
+    var processedAt: ZonedDateTime?
+    var updatedAt: ZonedDateTime?
+}
 
-data class Event(var status: EventStatus? = null, var error: String? = null, var tenant: String? = null, var processedAt: ZonedDateTime? = null, var xRefId: String? = null, var payload: String? = null)
+interface Event : EventResponseMixin {
+    var eventTime: ZonedDateTime?
+    var shard: Int?
+    var id: String?
+    var status: EventStatus?
+    var error: String?
+    var tenant: String?
+    var processedAt: ZonedDateTime?
+    var xRefId: String?
+    var payload: String?
+}
 
-data class EventLookup(val tenant: String, val xrefId: String, val bucketId: String, val shard: Int, val eventTime: ZonedDateTime, val eventId: String, val payload: String?)
+interface EventLookup {
+    var tenant: String?
+    var xrefId: String?
+    var bucketId: ZonedDateTime?
+    var shard: Int?
+    var eventTime: ZonedDateTime?
+    var eventId: String?
+    var payload: String?
+}
 
-data class ShardStatus(var bucketId: ZonedDateTime? = null, var shard: Int? = null, var status: EventStatus? = null)
-data class ShardStatusList(var list: List<ShardStatus?>? = null)
+abstract class Idso(private val objectId: HzObjectFactory.OBJECT_ID) : IdentifiedDataSerializable {
+    override fun getFactoryId() = HzObjectFactory.BIGBEN_FACTORY_ID
+    override fun getId() = objectId.ordinal
+}
+
+data class ShardStatus(var bucketId: ZonedDateTime? = null, var shard: Int? = null, var status: EventStatus? = null) : Idso(SHARD_STATUS) {
+    override fun writeData(out: ObjectDataOutput) {
+        out.writeLong(bucketId!!.toInstant().toEpochMilli())
+        out.writeInt(shard!!)
+        out.writeByte(status!!.ordinal)
+    }
+
+    override fun readData(`in`: ObjectDataInput) {
+        bucketId = ofInstant(ofEpochMilli(`in`.readLong()), UTC)
+        shard = `in`.readInt()
+        status = EventStatus.values()[`in`.readByte().toInt()]
+    }
+}
+
+data class ShardStatusList(var list: List<ShardStatus?>? = null) : Idso(SHARD_STATUS_LIST) {
+    override fun writeData(out: ObjectDataOutput) {
+        out.writeInt(list!!.size)
+        list!!.forEach { out.writeObject(it) }
+    }
+
+    override fun readData(`in`: ObjectDataInput) {
+        list = (1..`in`.readInt()).map { `in`.readObject<ShardStatus>() }
+    }
+}
 
 enum class Mode { UPSERT, REMOVE }
-open class EventRequest(var id: String? = null, var eventTime: Long? = null, var tenant: String? = null, var mode: Mode = UPSERT)
-
-class EventResponse(id: String? = null, eventTime: Long? = null, tenant: String? = null, mode: Mode = UPSERT,
-                    var eventId: String? = null, var triggeredAt: String? = null, var eventStatus: EventStatus? = null) : EventRequest(id, eventTime, tenant, mode)
+open class EventRequest(var id: String? = null, var eventTime: String? = null, var tenant: String? = null, var payload: String? = null, var mode: Mode = UPSERT)
+class EventResponse(id: String? = null, eventTime: String? = null, tenant: String? = null, mode: Mode = UPSERT, payload: String? = null,
+                    var eventId: String? = null, var triggeredAt: String? = null, var eventStatus: EventStatus? = null, var error: String? = null) :
+        EventRequest(id = id, eventTime = eventTime, tenant = tenant, mode = mode)
 
 interface EventResponseMixin {
-    var eventResponse: EventResponse
+    var eventResponse: EventResponse?
 }
 
