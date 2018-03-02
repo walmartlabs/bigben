@@ -1,5 +1,6 @@
 package com.walmartlabs.opensource.bigben.extns
 
+import com.walmartlabs.opensource.bigben.utils.Props
 import java.time.Instant.EPOCH
 import java.time.Instant.ofEpochMilli
 import java.time.ZoneOffset.UTC
@@ -52,3 +53,6 @@ fun Date.toZdt(): ZonedDateTime {
 fun nowUTC(): ZonedDateTime {
     return now(UTC)
 }
+
+fun ZonedDateTime?.bucket() = utc(bucketize(this?.toInstant()?.toEpochMilli() ?:
+        throw IllegalArgumentException("null time"), Props.int("event.schedule.scan.interval.minutes", 1)))

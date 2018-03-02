@@ -56,7 +56,7 @@ class EventService(private val hz: Hz, private val service: Service,
                         done({ l.error("error in triggering lapsed events:", it.rootCause()) }) {
                             it!!.forEach {
                                 l.warn("event was triggered immediately (likely lapsed), event id: {}, tenant: {}, " +
-                                        "eventTime: {}, currentTime: {}", it.xRefId, it.tenant, it.eventTime, nowUTC())
+                                        "eventTime: {}, currentTime: {}", it.xrefId, it.tenant, it.eventTime, nowUTC())
                             }
                         }
                 count { it.eventStatus == REJECTED }.let {
@@ -80,7 +80,7 @@ class EventService(private val hz: Hz, private val service: Service,
     fun registerProcessor(config: ProcessorConfig): Response {
         return try {
             ok().entity(hz.hz.getExecutorService("default").submitToAllMembers(ProcessRegisterTask(config)).
-                    mapValues { it.value.listenable() }.values.toList().reduce().result { emptyList() }).build()
+                    mapValues { it.value.listenable() }.values.toList().reduce().result { throw RuntimeException("") }).build()
         } catch (e: Exception) {
             l.error("error in registering processor: {}", config, e.rootCause())
             status(INTERNAL_SERVER_ERROR).entity(ImmutableMap.of("status", "FAIL", "error", getStackTraceAsString(e.rootCause()!!))).build()

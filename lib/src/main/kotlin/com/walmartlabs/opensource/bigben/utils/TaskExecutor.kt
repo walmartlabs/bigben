@@ -41,7 +41,7 @@ class TaskExecutor(private val retryableExceptions: Set<Class<*>>) {
     private fun <R> async(taskId: String, retryCount: Int, maxRetries: Int,
                           delay: Int, backoffMultiplier: Int, timeUnit: TimeUnit, task: Supplier<Callable<ListenableFuture<R>>>): ListenableFuture<R> {
         return try {
-            task.get().call().catchingAsync { mayBeRetry(task, taskId, retryCount, maxRetries, delay, backoffMultiplier, timeUnit, it) }
+            task.get().call().catchingAsync { mayBeRetry(task, taskId, retryCount, maxRetries, delay, backoffMultiplier, timeUnit, it!!) }
         } catch (t: Throwable) {
             mayBeRetry(task, taskId, retryCount, maxRetries, delay, backoffMultiplier, timeUnit, t)
         }
@@ -56,7 +56,7 @@ class TaskExecutor(private val retryableExceptions: Set<Class<*>>) {
                 if (l.isWarnEnabled)
                     l.warn(format("operation failed, taskId='{}', retrying after {} {}, retry={}, maxRetry={}, exception='{}'",
                             taskId, delay, timeUnit, retryCount, maxRetries, if (cause.message == null) cause::class.java.name else cause.message))
-                RETRY_POOL.schedule(Callable { async(taskId, retryCount + 1, maxRetries, backoffMultiplier * delay, backoffMultiplier, timeUnit, task) }, delay.toLong(), timeUnit).transformAsync { it -> it }
+                RETRY_POOL.schedule(Callable { async(taskId, retryCount + 1, maxRetries, backoffMultiplier * delay, backoffMultiplier, timeUnit, task) }, delay.toLong(), timeUnit).transformAsync { it -> it!! }
             } else {
                 l.error(format("operation failed, taskId='{}', after {} retries, will not be retried anymore, exception='{}'",
                         taskId, maxRetries, if (cause.message == null) cause::class.java.name else cause.message), cause)

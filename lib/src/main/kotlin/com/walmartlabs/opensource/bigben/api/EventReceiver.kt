@@ -59,7 +59,7 @@ class EventReceiver(val hz: Hz) {
                             }
                         } else {
                             addEvent0(eventRequest, bucketId, eventTime).transform {
-                                if (l.isDebugEnabled) l.debug("{}, add-event: successful", it!!.xRefId)
+                                if (l.isDebugEnabled) l.debug("{}, add-event: successful", it!!.xrefId)
                                 eventRequest.toResponse().apply { eventId = it!!.id; eventStatus = ACCEPTED }
                             }
                         }
@@ -94,7 +94,7 @@ class EventReceiver(val hz: Hz) {
                     it.shard = ((count - 1) / Props.int("event.shard.size", 1000)).toInt()
                     it.status = UN_PROCESSED
                     it.tenant = eventRequest.tenant
-                    it.xRefId = eventRequest.id
+                    it.xrefId = eventRequest.id
                 }
             }
         }

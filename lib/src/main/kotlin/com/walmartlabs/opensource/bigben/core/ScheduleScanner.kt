@@ -6,13 +6,13 @@ import com.google.common.collect.LinkedHashMultimap
 import com.google.common.collect.Multimap
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors.listeningDecorator
-import com.hazelcast.core.HazelcastInstance
 import com.hazelcast.core.IExecutorService
 import com.hazelcast.core.Member
 import com.walmartlabs.opensource.bigben.entities.EventStatus.ERROR
 import com.walmartlabs.opensource.bigben.entities.ShardStatus
 import com.walmartlabs.opensource.bigben.entities.ShardStatusList
 import com.walmartlabs.opensource.bigben.extns.*
+import com.walmartlabs.opensource.bigben.hz.Hz
 import com.walmartlabs.opensource.bigben.hz.Service
 import com.walmartlabs.opensource.bigben.tasks.BulkShardTask
 import com.walmartlabs.opensource.bigben.utils.Props
@@ -23,15 +23,14 @@ import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeUnit.MILLISECONDS
-import java.util.concurrent.TimeUnit.MINUTES
+import java.util.concurrent.TimeUnit.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Created by smalik3 on 2/23/18
  */
-class ScheduleScanner(private val hz: HazelcastInstance) : Service {
+class ScheduleScanner(private val hz: Hz) : Service {
 
     companion object {
         internal var BUCKET_CACHE = "bucketCache"
@@ -58,7 +57,8 @@ class ScheduleScanner(private val hz: HazelcastInstance) : Service {
         bucketWidth = Props.int("event.schedule.scan.interval.minutes", 1)
         val checkpointInterval = Props.long("event.bucket.manager.checkpoint.interval", 1)
         val checkpointIntervalUnits = TimeUnit.valueOf(Props.string("event.bucket.manager.checkpoint.interval.units", MINUTES.name))
-        bucketManager = BucketManager(lookbackRange, 2 * bucketWidth * 60, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits, lookbackRange)
+        //bucketManager = BucketManager(lookbackRange, 2 * bucketWidth * 60, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits, lookbackRange)
+        bucketManager = BucketManager(lookbackRange, 2 * bucketWidth * 60, bucketWidth * 60, 10, SECONDS, lookbackRange)
     }
 
     override fun execute() {
@@ -98,7 +98,7 @@ class ScheduleScanner(private val hz: HazelcastInstance) : Service {
 
                             val map = distro.asMap()
                             val iterator = Iterators.cycle<Member>(map.keys)
-                            val executorService = hz.getExecutorService(EVENT_SCHEDULER)
+                            val executorService = hz.hz.getExecutorService(EVENT_SCHEDULER)
                             map.entries.map {
                                 { submitShards(executorService, iterator.next(), it.value, currentBucketId) }.
                                         retriable("shards-submit", Props.int("event.submit.max.retries", 10),
@@ -122,7 +122,7 @@ class ScheduleScanner(private val hz: HazelcastInstance) : Service {
     }
 
     private fun calculateDistro(shards: Multimap<ZonedDateTime, Int>): LinkedHashMultimap<Member, Pair<ZonedDateTime, Int>> {
-        val members = hz.cluster.members.toMutableSet().apply { remove(hz.cluster.localMember) }.toList().shuffled().toMutableList().apply { add(hz.cluster.localMember) }
+        val members = hz.hz.cluster.members.toMutableSet().apply { remove(hz.hz.cluster.localMember) }.toList().shuffled().toMutableList().apply { add(hz.hz.cluster.localMember) }
         val entries = shards.entries().toList()
         return LinkedHashMultimap.create<Member, Pair<ZonedDateTime, Int>>().apply {
             val size = members.size

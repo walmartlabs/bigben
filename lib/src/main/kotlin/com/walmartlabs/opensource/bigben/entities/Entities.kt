@@ -33,7 +33,7 @@ interface Event : EventResponseMixin {
     var error: String?
     var tenant: String?
     var processedAt: ZonedDateTime?
-    var xRefId: String?
+    var xrefId: String?
     var payload: String?
 }
 

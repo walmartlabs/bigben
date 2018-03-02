@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit.SECONDS
 /**
  * Created by smalik3 on 2/21/18
  */
-private val l = LoggerFactory.getLogger("FutureExtensions")
+val l = LoggerFactory.getLogger("extns")
 
 fun onError(t: Throwable?) = l.error("error in processing: ${getStackTraceAsString(t.rootCause()!!)}", t.rootCause())
 

@@ -3,15 +3,14 @@ package com.walmartlabs.opensource.bigben.extns
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.base.Throwables
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 /**
  * Created by smalik3 on 2/21/18
  */
-inline fun <reified T : Any> logger(): Logger {
-    return LoggerFactory.getLogger(unwrapCompanionClass(T::class.java).name)
-}
+inline fun <reified T : Any> logger() = LoggerFactory.getLogger(unwrapCompanionClass(T::class.java).name)!!
+
+fun logger(name: String) = LoggerFactory.getLogger(name)!!
 
 fun <T : Any> unwrapCompanionClass(ofClass: Class<T>): Class<*> {
     return if (ofClass.enclosingClass != null && ofClass.enclosingClass.kotlin.isCompanion) {

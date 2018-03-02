@@ -153,7 +153,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         try {
             purgeIfNeeded()
             checkpointHelper.saveCheckpoint(buckets)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             l.error("failed to save checkpoint", e)
         }
     }
@@ -238,10 +238,10 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
                         "a" to it.value.awaiting.stream().boxed().toArray().joinToString(","),
                         "p" to it.value.processing.stream().boxed().toArray().joinToString(","))
             }.let { m ->
-                if (l.isDebugEnabled) l.debug("saving checkpoint for buckets: ${m.keys}")
+                if (l.isDebugEnabled) l.debug("saving checkpoint for buckets: {}", m.keys)
                 save<EventLookup> { it.tenant = CHECKPOINT_KEY; it.xrefId = CHECKPOINT_KEY; it.payload = m.values.json() }
-            }.done {
-                if (l.isDebugEnabled && it != null) l.debug("checkpoint saved successfully for buckets: ${it.payload}")
+            }.done({ l.warn("error in saving checkpoint", it.rootCause()) }) {
+                if (l.isDebugEnabled && it != null) l.debug("checkpoint saved successfully for buckets: {}", it.payload)
             }
         }
 

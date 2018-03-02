@@ -30,7 +30,7 @@ $parm#end
     <partition-group enabled="false"/>
     <map name="bucketCache">
         <in-memory-format>OBJECT</in-memory-format>
-        <map-store enabled="true" initial-mode="LAZY">
+        #*<map-store enabled="true" initial-mode="LAZY">
             <factory-class-name>com.walmart.gmp.ingestion.platform.framework.core.GenericMapStoreFactory
             </factory-class-name>
             <properties>
@@ -40,7 +40,7 @@ $parm#end
             <write-delay-seconds>#resolve($map.store.writeDelay 60)</write-delay-seconds>
             <write-batch-size>#resolve($map.store.batchSize 1000)</write-batch-size>
             <write-coalescing>#resolve($map.store.writeCoalescing true)</write-coalescing>
-        </map-store>
+        </map-store>*#
         <backup-count>#resolve($map.backupCount 1)</backup-count>
         <async-backup-count>#resolve($map.asyncBackupCount 0)</async-backup-count>
         <time-to-live-seconds>#resolve($map.ttl 0)</time-to-live-seconds>
@@ -54,7 +54,7 @@ $parm#end
     <services enable-defaults="true"/>
     <serialization>
         <data-serializable-factories>
-            <data-serializable-factory factory-id="1">com.walmartlabs.components.scheduler.entities.ObjectFactory</data-serializable-factory>
+            <data-serializable-factory factory-id="1">com.walmartlabs.opensource.bigben.hz.HzObjectFactory</data-serializable-factory>
         </data-serializable-factories>
     </serialization>
 </hazelcast>
