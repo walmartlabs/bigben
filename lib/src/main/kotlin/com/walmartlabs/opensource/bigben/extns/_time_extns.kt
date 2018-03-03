@@ -55,4 +55,4 @@ fun nowUTC(): ZonedDateTime {
 }
 
 fun ZonedDateTime?.bucket() = utc(bucketize(this?.toInstant()?.toEpochMilli() ?:
-        throw IllegalArgumentException("null time"), Props.int("event.schedule.scan.interval.minutes", 1)))
+        throw NullPointerException("null time"), Props.int("event.schedule.scan.interval.minutes", 1)))

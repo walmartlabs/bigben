@@ -26,3 +26,6 @@ private val om = ObjectMapper()
 fun Any.json(): String = om.writeValueAsString(this)
 fun <T> Class<T>.fromJson(s: String) = om.readValue(s, this)
 fun <T> TypeReference<T>.fromJson(s: String): T = om.readValue(s, this)
+inline fun <reified T> typeRefJson(s: String): T {
+    return object : TypeReference<T>() {}.fromJson(s)
+}

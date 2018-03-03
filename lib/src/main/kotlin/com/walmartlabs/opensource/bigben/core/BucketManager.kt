@@ -1,6 +1,5 @@
 package com.walmartlabs.opensource.bigben.core
 
-import com.fasterxml.jackson.core.type.TypeReference
 import com.google.common.base.Throwables.getRootCause
 import com.google.common.collect.HashMultimap
 import com.google.common.collect.Multimap
@@ -25,6 +24,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Predicate
+import java.util.stream.Collectors
 import kotlin.Comparator
 import kotlin.collections.HashMap
 
@@ -232,11 +232,13 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
             private val CHECKPOINT_KEY = "_CHECKPOINT_"
         }
 
+        data class Checkpoint(val b: String, val c: Long, val a: List<Int>, val p: List<Int>)
+
         fun saveCheckpoint(data: Map<ZonedDateTime, BucketSnapshot>): ListenableFuture<EventLookup> {
             return data.toSortedMap().mapValues {
-                mapOf("b" to it.value.id.toString(), "c" to it.value.count,
-                        "a" to it.value.awaiting.stream().boxed().toArray().joinToString(","),
-                        "p" to it.value.processing.stream().boxed().toArray().joinToString(","))
+                Checkpoint(it.value.id.toString(), it.value.count,
+                        it.value.awaiting.stream().boxed().collect(Collectors.toList()),
+                        it.value.processing.stream().boxed().collect(Collectors.toList()))
             }.let { m ->
                 if (l.isDebugEnabled) l.debug("saving checkpoint for buckets: {}", m.keys)
                 save<EventLookup> { it.tenant = CHECKPOINT_KEY; it.xrefId = CHECKPOINT_KEY; it.payload = m.values.json() }
@@ -249,11 +251,11 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
             return fetch<EventLookup> { it.tenant = CHECKPOINT_KEY; it.xrefId = CHECKPOINT_KEY }.transform {
                 when {
                     it?.payload != null && it.payload!!.trim().isNotEmpty() -> {
-                        object : TypeReference<List<Map<String, Any>>>() {}.fromJson(it.payload!!).map { it.mapValues { it.value.toString() } }.map {
-                            val awaiting = it["a"]?.let { if (it.isEmpty()) BitSet() else it.split(",").fold(BitSet()) { b, s -> b.set(s.toInt()); b } } ?: BitSet()
-                            val processing = it["p"]?.let { if (it.isEmpty()) BitSet() else it.split(",").fold(BitSet()) { b, s -> b.set(s.toInt()); b } } ?: BitSet()
+                        typeRefJson<List<Checkpoint>>(it.payload!!).map {
+                            val awaiting = it.a.fold(BitSet(), { b, i -> b.apply { set(i) } })
+                            val processing = it.p.fold(BitSet(), { b, i -> b.apply { set(i) } })
                             processing.stream().forEach { awaiting.set(it) }
-                            BucketSnapshot(ZonedDateTime.parse(it["a"].toString()), it["c"].toString().toLong(), awaiting, BitSet())
+                            BucketSnapshot(ZonedDateTime.parse(it.b), it.c, awaiting, BitSet())
                         }.associate { it.id to it }.also { if (l.isDebugEnabled) l.debug("loaded checkpoint: {}", it) }
                     }
                     else -> {

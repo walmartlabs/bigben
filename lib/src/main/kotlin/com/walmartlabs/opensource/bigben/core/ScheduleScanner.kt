@@ -23,7 +23,8 @@ import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeUnit.*
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.TimeUnit.MINUTES
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -57,8 +58,7 @@ class ScheduleScanner(private val hz: Hz) : Service {
         bucketWidth = Props.int("event.schedule.scan.interval.minutes", 1)
         val checkpointInterval = Props.long("event.bucket.manager.checkpoint.interval", 1)
         val checkpointIntervalUnits = TimeUnit.valueOf(Props.string("event.bucket.manager.checkpoint.interval.units", MINUTES.name))
-        //bucketManager = BucketManager(lookbackRange, 2 * bucketWidth * 60, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits, lookbackRange)
-        bucketManager = BucketManager(lookbackRange, 2 * bucketWidth * 60, bucketWidth * 60, 10, SECONDS, lookbackRange)
+        bucketManager = BucketManager(lookbackRange, 2 * bucketWidth * 60, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits, lookbackRange)
     }
 
     override fun execute() {

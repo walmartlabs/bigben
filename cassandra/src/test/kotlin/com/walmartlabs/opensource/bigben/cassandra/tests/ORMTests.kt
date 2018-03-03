@@ -15,7 +15,7 @@ import kotlin.test.assertEquals
 /**
  * Created by smalik3 on 3/2/18
  */
-class BucketTests {
+class ORMTests {
 
     private lateinit var cluster: Cluster
     private lateinit var mappingManager: MappingManager
