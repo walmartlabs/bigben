@@ -42,6 +42,7 @@ class BulkShardTask(private var shards: Collection<Pair<ZonedDateTime, Int>>? = 
     companion object {
         private val l = logger<BulkShardTask>()
         private val NO_OP = immediateFuture<List<ShardStatus>>(ArrayList())
+        private val loader = createProvider<EventLoader<Pair<ZonedDateTime?, String>>>()
     }
 
     private lateinit var hz: HazelcastInstance
@@ -62,9 +63,8 @@ class BulkShardTask(private var shards: Collection<Pair<ZonedDateTime, Int>>? = 
         val fetchSizeHint = Props.int("max.events.in.memory", 100_000) / shards.size
         return shards.map { s ->
             try {
-                @Suppress("UNCHECKED_CAST")
-                val p = domainProvider as EntityProvider<Event>
-                ShardTask(s, fetchSizeHint, ProcessorRegistry.instance, p.loader()).call().done({ l.error("error in executing shard: bucket: {}, shard: {}", s.first, s.second, it.rootCause()) }) {
+                ShardTask(s, fetchSizeHint, ProcessorRegistry.instance, loader).call().done(
+                        { l.error("error in executing shard: bucket: {}, shard: {}", s.first, s.second, it.rootCause()) }) {
                     if (l.isInfoEnabled) l.info("shard processed, bucket: {}, shard: {}", s.first, s.second)
                 }.catching {
                     l.error("error in executing shard, returning an ERROR status bucket: {}, shard: {}", s.first, s.second, it.rootCause())
@@ -94,9 +94,8 @@ class BulkShardTask(private var shards: Collection<Pair<ZonedDateTime, Int>>? = 
     }
 }
 
-typealias EventLoader<T> = (t: T?, bucketId: ZonedDateTime, shard: Int, fetchSize: Int) -> ListenableFuture<Pair<T?, List<Event>?>>
-
-class ShardTask<T>(val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int, private val processor: EventProcessor<Event>, private val loader: EventLoader<T>) : Callable<ListenableFuture<ShardStatus>> {
+class ShardTask<T>(private val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int,
+                   private val processor: EventProcessor<Event>, private val loader: EventLoader<T>) : Callable<ListenableFuture<ShardStatus>> {
 
     companion object {
         private val l = logger<ShardTask<Any>>()
@@ -112,28 +111,32 @@ class ShardTask<T>(val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int, private 
 
     override fun call(): ListenableFuture<ShardStatus> {
         if (l.isDebugEnabled) l.debug("{}, processing shard with fetch size: {}", executionKey, fetchSize)
-        var hasError = false
-        loader(null, p.first, p.second, fetchSize).transformAsync { loaded ->
-            if (loaded!!.second == null || loaded.second!!.isEmpty()) immediateFuture(loaded.first to emptyList())
-            else loaded.second!!.map { schedule(it) }.reduce().transformAsync {
-                hasError = it!!.fold(hasError, { b, e -> b || e.status == ERROR }); loader(loaded.first, p.first, p.second, fetchSize)
-            }
+        return loader.load(null, p.first, p.second, fetchSize).transformAsync { loaded ->
+            if (loaded!!.second == null || loaded.second!!.isEmpty()) immediateFuture(loaded.first to loaded.second)
+            else loaded.second!!.map { e ->
+                schedule(e).done({
+                    l.error("{}/{}/{} event has error in processing", executionKey, e.eventTime, e.id, it.rootCause())
+                }) { if (l.isDebugEnabled) l.debug("{}/{}/{} event is processed successfully", executionKey, e.eventTime, e.id) }
+            }.reduce().transformAsync { loader.load(loaded.first, p.first, p.second, fetchSize) }
+        }.transform {
+            it!!.second?.fold(false, { b, e -> b || e.status == ERROR })?.run {
+                if (l.isDebugEnabled) {
+                    if (this) l.debug("{}, errors in processing shard", executionKey)
+                    else l.debug("{}, shard processed successfully", executionKey)
+                }
+                ShardStatus(p.first, p.second, if (this) ERROR else PROCESSED)
+            } ?: ShardStatus(p.first, p.second, PROCESSED)
         }
-        if (l.isDebugEnabled) {
-            if (hasError) l.debug("{}, errors in processing shard", executionKey)
-            else l.debug("{}, shard processed successfully", executionKey)
-        }
-        return immediateFuture(ShardStatus(p.first, p.second, if (hasError) ERROR else PROCESSED))
     }
 
     private fun schedule(e: Event): ListenableFuture<Event> {
         val delay = e.eventTime!!.toInstant().toEpochMilli() - currentTimeMillis()
         return if (delay <= 0) {
             if (l.isDebugEnabled) l.debug("{}, event {} time has expired, processing immediately", executionKey, e.id)
-            process(e).transformAsync { saveEvent(e) }
+            process(e).transformAsync { save(e) }
         } else {
             if (l.isDebugEnabled) l.debug("{}, scheduling event '{}' after delay {}, at {}", executionKey, e.id, delay, e.eventTime!!)
-            AsyncCallable { processor(e) }.scheduleAsync(delay, MILLISECONDS, scheduler).transformAsync { saveEvent(it!!) }
+            AsyncCallable { processor(e) }.scheduleAsync(delay, MILLISECONDS, scheduler).transformAsync { save(it!!) }
         }
     }
 
@@ -154,39 +157,19 @@ class ShardTask<T>(val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int, private 
         }
     }
 
-    private fun saveEvent(e: Event): ListenableFuture<Event> {
+    private fun save(e: Event): ListenableFuture<Event> {
         if (l.isDebugEnabled) l.debug("{}, saving event: {} to the DB, the status is '{}'", executionKey, e.id, e.status)
-        return save {
-            it.id = e.id
-            it.status = e.status
-            it.processedAt = e.processedAt
-            if (e.error != null)
-                it.error = e.error
-        }
+        return domainProvider<Event>().save(e)
     }
 }
 
-internal class ShutdownTask : Idso(SHUTDOWN_TASK), Callable<Boolean> {
-
+internal class ShutdownTask : IdsoCallable(SHUTDOWN_TASK), Callable<Boolean> {
     override fun call(): Boolean {
         TODO()
     }
-
-    override fun writeData(out: ObjectDataOutput?) {
-    }
-
-    override fun readData(`in`: ObjectDataInput?) {
-    }
 }
 
-internal class StatusTask(private var serviceName: String? = null) : Idso(CLUSTER_STATUS_TASK), Callable<String> {
-
+internal class StatusTask(private var serviceName: String? = null) : IdsoCallable(CLUSTER_STATUS_TASK), Callable<String> {
     override fun call() = if (ClusterSingleton.ACTIVE_SERVICES.contains(serviceName)) "Master" else "Slave"
-
-    override fun writeData(out: ObjectDataOutput?) {
-    }
-
-    override fun readData(`in`: ObjectDataInput?) {
-    }
 }
 

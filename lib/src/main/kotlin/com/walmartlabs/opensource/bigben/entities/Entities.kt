@@ -27,6 +27,7 @@ interface Bucket {
 
 interface Event : EventResponseMixin {
     var eventTime: ZonedDateTime?
+    var bucketId: ZonedDateTime?
     var shard: Int?
     var id: String?
     var status: EventStatus?
@@ -50,6 +51,16 @@ interface EventLookup {
 abstract class Idso(private val objectId: HzObjectFactory.OBJECT_ID) : IdentifiedDataSerializable {
     override fun getFactoryId() = HzObjectFactory.BIGBEN_FACTORY_ID
     override fun getId() = objectId.ordinal
+}
+
+abstract class IdsoCallable(private val objectId: HzObjectFactory.OBJECT_ID) : IdentifiedDataSerializable {
+    override fun getFactoryId() = HzObjectFactory.BIGBEN_FACTORY_ID
+    override fun getId() = objectId.ordinal
+    override fun writeData(out: ObjectDataOutput?) {
+    }
+
+    override fun readData(`in`: ObjectDataInput?) {
+    }
 }
 
 data class ShardStatus(var bucketId: ZonedDateTime? = null, var shard: Int? = null, var status: EventStatus? = null) : Idso(SHARD_STATUS) {

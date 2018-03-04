@@ -85,10 +85,10 @@ fun <T, F : Future<T>> F.listenable(): ListenableFutureAdapter<T> {
     return ListenableFutureAdapter(this as ICompletableFuture<T>)
 }
 
-fun <T> Future<T>.result(waitTime: Long = Props.long("generic.future.max.get.time", 60L), errorHandler: (Exception) -> T): T {
+fun <T> Future<T>.result(waitTime: Long = Props.long("generic.future.max.get.time", 60L), errorHandler: (Exception) -> T?): T {
     return try {
         get(waitTime, SECONDS)
     } catch (e: Exception) {
-        errorHandler(e)
+        errorHandler(e) ?: throw e
     }
 }

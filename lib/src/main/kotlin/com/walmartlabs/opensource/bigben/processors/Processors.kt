@@ -1,6 +1,5 @@
 package com.walmartlabs.opensource.bigben.processors
 
-import com.fasterxml.jackson.core.type.TypeReference
 import com.google.common.base.Throwables.getStackTraceAsString
 import com.google.common.cache.CacheBuilder
 import com.google.common.net.HttpHeaders.ACCEPT
@@ -44,7 +43,7 @@ object ProcessorRegistry : EventProcessor<Event> {
     private val devNull = DevNull()
     private val ASYNC_HTTP_CLIENT = AsyncHttpClient()
 
-    private val configs = object : TypeReference<List<ProcessorConfig>>() {}.fromJson(Props.string("processor.configs")).associate { it.tenant!! to it }.toMutableMap()
+    private val configs = typeRefJson<List<ProcessorConfig>>(Props.string("processor.configs", "[]")).associate { it.tenant!! to it }.toMutableMap()
     private val processorCache = CacheBuilder.newBuilder().build<String, EventProcessor<Event>>()
 
     init {

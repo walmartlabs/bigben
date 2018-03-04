@@ -19,7 +19,7 @@ import java.util.function.Predicate
  * Created by smalik3 on 2/22/18
  */
 class BucketsLoader(private val lookbackRange: Int, private val fetchSize: Int, private val predicate: Predicate<ZonedDateTime>,
-                    private val bucketWidth: Int, val bucketId: ZonedDateTime, val consumer: (Bucket) -> Unit) : Runnable {
+                    private val bucketWidth: Int, private val bucketId: ZonedDateTime, private val consumer: (Bucket) -> Unit) : Runnable {
 
     companion object {
         private val l = logger<BucketsLoader>()
@@ -56,10 +56,8 @@ class BucketsLoader(private val lookbackRange: Int, private val fetchSize: Int, 
                                     consumer(it ?: BucketManager.Companion.EmptyBucket(bucketId))
                                 }
                     } else {
-                        if (l.isDebugEnabled) l.debug("bucket {} already loaded, skipping...", bId)
+                        if (l.isDebugEnabled) l.debug("bucket {} already loaded (likely by checkpoint), skipping...", bId)
                     }
-                } else {
-                    if (l.isInfoEnabled) l.info("no more buckets to load, look back range reached")
                 }
             }
             runningJob.set(scheduler.schedule({ load(currentBucketIndex.get()) }, (if (!atLeastOne.get()) 0 else waitInterval).toLong(), SECONDS))

@@ -47,7 +47,7 @@ class ScheduleScanner(private val hz: Hz) : Service {
     private val isShutdown = AtomicReference(false)
 
     private lateinit var bucketManager: BucketManager
-    private var bucketWidth = Props.int("event.schedule.scan.interval.minutes", 1)
+    private val bucketWidth = Props.int("event.schedule.scan.interval.minutes", 1)
     @Volatile private lateinit var lastScan: ZonedDateTime
 
     override val name: String = "ScheduleScanner"
@@ -55,10 +55,9 @@ class ScheduleScanner(private val hz: Hz) : Service {
     override fun init() {
         if (l.isInfoEnabled) l.info("initing the event scheduler")
         val lookbackRange = Props.int("events.backlog.check.limit", 2)
-        bucketWidth = Props.int("event.schedule.scan.interval.minutes", 1)
         val checkpointInterval = Props.long("event.bucket.manager.checkpoint.interval", 1)
         val checkpointIntervalUnits = TimeUnit.valueOf(Props.string("event.bucket.manager.checkpoint.interval.units", MINUTES.name))
-        bucketManager = BucketManager(lookbackRange, 2 * bucketWidth * 60, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits, lookbackRange)
+        bucketManager = BucketManager(lookbackRange + 1, 2 * bucketWidth * 60, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits)
     }
 
     override fun execute() {
@@ -83,20 +82,22 @@ class ScheduleScanner(private val hz: Hz) : Service {
         }
         val currentBucketId = lastScan.plusMinutes(bucketWidth.toLong())
         lastScan = currentBucketId
-        if (l.isInfoEnabled) l.info("scanning the schedule(s) for bucket: {}", currentBucketId)
+        if (l.isDebugEnabled) l.debug("scanning the schedule(s) for bucket: {}", currentBucketId)
         try {
             bucketManager.getProcessableShardsForOrBefore(currentBucketId).
                     done({ l.error("error in processing bucket: {}", currentBucketId, it!!.rootCause()) }) {
                         try {
                             if (it!!.isEmpty) {
-                                if (l.isInfoEnabled) l.info("nothing to schedule for bucket: " + currentBucketId)
+                                if (l.isDebugEnabled) l.debug("nothing to schedule for bucket: {}", currentBucketId)
                                 return@done
                             }
-                            if (l.isInfoEnabled) l.info("%s, shards to be processed: => %s", currentBucketId, it)
+                            if (l.isDebugEnabled) l.debug("{}, shards to be processed: => {}", currentBucketId, it)
                             val distro = calculateDistro(it)
-                            if (l.isInfoEnabled) l.info("{}, schedule distribution: => {}", currentBucketId, distro)
 
                             val map = distro.asMap()
+                            if (l.isDebugEnabled) l.debug("{}, schedule distribution: => {}", currentBucketId,
+                                    map.mapKeys { it.key.address.toString() }.mapValues { it.value.joinToString(",") { "${it.first}[${it.second}]" } })
+
                             val iterator = Iterators.cycle<Member>(map.keys)
                             val executorService = hz.hz.getExecutorService(EVENT_SCHEDULER)
                             map.entries.map {
@@ -105,11 +106,11 @@ class ScheduleScanner(private val hz: Hz) : Service {
                                                 Props.int("event.submit.initial.delay", 1),
                                                 Props.int("event.submit.backoff.multiplier", 1)).transform { it!!.list }
                             }.reduce().done({ l.error("schedule for bucket {} finished abnormally", currentBucketId, it.rootCause()) }) {
-                                if (l.isInfoEnabled) l.info("schedule for bucket {} finished normally => {}", currentBucketId, it)
-                                val buckets = it!!.map { it!! }.flatten().filterNotNull()
+                                if (l.isDebugEnabled) l.debug("schedule for bucket {} finished normally => {}", currentBucketId, it)
+                                val buckets = it!!.map { it!! }.flatten().filterNotNull().toSet()
                                 buckets.let { it.toSet().map { bucketManager.bucketProcessed(it.bucketId!!, it.status!!) } }.
                                         done({ l.error("bucket-scan: {}, failed to update the scan-status: {}", currentBucketId, buckets.map { it.bucketId }, it.rootCause()) }) {
-                                            if (l.isInfoEnabled) l.info("bucket-scan: {}, successfully updated the scan-status: {}", currentBucketId, buckets.map { it.bucketId })
+                                            if (l.isDebugEnabled) l.debug("bucket-scan: {}, successfully updated the scan-status: {}", currentBucketId, buckets.map { it.bucketId })
                                         }
                             }
                         } catch (e: Exception) {
@@ -142,7 +143,7 @@ class ScheduleScanner(private val hz: Hz) : Service {
                     l.error("{}, member {} finished abnormally for shards: {}", bucket, member.socketAddress, shardsData, it)
                     shardsData.forEach { bucketManager.shardDone(it.first, it.second, ERROR) }
                 }) {
-                    l.info("{}, member {} finished normally for shards: {}", bucket, member.socketAddress, it)
+                    if (l.isDebugEnabled) l.debug("{}, member {} finished normally for shards: {}", bucket, member.socketAddress, it)
                     it?.list?.forEach { bucketManager.shardDone(it!!.bucketId!!, it.shard!!, it.status!!) }
                 }
     }

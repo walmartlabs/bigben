@@ -9,7 +9,6 @@ import com.walmartlabs.opensource.bigben.extns.logger
 import com.walmartlabs.opensource.bigben.extns.transformAsync
 import java.lang.Integer.getInteger
 import java.lang.Runtime.getRuntime
-import java.lang.String.format
 import java.util.UUID.randomUUID
 import java.util.concurrent.*
 import java.util.concurrent.TimeUnit.SECONDS
@@ -54,16 +53,16 @@ class TaskExecutor(private val retryableExceptions: Set<Class<*>>) {
         return if (shouldRetry(cause)) {
             if (retryCount < maxRetries) {
                 if (l.isWarnEnabled)
-                    l.warn(format("operation failed, taskId='{}', retrying after {} {}, retry={}, maxRetry={}, exception='{}'",
-                            taskId, delay, timeUnit, retryCount, maxRetries, if (cause.message == null) cause::class.java.name else cause.message))
+                    l.warn("operation failed, taskId='{}', retrying after {} {}, retry={}, maxRetry={}, exception='{}'",
+                            taskId, delay, timeUnit, retryCount, maxRetries, if (cause.message == null) cause::class.java.name else cause.message)
                 RETRY_POOL.schedule(Callable { async(taskId, retryCount + 1, maxRetries, backoffMultiplier * delay, backoffMultiplier, timeUnit, task) }, delay.toLong(), timeUnit).transformAsync { it -> it!! }
             } else {
-                l.error(format("operation failed, taskId='{}', after {} retries, will not be retried anymore, exception='{}'",
-                        taskId, maxRetries, if (cause.message == null) cause::class.java.name else cause.message), cause)
+                l.error("operation failed, taskId='{}', after {} retries, will not be retried anymore, exception='{}'",
+                        taskId, maxRetries, if (cause.message == null) cause::class.java.name else cause.message, cause)
                 immediateFailedFuture<R>(cause)
             }
         } else {
-            l.error(format("operation failed, taskId='{}', unexpected exception", taskId), cause)
+            l.error("operation failed, taskId='{}', unexpected exception", taskId, cause)
             immediateFailedFuture<R>(cause)
         }
     }

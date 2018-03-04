@@ -58,9 +58,11 @@ class EventReceiver(val hz: Hz) {
                                 }
                             }
                         } else {
-                            addEvent0(eventRequest, bucketId, eventTime).transform {
-                                if (l.isDebugEnabled) l.debug("{}, add-event: successful", it!!.xrefId)
-                                eventRequest.toResponse().apply { eventId = it!!.id; eventStatus = ACCEPTED }
+                            addEvent0(eventRequest, bucketId, eventTime).transformAsync {
+                                addLookup0(eventRequest, it!!.bucketId!!, it.shard!!, it.id!!, it.eventTime!!).transform {
+                                    if (l.isDebugEnabled) l.debug("{}, add-event: successful", it!!.xrefId)
+                                    eventRequest.toResponse().apply { eventId = it!!.eventId; eventStatus = ACCEPTED }
+                                }
                             }
                         }
                     }.catching {
@@ -95,6 +97,7 @@ class EventReceiver(val hz: Hz) {
                     it.status = UN_PROCESSED
                     it.tenant = eventRequest.tenant
                     it.xrefId = eventRequest.id
+                    it.bucketId = eventTime.bucket()
                 }
             }
         }
@@ -150,7 +153,7 @@ class EventReceiver(val hz: Hz) {
                 val eventResponse = eventRequest.toResponse()
                 eventResponse.eventStatus = REJECTED
                 //eventResponse.setErrors(newArrayList<Error>(Error("400", "tenant", "", "tenant not registered / unknown tenant")))
-                l.error("event rejected, unknown tenant. Did you register one in the processors.typeRefJson?, {}", eventRequest.json())
+                l.error("event rejected, unknown tenant. Did you register one in the processors.config?, {}", eventRequest.json())
                 return immediateFuture<EventResponse>(eventResponse)
             }
         }
@@ -191,6 +194,8 @@ class EventReceiver(val hz: Hz) {
             val b = if (entry.value == null) domainProvider<Bucket>().let { it.raw(it.selector(Bucket::class.java)) } else entry.value!!
             b.count = (b.count ?: 0) + 1L
             b.updatedAt = nowUTC()
+            if (b.status == null)
+                b.status = UN_PROCESSED
             entry.setValue(b)
             if (l.isDebugEnabled) l.debug("bucket-id: {}, old-count: {}, new-count: {} ", entry.key, b.count!! - 1, b.count)
             return b.count

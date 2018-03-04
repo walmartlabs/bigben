@@ -8,30 +8,31 @@ import com.datastax.driver.mapping.Mapper
 import com.datastax.driver.mapping.MappingManager
 import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.opensource.bigben.entities.*
+import com.walmartlabs.opensource.bigben.extns.epoch
 import com.walmartlabs.opensource.bigben.extns.fromJson
 import com.walmartlabs.opensource.bigben.extns.logger
 import com.walmartlabs.opensource.bigben.extns.transform
-import com.walmartlabs.opensource.bigben.tasks.EventLoader
 import com.walmartlabs.opensource.bigben.utils.Props
+import java.time.ZonedDateTime
 
 /**
  * Created by smalik3 on 3/2/18
  */
-open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory {
+open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, EventLoader<Pair<ZonedDateTime, String>> {
 
     companion object {
         private val l = logger<CassandraProvider<*>>()
         private val cluster: Cluster
         private val mappingManager: MappingManager
+        private val loaderQuery: PreparedStatement
 
         init {
             if (l.isInfoEnabled) l.info("initialing the Cassandra domain provider")
             cluster = (Class.forName(Props.string("bigben.cassandra.cluster.factory", CassandraProvider::class.java.name)).newInstance() as ClusterFactory).create()
             mappingManager = MappingManager(cluster.connect())
+            loaderQuery = mappingManager.session.prepare("SELECT * FROM bigben.events WHERE bucket_id = ? AND shard = ? AND (event_time, id) > (?,?) LIMIT ?")
         }
     }
-
-    override fun loader(): EventLoader<T> = TODO("later")
 
     @Suppress("UNCHECKED_CAST")
     override fun selector(type: Class<T>): T {
@@ -46,6 +47,7 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory {
     override fun raw(selector: T) = selector
 
     override fun fetch(selector: T): ListenableFuture<T?> {
+        if (l.isDebugEnabled) l.debug("fetching ")
         return mappingManager.mapper(selector::class.java).let {
             when (selector) {
                 is EventC -> {
@@ -73,7 +75,7 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory {
             when (selector) {
                 is EventC -> {
                     require(selector.eventTime != null && selector.id != null &&
-                            selector.shard != null && selector.shard!! > 0) { "event keys not provided: $selector" }
+                            selector.shard != null && selector.shard!! >= 0) { "event keys not provided: $selector" }
                 }
                 is BucketC -> {
                     require(selector.id != null) { "bucket id not provided: $selector" }
@@ -122,5 +124,15 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory {
                 .addContactPoints(*(clusterConfig.contactPoints?.split(",")?.toTypedArray() ?:
                         throw ExceptionInInitializerError("contact points not provided")))
                 .build()
+    }
+
+    override fun load(t: Pair<ZonedDateTime, String>?, bucketId: ZonedDateTime, shard: Int, fetchSize: Int): ListenableFuture<Pair<Pair<ZonedDateTime, String>?, List<Event>?>> {
+        return mappingManager.session.executeAsync(loaderQuery.bind(bucketId, shard, epoch(), "")).
+                transform {
+                    mappingManager.mapper(EventC::class.java).map(it!!).toList().let {
+                        if (it.isNotEmpty()) it.last().run { eventTime!! to id!! to it }
+                        else null to emptyList<Event>()
+                    }
+                }
     }
 }

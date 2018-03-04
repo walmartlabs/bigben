@@ -2,7 +2,6 @@ package com.walmartlabs.opensource.bigben.providers.domain.cassandra
 
 import com.datastax.driver.mapping.annotations.*
 import com.walmartlabs.opensource.bigben.entities.*
-import com.walmartlabs.opensource.bigben.extns.bucket
 import java.time.ZonedDateTime
 
 /**
@@ -18,7 +17,7 @@ data class BucketC(@PartitionKey override var id: ZonedDateTime? = null,
 @Table(keyspace = "bigben", name = "events")
 data class EventC(@ClusteringColumn @Column(name = "event_time") override var eventTime: ZonedDateTime? = null,
                   @ClusteringColumn(1) override var id: String? = null,
-                  @PartitionKey @Column(name = "bucket_id") var bucketId: ZonedDateTime? = eventTime?.bucket(),
+                  @PartitionKey @Column(name = "bucket_id") override var bucketId: ZonedDateTime? = null,
                   @PartitionKey(1) override var shard: Int? = null,
                   override var status: EventStatus? = null,
                   override var error: String? = null,

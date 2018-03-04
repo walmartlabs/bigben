@@ -1,6 +1,5 @@
 package com.walmartlabs.opensource.bigben.hz
 
-import com.fasterxml.jackson.core.type.TypeReference
 import com.hazelcast.config.XmlConfigBuilder
 import com.hazelcast.core.Hazelcast.newHazelcastInstance
 import com.hazelcast.core.HazelcastInstance
@@ -9,8 +8,8 @@ import com.hazelcast.nio.serialization.IdentifiedDataSerializable
 import com.walmartlabs.opensource.bigben.api.EventReceiver.Companion.CACHED_PROCESSOR
 import com.walmartlabs.opensource.bigben.entities.ShardStatus
 import com.walmartlabs.opensource.bigben.entities.ShardStatusList
-import com.walmartlabs.opensource.bigben.extns.fromJson
 import com.walmartlabs.opensource.bigben.extns.logger
+import com.walmartlabs.opensource.bigben.extns.typeRefJson
 import com.walmartlabs.opensource.bigben.hz.HzObjectFactory.OBJECT_ID.*
 import com.walmartlabs.opensource.bigben.tasks.BulkShardTask
 import com.walmartlabs.opensource.bigben.tasks.ShutdownTask
@@ -48,8 +47,7 @@ class Hz {
 
     init {
         val config = VelocityContext().let { c ->
-            val overrides = if (Props.string("hz.props", "{}") != "{}") Hz::class.java.getResource("hz.props").readText() else "{}"
-            object : TypeReference<Map<String, Any>>() {}.fromJson(overrides).forEach { c.put(it.key, it.value) }
+            typeRefJson<Map<String, Any>>(Props.string("bigben.hz.config", "{}")).forEach { c.put(it.key, it.value) }
             val template = VELOCITY_ENGINE.getTemplate(Props.string("hz.file", "/hz.xml.vm"))
             StringWriter().apply { template.merge(c, this) }.toString()
         }
