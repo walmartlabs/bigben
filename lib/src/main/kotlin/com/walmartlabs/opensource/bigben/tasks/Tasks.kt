@@ -13,12 +13,15 @@ import com.hazelcast.nio.serialization.IdentifiedDataSerializable
 import com.walmartlabs.opensource.bigben.entities.*
 import com.walmartlabs.opensource.bigben.entities.EventStatus.ERROR
 import com.walmartlabs.opensource.bigben.entities.EventStatus.PROCESSED
-import com.walmartlabs.opensource.bigben.extns.*
-import com.walmartlabs.opensource.bigben.hz.ClusterSingleton
-import com.walmartlabs.opensource.bigben.hz.HzObjectFactory.OBJECT_ID.*
+import com.walmartlabs.opensource.bigben.extns.domainProvider
+import com.walmartlabs.opensource.bigben.hz.HzObjectFactory
+import com.walmartlabs.opensource.bigben.hz.HzObjectFactory.OBJECT_ID.BULK_EVENT_TASK
+import com.walmartlabs.opensource.bigben.hz.HzObjectFactory.OBJECT_ID.SHUTDOWN_TASK
 import com.walmartlabs.opensource.bigben.processors.EventProcessor
 import com.walmartlabs.opensource.bigben.processors.ProcessorRegistry
-import com.walmartlabs.opensource.bigben.utils.Props
+import com.walmartlabs.opensource.core.*
+import com.walmartlabs.opensource.core.hz.ClusterSingleton
+import com.walmartlabs.opensource.core.utils.Props
 import java.lang.Runtime.getRuntime
 import java.lang.System.currentTimeMillis
 import java.time.Instant
@@ -169,7 +172,9 @@ internal class ShutdownTask : IdsoCallable(SHUTDOWN_TASK), Callable<Boolean> {
     }
 }
 
-internal class StatusTask(private var serviceName: String? = null) : IdsoCallable(CLUSTER_STATUS_TASK), Callable<String> {
+internal class StatusTask(private var serviceName: String? = null) : Idso(HzObjectFactory.OBJECT_ID.CLUSTER_STATUS_TASK), Callable<String> {
     override fun call() = if (ClusterSingleton.ACTIVE_SERVICES.contains(serviceName)) "Master" else "Slave"
+    override fun writeData(out: ObjectDataOutput) = out.writeUTF(serviceName)
+    override fun readData(`in`: ObjectDataInput) = `in`.let { serviceName = it.readUTF() }
 }
 

@@ -1,4 +1,4 @@
-package com.walmartlabs.opensource.bigben.hz
+package com.walmartlabs.opensource.core.hz
 
 /**
  * Created by smalik3 on 2/23/18

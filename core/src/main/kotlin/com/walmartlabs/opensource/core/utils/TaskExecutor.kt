@@ -1,12 +1,12 @@
-package com.walmartlabs.opensource.bigben.utils
+package com.walmartlabs.opensource.core.utils
 
 import com.fasterxml.jackson.databind.util.ClassUtil.getRootCause
 import com.google.common.util.concurrent.Futures.immediateFailedFuture
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors.listeningDecorator
-import com.walmartlabs.opensource.bigben.extns.catchingAsync
-import com.walmartlabs.opensource.bigben.extns.logger
-import com.walmartlabs.opensource.bigben.extns.transformAsync
+import com.walmartlabs.opensource.core.catchingAsync
+import com.walmartlabs.opensource.core.logger
+import com.walmartlabs.opensource.core.transformAsync
 import java.lang.Integer.getInteger
 import java.lang.Runtime.getRuntime
 import java.util.UUID.randomUUID

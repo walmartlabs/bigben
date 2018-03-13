@@ -1,6 +1,6 @@
 package com.walmartlabs.opensource.bigben.extns
 
-import com.walmartlabs.opensource.bigben.utils.Props
+import com.walmartlabs.opensource.core.utils.Props
 import java.time.Instant.EPOCH
 import java.time.Instant.ofEpochMilli
 import java.time.ZoneOffset.UTC

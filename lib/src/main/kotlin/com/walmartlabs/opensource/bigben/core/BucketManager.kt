@@ -14,8 +14,12 @@ import com.walmartlabs.opensource.bigben.entities.Event
 import com.walmartlabs.opensource.bigben.entities.EventLookup
 import com.walmartlabs.opensource.bigben.entities.EventStatus
 import com.walmartlabs.opensource.bigben.entities.EventStatus.*
-import com.walmartlabs.opensource.bigben.extns.*
-import com.walmartlabs.opensource.bigben.utils.Props
+import com.walmartlabs.opensource.bigben.extns.domainProvider
+import com.walmartlabs.opensource.bigben.extns.fetch
+import com.walmartlabs.opensource.bigben.extns.nowUTC
+import com.walmartlabs.opensource.bigben.extns.save
+import com.walmartlabs.opensource.core.*
+import com.walmartlabs.opensource.core.utils.Props
 import java.lang.Runtime.getRuntime
 import java.time.ZonedDateTime
 import java.util.*
@@ -41,8 +45,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         private val index = AtomicInteger()
         val scheduler = listeningDecorator(ScheduledThreadPoolExecutor(4, ThreadFactory { Thread(it, "BucketManager-${index.getAndIncrement()}") }))!!
 
-        internal data class EmptyBucket(override var id: ZonedDateTime?, override var status: EventStatus? = EMPTY,
-                                        override var count: Long? = 0L, override var processedAt: ZonedDateTime? = null, override var updatedAt: ZonedDateTime? = null) : Bucket
+        internal fun emptyBucket(bucketId: ZonedDateTime) = domainProvider<Bucket>().let { it.raw(it.selector(Bucket::class.java)).apply { this.id = bucketId; count = 0L; status = EMPTY } }
     }
 
     private val shardSize = Props.int("event.shard.size", 1000)
@@ -81,7 +84,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         }
         return HashMultimap.create<ZonedDateTime, Int>().let { shards ->
             fetch<Bucket> { it.id = bucketId }.transform {
-                val bucket = it ?: EmptyBucket(bucketId)
+                val bucket = it ?: emptyBucket(bucketId)
                 if (buckets.putIfAbsent(bucketId, BucketSnapshot(bucketId, bucket.count!!, shardSize, bucket.status!!)) != null) {
                     l.warn("bucket with id {} already existed in the cache, this is highly unusual", bucketId)
                 }
@@ -187,7 +190,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
                         }
                     }
                 }.reduce().done({ l.error("error in purging snapshots", getRootCause(it!!)) }) {
-                    if (l.isInfoEnabled) l.info("purged buckets: {}", it?.map { it.id })
+                    if (l.isInfoEnabled) l.info("purged buckets: {}", it?.map { it!!.id })
                 }
             }
         }

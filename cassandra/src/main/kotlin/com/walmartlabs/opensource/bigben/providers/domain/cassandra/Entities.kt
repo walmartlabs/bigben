@@ -1,7 +1,13 @@
 package com.walmartlabs.opensource.bigben.providers.domain.cassandra
 
 import com.datastax.driver.mapping.annotations.*
+import com.hazelcast.nio.ObjectDataInput
+import com.hazelcast.nio.ObjectDataOutput
 import com.walmartlabs.opensource.bigben.entities.*
+import com.walmartlabs.opensource.bigben.hz.HzObjectFactory.Companion.BIGBEN_FACTORY_ID
+import com.walmartlabs.opensource.bigben.hz.HzObjectFactory.OBJECT_ID.BUCKET
+import com.walmartlabs.opensource.core.fromJson
+import com.walmartlabs.opensource.core.json
 import java.time.ZonedDateTime
 
 /**
@@ -12,7 +18,19 @@ data class BucketC(@PartitionKey override var id: ZonedDateTime? = null,
                    override var status: EventStatus? = null,
                    override var count: Long? = null,
                    @Column(name = "processed_at") override var processedAt: ZonedDateTime? = null,
-                   @Column(name = "modified_at") override var updatedAt: ZonedDateTime? = null) : Bucket
+                   @Column(name = "modified_at") override var updatedAt: ZonedDateTime? = null) : Bucket {
+    override fun getFactoryId() = BIGBEN_FACTORY_ID
+    override fun getId() = BUCKET.ordinal
+    override fun writeData(out: ObjectDataOutput) = out.writeUTF(this.json())
+    override fun readData(`in`: ObjectDataInput) = `in`.let {
+        val dup = BucketC::class.java.fromJson(it.readUTF())
+        id = dup.id
+        status = dup.status
+        count = dup.count
+        processedAt = dup.processedAt
+        updatedAt = dup.updatedAt
+    }
+}
 
 @Table(keyspace = "bigben", name = "events")
 data class EventC(@ClusteringColumn @Column(name = "event_time") override var eventTime: ZonedDateTime? = null,

@@ -9,10 +9,10 @@ import com.datastax.driver.mapping.MappingManager
 import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.opensource.bigben.entities.*
 import com.walmartlabs.opensource.bigben.extns.epoch
-import com.walmartlabs.opensource.bigben.extns.fromJson
-import com.walmartlabs.opensource.bigben.extns.logger
-import com.walmartlabs.opensource.bigben.extns.transform
-import com.walmartlabs.opensource.bigben.utils.Props
+import com.walmartlabs.opensource.core.fromJson
+import com.walmartlabs.opensource.core.logger
+import com.walmartlabs.opensource.core.transform
+import com.walmartlabs.opensource.core.utils.Props
 import java.time.ZonedDateTime
 
 /**

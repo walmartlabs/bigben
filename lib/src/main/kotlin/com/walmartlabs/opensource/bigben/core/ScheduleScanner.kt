@@ -9,13 +9,17 @@ import com.google.common.util.concurrent.MoreExecutors.listeningDecorator
 import com.hazelcast.core.IExecutorService
 import com.hazelcast.core.Member
 import com.walmartlabs.opensource.bigben.entities.EventStatus.ERROR
+import com.walmartlabs.opensource.bigben.entities.EventStatus.PROCESSED
 import com.walmartlabs.opensource.bigben.entities.ShardStatus
 import com.walmartlabs.opensource.bigben.entities.ShardStatusList
-import com.walmartlabs.opensource.bigben.extns.*
-import com.walmartlabs.opensource.bigben.hz.Hz
-import com.walmartlabs.opensource.bigben.hz.Service
+import com.walmartlabs.opensource.bigben.extns.bucketize
+import com.walmartlabs.opensource.bigben.extns.nextScan
+import com.walmartlabs.opensource.bigben.extns.nowUTC
 import com.walmartlabs.opensource.bigben.tasks.BulkShardTask
-import com.walmartlabs.opensource.bigben.utils.Props
+import com.walmartlabs.opensource.core.*
+import com.walmartlabs.opensource.core.hz.Hz
+import com.walmartlabs.opensource.core.hz.Service
+import com.walmartlabs.opensource.core.utils.Props
 import java.lang.Runtime.getRuntime
 import java.time.Instant
 import java.time.ZoneOffset.UTC
@@ -54,7 +58,7 @@ class ScheduleScanner(private val hz: Hz) : Service {
 
     override fun init() {
         if (l.isInfoEnabled) l.info("initing the event scheduler")
-        val lookbackRange = Props.int("events.backlog.check.limit", 2)
+        val lookbackRange = Props.int("events.backlog.check.limit", 10)
         val checkpointInterval = Props.long("event.bucket.manager.checkpoint.interval", 1)
         val checkpointIntervalUnits = TimeUnit.valueOf(Props.string("event.bucket.manager.checkpoint.interval.units", MINUTES.name))
         bucketManager = BucketManager(lookbackRange + 1, 2 * bucketWidth * 60, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits)
@@ -107,10 +111,12 @@ class ScheduleScanner(private val hz: Hz) : Service {
                                                 Props.int("event.submit.backoff.multiplier", 1)).transform { it!!.list }
                             }.reduce().done({ l.error("schedule for bucket {} finished abnormally", currentBucketId, it.rootCause()) }) {
                                 if (l.isDebugEnabled) l.debug("schedule for bucket {} finished normally => {}", currentBucketId, it)
-                                val buckets = it!!.map { it!! }.flatten().filterNotNull().toSet()
-                                buckets.let { it.toSet().map { bucketManager.bucketProcessed(it.bucketId!!, it.status!!) } }.
-                                        done({ l.error("bucket-scan: {}, failed to update the scan-status: {}", currentBucketId, buckets.map { it.bucketId }, it.rootCause()) }) {
-                                            if (l.isDebugEnabled) l.debug("bucket-scan: {}, successfully updated the scan-status: {}", currentBucketId, buckets.map { it.bucketId })
+                                val buckets = it!!.map { it!! }.flatten().filterNotNull().groupBy { it.bucketId!! }.
+                                        mapValues { it.value.fold(false, { hasError, ss -> hasError || (ss.status == ERROR) }) }
+                                if (l.isDebugEnabled) l.debug("bucket-scan: {}, final buckets with statuses to be persisted: {}", currentBucketId, buckets)
+                                buckets.map { bucketManager.bucketProcessed(it.key, if (it.value) ERROR else PROCESSED) }.
+                                        done({ l.error("bucket-scan: {}, failed to update the scan-status: {}", currentBucketId, buckets.keys, it.rootCause()) }) {
+                                            if (l.isDebugEnabled) l.debug("bucket-scan: {}, successfully updated the scan-status: {}", currentBucketId, buckets.keys)
                                         }
                             }
                         } catch (e: Exception) {

@@ -1,13 +1,13 @@
-package com.walmartlabs.opensource.bigben.extns
+package com.walmartlabs.opensource.core
 
 import com.google.common.base.Function
 import com.google.common.base.Throwables.getStackTraceAsString
 import com.google.common.util.concurrent.*
 import com.google.common.util.concurrent.MoreExecutors.directExecutor
 import com.hazelcast.core.ICompletableFuture
-import com.walmartlabs.opensource.bigben.utils.ListenableFutureAdapter
-import com.walmartlabs.opensource.bigben.utils.Props
-import com.walmartlabs.opensource.bigben.utils.TaskExecutor
+import com.walmartlabs.opensource.core.utils.ListenableFutureAdapter
+import com.walmartlabs.opensource.core.utils.Props
+import com.walmartlabs.opensource.core.utils.TaskExecutor
 import org.slf4j.LoggerFactory
 import java.util.UUID.randomUUID
 import java.util.concurrent.ExecutorService

@@ -1,4 +1,4 @@
-package com.walmartlabs.opensource.bigben.utils
+package com.walmartlabs.opensource.core.utils
 
 import com.google.common.util.concurrent.ListenableFuture
 import com.hazelcast.core.ExecutionCallback

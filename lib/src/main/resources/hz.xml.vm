@@ -49,7 +49,7 @@ $parm#end
     <services enable-defaults="true"/>
     <serialization>
         <data-serializable-factories>
-            <data-serializable-factory factory-id="1">com.walmartlabs.opensource.bigben.hz.HzObjectFactory</data-serializable-factory>
+            <data-serializable-factory factory-id="1">com.walmartlabs.opensource.core.hz.HzObjectFactory</data-serializable-factory>
         </data-serializable-factories>
     </serialization>
 </hazelcast>

@@ -1,4 +1,4 @@
-package com.walmartlabs.opensource.bigben.utils
+package com.walmartlabs.opensource.core.utils
 
 /**
  * Created by smalik3 on 2/21/18

@@ -15,9 +15,10 @@ import com.ning.http.client.AsyncHttpClient
 import com.ning.http.client.Response
 import com.walmartlabs.opensource.bigben.entities.Event
 import com.walmartlabs.opensource.bigben.entities.EventStatus.*
-import com.walmartlabs.opensource.bigben.extns.*
+import com.walmartlabs.opensource.bigben.extns.nowUTC
 import com.walmartlabs.opensource.bigben.processors.ProcessorConfig.Type.*
-import com.walmartlabs.opensource.bigben.utils.Props
+import com.walmartlabs.opensource.core.*
+import com.walmartlabs.opensource.core.utils.Props
 import toResponse
 import java.io.Serializable
 import java.lang.String.format

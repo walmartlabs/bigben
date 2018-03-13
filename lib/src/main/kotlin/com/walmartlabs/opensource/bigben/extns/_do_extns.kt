@@ -2,6 +2,7 @@ package com.walmartlabs.opensource.bigben.extns
 
 import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.opensource.bigben.entities.EntityProvider
+import com.walmartlabs.opensource.core.createProvider
 
 val domainProvider = createProvider<EntityProvider<Any>>()
 

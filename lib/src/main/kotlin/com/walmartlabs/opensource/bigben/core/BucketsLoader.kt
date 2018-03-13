@@ -3,12 +3,12 @@ package com.walmartlabs.opensource.bigben.core
 import com.google.common.util.concurrent.ListenableScheduledFuture
 import com.walmartlabs.opensource.bigben.core.BucketManager.Companion.scheduler
 import com.walmartlabs.opensource.bigben.entities.Bucket
-import com.walmartlabs.opensource.bigben.extns.done
 import com.walmartlabs.opensource.bigben.extns.fetch
-import com.walmartlabs.opensource.bigben.extns.logger
-import com.walmartlabs.opensource.bigben.extns.rootCause
-import com.walmartlabs.opensource.bigben.utils.Props
-import com.walmartlabs.opensource.bigben.utils.TaskExecutor
+import com.walmartlabs.opensource.core.done
+import com.walmartlabs.opensource.core.logger
+import com.walmartlabs.opensource.core.rootCause
+import com.walmartlabs.opensource.core.utils.Props
+import com.walmartlabs.opensource.core.utils.TaskExecutor
 import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicBoolean
@@ -53,7 +53,7 @@ class BucketsLoader(private val lookbackRange: Int, private val fetchSize: Int, 
                                 .done({ l.error("error in loading bucket {}, system is giving up", bId, it.rootCause()) }) {
                                     if (l.isDebugEnabled)
                                         l.info("bucket {} loaded successfully", bId)
-                                    consumer(it ?: BucketManager.Companion.EmptyBucket(bucketId))
+                                    consumer(it ?: BucketManager.emptyBucket(bucketId))
                                 }
                     } else {
                         if (l.isDebugEnabled) l.debug("bucket {} already loaded (likely by checkpoint), skipping...", bId)

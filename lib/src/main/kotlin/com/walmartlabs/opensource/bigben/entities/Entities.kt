@@ -17,7 +17,7 @@ import java.time.ZonedDateTime.ofInstant
  */
 enum class EventStatus { PROCESSED, ERROR, UN_PROCESSED, PROCESSING, TRIGGERED, EMPTY, REJECTED, ACCEPTED, UPDATED, DELETED }
 
-interface Bucket {
+interface Bucket : IdentifiedDataSerializable {
     var id: ZonedDateTime?
     var status: EventStatus?
     var count: Long?

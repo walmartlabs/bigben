@@ -1,4 +1,4 @@
-package com.walmartlabs.opensource.bigben.extns
+package com.walmartlabs.opensource.core
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -23,6 +23,8 @@ fun <T : Any> unwrapCompanionClass(ofClass: Class<T>): Class<*> {
 }
 
 fun Throwable?.rootCause() = this?.let { Throwables.getRootCause(this) }
+
+fun Throwable?.stackTraceAsString() = this?.let { Throwables.getStackTraceAsString(this) }
 
 private val om = ObjectMapper().registerModule(KotlinModule())
 fun Any.json(): String = om.writeValueAsString(this)
