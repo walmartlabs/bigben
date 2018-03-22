@@ -19,9 +19,9 @@ import java.util.concurrent.TimeUnit.SECONDS
 /**
  * Created by smalik3 on 2/21/18
  */
-val l = LoggerFactory.getLogger("extns")
+val _l = LoggerFactory.getLogger("extns")!!
 
-fun onError(t: Throwable?) = l.error("error in processing: ${getStackTraceAsString(t.rootCause()!!)}", t.rootCause())
+fun onError(t: Throwable?) = _l.error("error in processing: ${getStackTraceAsString(t.rootCause()!!)}", t.rootCause())
 
 fun <T> ListenableFuture<T>.done(onError: (Throwable?) -> Unit = ::onError, onSuccess: (T?) -> Unit): ListenableFuture<T> {
     return also {

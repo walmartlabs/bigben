@@ -24,15 +24,15 @@ class BucketStore : MapStore<ZonedDateTime, Bucket> {
     }
 
     override fun load(key: ZonedDateTime): Bucket? {
-        return { fetch<Bucket> { it.id = key } }.retriable("load-bucket: $key").get(1, MINUTES)
+        return { fetch<Bucket> { it.bucketId = key } }.retriable("load-bucket: $key").get(1, MINUTES)
     }
 
     override fun loadAll(keys: Collection<ZonedDateTime>): Map<ZonedDateTime, Bucket> {
-        return keys.map { k -> { fetch<Bucket> { it.id = k } }.retriable("load-bucket: $k") }.reduce().get(1, MINUTES).associate { it!!.id!! to it }
+        return keys.map { k -> { fetch<Bucket> { it.bucketId = k } }.retriable("load-bucket: $k") }.reduce().get(1, MINUTES).associate { it!!.bucketId!! to it }
     }
 
     override fun storeAll(map: Map<ZonedDateTime, Bucket>) {
-        map.values.map { v -> { provider.save(v) }.retriable("save-bucket: ${v.id}") }
+        map.values.map { v -> { provider.save(v) }.retriable("save-bucket: ${v.bucketId}") }
     }
 
     override fun loadAllKeys(): Iterable<ZonedDateTime>? = null
@@ -43,6 +43,6 @@ class BucketStore : MapStore<ZonedDateTime, Bucket> {
 
     override fun store(key: ZonedDateTime, value: Bucket) {
         if (l.isDebugEnabled) l.debug("saving bucket: {}", key);
-        { provider.save(value.apply { id = key }) }.retriable("save-bucket: $key").get(1, MINUTES)
+        { provider.save(value.apply { bucketId = key }) }.retriable("save-bucket: $key").get(1, MINUTES)
     }
 }

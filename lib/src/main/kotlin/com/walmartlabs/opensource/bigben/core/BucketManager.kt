@@ -45,7 +45,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         private val index = AtomicInteger()
         val scheduler = listeningDecorator(ScheduledThreadPoolExecutor(4, ThreadFactory { Thread(it, "BucketManager-${index.getAndIncrement()}") }))!!
 
-        internal fun emptyBucket(bucketId: ZonedDateTime) = domainProvider<Bucket>().let { it.raw(it.selector(Bucket::class.java)).apply { this.id = bucketId; count = 0L; status = EMPTY } }
+        internal fun emptyBucket(bucketId: ZonedDateTime) = domainProvider<Bucket>().let { it.raw(it.selector(Bucket::class.java)).apply { this.bucketId = bucketId; count = 0L; status = EMPTY } }
     }
 
     private val shardSize = Props.int("event.shard.size", 1000)
@@ -79,14 +79,14 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
             if (l.isInfoEnabled) l.info("starting the background load of previous buckets")
             val fetchSize = Props.int("buckets.background.load.fetch.size", 10)
             bucketsLoader = BucketsLoader(maxBuckets - 1, fetchSize, Predicate { buckets.containsKey(it) }, bucketWidth, bucketId) {
-                buckets.put(it.id!!, BucketSnapshot(it.id!!, it.count!!, shardSize, it.status!!))
+                buckets.put(it.bucketId!!, BucketSnapshot.with(it.bucketId!!, it.count!!, shardSize, it.status!!))
             }.apply { run() }
         }
         return HashMultimap.create<ZonedDateTime, Int>().let { shards ->
-            fetch<Bucket> { it.id = bucketId }.transform {
+            fetch<Bucket> { it.bucketId = bucketId }.transform {
                 val bucket = it ?: emptyBucket(bucketId)
-                if (buckets.putIfAbsent(bucketId, BucketSnapshot(bucketId, bucket.count!!, shardSize, bucket.status!!)) != null) {
-                    l.warn("bucket with id {} already existed in the cache, this is highly unusual", bucketId)
+                if (buckets.putIfAbsent(bucketId, BucketSnapshot.with(bucketId, bucket.count!!, shardSize, bucket.status!!)) != null) {
+                    l.warn("bucket with bucketId {} already existed in the cache, this is highly unusual", bucketId)
                 }
                 buckets.entries.filter { e -> e.value.awaiting.cardinality() > 0 }.forEach { e -> e.value.awaiting.stream().forEach { s -> shards.put(e.key, s) } }
                 if (l.isDebugEnabled) l.debug("processable shards at bucket: {}, are => {}", bucketId, shards)
@@ -196,26 +196,25 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         }
     }
 
-    private data class BucketSnapshot(val id: ZonedDateTime, val count: Long, val processing: BitSet, val awaiting: BitSet, private val shards: Int = -1) {
+    private data class BucketSnapshot(val id: ZonedDateTime, val count: Long, val processing: BitSet, val awaiting: BitSet) {
 
         companion object {
             private val l = logger<BucketSnapshot>()
             private val EMPTY = BitSet()
-        }
 
-        constructor(id: ZonedDateTime, count: Long, shardSize: Int, status: EventStatus) : this(id, count, BitSet(),
-                if (count == 0L || PROCESSED == status) EMPTY else {
-                    val shards = (if (count % shardSize == 0L) count / shardSize else count / shardSize + 1).toInt()
+            fun with(id: ZonedDateTime, count: Long, shardSize: Int, status: EventStatus): BucketSnapshot {
+                val shards = (if (count % shardSize == 0L) count / shardSize else count / shardSize + 1).toInt()
+                val awaiting = if (count == 0L || PROCESSED == status) EMPTY else {
                     BitSet(shards).apply { set(0, shards) }
-                }, (if (count % shardSize == 0L) count / shardSize else count / shardSize + 1).toInt())
-
-        init {
-            when {
-                count == 0L -> l.info("bucket: {} => empty, no events", id)
-                awaiting === EMPTY -> l.info("bucket: {} => already done", id)
-                else -> {
-                    if (l.isInfoEnabled) l.info("bucket: {} => has {} events, resulting in {} shards", id, count, shards)
                 }
+                when {
+                    count == 0L -> l.info("bucket: {} => empty, no events", id)
+                    awaiting === EMPTY -> l.info("bucket: {} => already done", id)
+                    else -> {
+                        if (l.isInfoEnabled) l.info("bucket: {} => has {} events, resulting in {} shards", id, count, shards)
+                    }
+                }
+                return BucketSnapshot(id, count, BitSet(), awaiting)
             }
         }
 
@@ -267,7 +266,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
                             val awaiting = it.a.fold(BitSet(), { b, i -> b.apply { set(i) } })
                             val processing = it.p.fold(BitSet(), { b, i -> b.apply { set(i) } })
                             processing.stream().forEach { awaiting.set(it) }
-                            BucketSnapshot(ZonedDateTime.parse(it.b), it.c, awaiting, BitSet())
+                            BucketSnapshot(ZonedDateTime.parse(it.b), it.c, BitSet(), awaiting)
                         }.associate { it.id to it }.also { if (l.isDebugEnabled) l.debug("loaded checkpoint: {}", it) }
                     }
                     else -> {
@@ -287,7 +286,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
 
         fun syncBucket(bucketId: ZonedDateTime, status: EventStatus, setProcessedAt: Boolean): ListenableFuture<Bucket> {
             if (l.isDebugEnabled) l.debug("bucket {} is done, syncing status as {}", bucketId, status)
-            return save<Bucket> { it.id = bucketId; it.status = status; if (setProcessedAt) it.processedAt = nowUTC() }.
+            return save<Bucket> { it.bucketId = bucketId; it.status = status; if (setProcessedAt) it.processedAt = nowUTC() }.
                     done({ l.error("bucket {} could not be synced as {}, after multiple retries", bucketId, status, it) })
                     { if (l.isInfoEnabled) l.info("bucket {} is successfully synced as {}", bucketId, status) }
         }

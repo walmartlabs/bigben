@@ -41,9 +41,8 @@
             <plugin>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-maven-plugin</artifactId>
-                <version>${kotlin.version}</version>
             </plugin>
         </plugins>
-        <finalName>bigben-app</finalName>
+        <finalName>bigben</finalName>
     </build>
 </project>

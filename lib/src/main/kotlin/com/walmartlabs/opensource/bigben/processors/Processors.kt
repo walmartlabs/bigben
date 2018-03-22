@@ -169,7 +169,7 @@ object ProcessorRegistry : EventProcessor<Event> {
 
     class DevNull : EventProcessor<Event> {
         override fun invoke(t: Event): ListenableFuture<Event> {
-            l.warn("routing event response with no tenant to /dev/null: {}", t.eventResponse)
+            //l.warn("routing event response with no tenant to /dev/null: {}", t.eventResponse)
             t.error = "/dev/null"
             t.status = PROCESSED
             return immediateFuture(t)

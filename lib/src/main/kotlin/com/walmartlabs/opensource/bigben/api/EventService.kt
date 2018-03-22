@@ -57,7 +57,7 @@ class EventService(private val hz: Hz, private val service: Service,
                 filter { it.eventStatus == TRIGGERED }.map { ProcessorRegistry.instance(it.event()) }.
                         done({ l.error("error in triggering lapsed events:", it.rootCause()) }) {
                             it!!.forEach {
-                                l.warn("event was triggered immediately (likely lapsed), event id: {}, tenant: {}, " +
+                                l.warn("event was triggered immediately (likely lapsed), event bucketId: {}, tenant: {}, " +
                                         "eventTime: {}, currentTime: {}", it.xrefId, it.tenant, it.eventTime, nowUTC())
                             }
                         }
@@ -95,11 +95,11 @@ class EventService(private val hz: Hz, private val service: Service,
 
     @GET
     @Path("/find")
-    fun find(@QueryParam("id") id: String, @QueryParam("tenant") tenant: String) = EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, false) }
+    fun find(@QueryParam("bucketId") id: String, @QueryParam("tenant") tenant: String) = EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, false) }
 
     @POST
     @Path("/dryrun")
-    fun dryrun(@QueryParam("id") id: String, @QueryParam("tenant") tenant: String) = EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, true) }
+    fun dryrun(@QueryParam("bucketId") id: String, @QueryParam("tenant") tenant: String) = EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, true) }
 
     private fun find(eventRequest: EventRequest, fire: Boolean): Response {
         val eventResponse = eventRequest.toResponse()

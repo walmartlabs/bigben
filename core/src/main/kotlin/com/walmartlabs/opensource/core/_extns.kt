@@ -35,10 +35,10 @@ inline fun <reified T> typeRefJson(s: String) = object : TypeReference<T>() {}.f
 inline fun <reified T> createProvider(): T {
     return try {
         ServiceLoader.load(T::class.java).first()!!.also {
-            if (l.isInfoEnabled) l.info("provider {} loaded successfully", T::class.java.name)
+            if (_l.isInfoEnabled) _l.info("provider {} loaded successfully", T::class.java.name)
         }
     } catch (e: Throwable) {
-        l.error("could not load provider {}", T::class.java.name, e.rootCause())
+        _l.error("could not load provider {}", T::class.java.name, e.rootCause())
         throw ExceptionInInitializerError(e.rootCause())
     }
 }

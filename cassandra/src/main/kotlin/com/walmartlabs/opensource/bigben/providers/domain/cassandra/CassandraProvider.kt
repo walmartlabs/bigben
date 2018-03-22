@@ -56,8 +56,8 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
                     it.getAsync(selector.bucketId, selector.shard, selector.eventTime, selector.id).transform { it }
                 }
                 is BucketC -> {
-                    require(selector.id != null) { "bucket id not provided: $selector" }
-                    it.getAsync(selector.id).transform { it }
+                    require(selector.bucketId != null) { "bucket id not provided: $selector" }
+                    it.getAsync(selector.bucketId).transform { it }
                 }
                 is EventLookupC -> {
                     require(selector.tenant != null && selector.xrefId != null) { "look up keys not provided: $selector" }
@@ -78,7 +78,7 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
                             selector.shard != null && selector.shard!! >= 0) { "event keys not provided: $selector" }
                 }
                 is BucketC -> {
-                    require(selector.id != null) { "bucket id not provided: $selector" }
+                    require(selector.bucketId != null) { "bucket id not provided: $selector" }
                 }
                 is EventLookupC -> {
                     require(selector.tenant != null && selector.xrefId != null) { "look up keys not provided: $selector" }
