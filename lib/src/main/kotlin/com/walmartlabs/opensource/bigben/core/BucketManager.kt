@@ -1,7 +1,5 @@
 package com.walmartlabs.opensource.bigben.core
 
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY
 import com.google.common.base.Throwables.getRootCause
 import com.google.common.collect.HashMultimap
 import com.google.common.collect.Multimap
@@ -10,19 +8,14 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.ListenableScheduledFuture
 import com.google.common.util.concurrent.MoreExecutors.listeningDecorator
 import com.walmartlabs.opensource.bigben.entities.Bucket
-import com.walmartlabs.opensource.bigben.entities.Event
-import com.walmartlabs.opensource.bigben.entities.EventLookup
 import com.walmartlabs.opensource.bigben.entities.EventStatus
 import com.walmartlabs.opensource.bigben.entities.EventStatus.*
 import com.walmartlabs.opensource.bigben.extns.domainProvider
 import com.walmartlabs.opensource.bigben.extns.fetch
-import com.walmartlabs.opensource.bigben.extns.nowUTC
-import com.walmartlabs.opensource.bigben.extns.save
 import com.walmartlabs.opensource.core.*
 import com.walmartlabs.opensource.core.utils.Props
 import java.lang.Runtime.getRuntime
 import java.time.ZonedDateTime
-import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.ThreadFactory
@@ -30,9 +23,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Predicate
-import java.util.stream.Collectors
 import kotlin.Comparator
-import kotlin.collections.HashMap
 
 /**
  * Created by smalik3 on 2/21/18
@@ -196,107 +187,4 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         }
     }
 
-    private data class BucketSnapshot(val id: ZonedDateTime, val count: Long, val processing: BitSet, val awaiting: BitSet) {
-
-        companion object {
-            private val l = logger<BucketSnapshot>()
-            private val EMPTY = BitSet()
-
-            fun with(id: ZonedDateTime, count: Long, shardSize: Int, status: EventStatus): BucketSnapshot {
-                val shards = (if (count % shardSize == 0L) count / shardSize else count / shardSize + 1).toInt()
-                val awaiting = if (count == 0L || PROCESSED == status) EMPTY else {
-                    BitSet(shards).apply { set(0, shards) }
-                }
-                when {
-                    count == 0L -> l.info("bucket: {} => empty, no events", id)
-                    awaiting === EMPTY -> l.info("bucket: {} => already done", id)
-                    else -> {
-                        if (l.isInfoEnabled) l.info("bucket: {} => has {} events, resulting in {} shards", id, count, shards)
-                    }
-                }
-                return BucketSnapshot(id, count, BitSet(), awaiting)
-            }
-        }
-
-        fun processing(shard: Int) = apply { awaiting.clear(shard); processing.set(shard) }
-
-        fun done(shard: Int, status: EventStatus) {
-            processing.clear(shard)
-            when (status) {
-                PROCESSED -> {
-                    if (l.isInfoEnabled) l.info("shard: {}[{}] finished successfully", id, shard)
-                    awaiting.clear(shard)
-                }
-                ERROR -> {
-                    if (l.isInfoEnabled) l.info("shard: {}[{}] finished with error", id, shard)
-                    awaiting.set(shard)
-                }
-                else -> throw IllegalArgumentException("invalid status value: $status")
-            }
-        }
-    }
-
-    private class CheckpointHelper {
-        companion object {
-            private val l = logger<CheckpointHelper>()
-            private val CHECKPOINT_KEY = "_CHECKPOINT_"
-        }
-
-        @JsonInclude(NON_EMPTY)
-        data class Checkpoint(val b: String, val c: Long, val a: List<Int> = emptyList(), val p: List<Int> = emptyList())
-
-        fun saveCheckpoint(data: Map<ZonedDateTime, BucketSnapshot>): ListenableFuture<EventLookup> {
-            return data.toSortedMap().mapValues {
-                Checkpoint(it.value.id.toString(), it.value.count,
-                        it.value.awaiting.stream().boxed().collect(Collectors.toList()),
-                        it.value.processing.stream().boxed().collect(Collectors.toList()))
-            }.let { m ->
-                if (l.isDebugEnabled) l.debug("saving checkpoint for buckets: {}", m.keys)
-                save<EventLookup> { it.tenant = CHECKPOINT_KEY; it.xrefId = CHECKPOINT_KEY; it.payload = m.values.json() }
-            }.done({ l.warn("error in saving checkpoint", it.rootCause()) }) {
-                if (l.isDebugEnabled && it != null) l.debug("checkpoint saved successfully for buckets: {}", it.payload)
-            }
-        }
-
-        fun loadCheckpoint(): ListenableFuture<Map<ZonedDateTime, BucketSnapshot>> {
-            return fetch<EventLookup> { it.tenant = CHECKPOINT_KEY; it.xrefId = CHECKPOINT_KEY }.transform {
-                when {
-                    it?.payload != null && it.payload!!.trim().isNotEmpty() -> {
-                        typeRefJson<List<Checkpoint>>(it.payload!!).map {
-                            val awaiting = it.a.fold(BitSet(), { b, i -> b.apply { set(i) } })
-                            val processing = it.p.fold(BitSet(), { b, i -> b.apply { set(i) } })
-                            processing.stream().forEach { awaiting.set(it) }
-                            BucketSnapshot(ZonedDateTime.parse(it.b), it.c, BitSet(), awaiting)
-                        }.associate { it.id to it }.also { if (l.isDebugEnabled) l.debug("loaded checkpoint: {}", it) }
-                    }
-                    else -> {
-                        if (l.isInfoEnabled)
-                            l.info("no checkpoint to load")
-                        HashMap()
-                    }
-                }
-            }.catching { l.error("error in loading checkpoint, ignoring", it); HashMap() }
-        }
-    }
-
-    private class StatusSyncer {
-        companion object {
-            private val l = logger<StatusSyncer>()
-        }
-
-        fun syncBucket(bucketId: ZonedDateTime, status: EventStatus, setProcessedAt: Boolean): ListenableFuture<Bucket> {
-            if (l.isDebugEnabled) l.debug("bucket {} is done, syncing status as {}", bucketId, status)
-            return save<Bucket> { it.bucketId = bucketId; it.status = status; if (setProcessedAt) it.processedAt = nowUTC() }.
-                    done({ l.error("bucket {} could not be synced as {}, after multiple retries", bucketId, status, it) })
-                    { if (l.isInfoEnabled) l.info("bucket {} is successfully synced as {}", bucketId, status) }
-        }
-
-        fun syncShard(bucketId: ZonedDateTime, shard: Int, eventTime: ZonedDateTime, eventId: String, status: EventStatus, payload: String?): ListenableFuture<Event> {
-            if (l.isDebugEnabled) l.debug("shard {}[{}] is done, syncing status as {}, payload: {}", bucketId, shard, status, payload)
-            return save<Event> { it.id = eventId; it.eventTime = eventTime; it.status = status; if (payload != null) it.payload = payload }.
-                    done({ l.error("shard {}[{}] could not be synced with status {}, after multiple retries", bucketId, shard, status, it) }) {
-                        if (l.isInfoEnabled) l.info("shard {}[{}] is successfully synced with status {}", bucketId, shard, status)
-                    }
-        }
-    }
 }
