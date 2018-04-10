@@ -298,12 +298,7 @@
       <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public_snapshot/</url>
     </pluginRepository>
   </pluginRepositories>
-  <scm>
-    <connection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</connection>
-    <developerConnection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</developerConnection>
-    <url>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</url>
-    <tag>HEAD</tag>
-  </scm>
+
   <distributionManagement>
     <repository>
       <id>pangaea_releases</id>
