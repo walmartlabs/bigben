@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.walmartlabs.opensource.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <modules>
         <module>core</module>
         <module>lib</module>
@@ -33,12 +32,12 @@
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>core</artifactId>
-                <version>1.0-SNAPSHOT</version>
+                <version>1.0</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.0-SNAPSHOT</version>
+                <version>1.0</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -303,7 +302,7 @@
     <connection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</connection>
     <developerConnection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</developerConnection>
     <url>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</url>
-    <tag>HEAD</tag>
+    <tag>bigben-1.0</tag>
   </scm>
   <distributionManagement>
     <repository>
