@@ -230,85 +230,16 @@
             </plugins>
         </pluginManagement>
     </build>
-  
-    <repositories>
-    <repository>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-      <id>nexus_release</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public/</url>
-    </repository>
-    <repository>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-        <updatePolicy>daily</updatePolicy>
-      </snapshots>
-      <id>central</id>
-      <url>http://central</url>
-    </repository>
-    <repository>
-      <releases>
-        <enabled>false</enabled>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-        <updatePolicy>daily</updatePolicy>
-      </snapshots>
-      <id>nexus_snapshot</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public_snapshot/</url>
-    </repository>
-  </repositories>
-  
-  <pluginRepositories>
-    <pluginRepository>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-        <updatePolicy>daily</updatePolicy>
-      </snapshots>
-      <id>central</id>
-      <url>http://central</url>
-    </pluginRepository>
-    <pluginRepository>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-      <id>nexus_plugin_release</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public/</url>
-    </pluginRepository>
-    <pluginRepository>
-      <releases>
-        <enabled>false</enabled>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-      </snapshots>
-      <id>nexus_plugin_snapshot</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public_snapshot/</url>
-    </pluginRepository>
-  </pluginRepositories>
-
-  <distributionManagement>
-    <repository>
-      <id>pangaea_releases</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_releases</url>
-    </repository>
-    <snapshotRepository>
-      <id>pangaea_snapshots</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_snapshots</url>
-    </snapshotRepository>
-  </distributionManagement>
-      
+    <pluginRepositories>
+        <pluginRepository>
+            <id>nexus_plugin_release</id>
+            <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>    
 </project>
