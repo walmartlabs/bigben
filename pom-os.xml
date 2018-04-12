@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.walmartlabs.opensource.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.2-SNAPSHOT</version>
+    <version>1.0-SNAPSHOT</version>
     <modules>
         <module>core</module>
         <module>lib</module>
@@ -32,16 +33,11 @@
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>core</artifactId>
-                <version>1.2-SNAPSHOT</version>
+                <version>1.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.2-SNAPSHOT</version>
-            </dependency>
-            <dependency>
-                <groupId>com.walmartlabs.opensource.bigben</groupId>
-                <artifactId>bigben-cassandra</artifactId>
                 <version>1.0-SNAPSHOT</version>
             </dependency>
             <dependency>
@@ -92,12 +88,12 @@
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-reflect</artifactId>
-                <version>${kotlin.version}</version>
+                <version>RELEASE</version>
             </dependency>
             <dependency>
-                <groupId>org.testng</groupId>
-                <artifactId>testng</artifactId>
-                <version>6.14.3</version>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>3.8.1</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>
@@ -234,92 +230,16 @@
             </plugins>
         </pluginManagement>
     </build>
-  
-    <repositories>
-    <repository>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-      <id>nexus_release</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public/</url>
-    </repository>
-    <repository>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-        <updatePolicy>daily</updatePolicy>
-      </snapshots>
-      <id>central</id>
-      <url>http://central</url>
-    </repository>
-    <repository>
-      <releases>
-        <enabled>false</enabled>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-        <updatePolicy>daily</updatePolicy>
-      </snapshots>
-      <id>nexus_snapshot</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public_snapshot/</url>
-    </repository>
-  </repositories>
-  
-  <pluginRepositories>
-    <pluginRepository>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-        <updatePolicy>daily</updatePolicy>
-      </snapshots>
-      <id>central</id>
-      <url>http://central</url>
-    </pluginRepository>
-    <pluginRepository>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-      <id>nexus_plugin_release</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public/</url>
-    </pluginRepository>
-    <pluginRepository>
-      <releases>
-        <enabled>false</enabled>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-      </snapshots>
-      <id>nexus_plugin_snapshot</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public_snapshot/</url>
-    </pluginRepository>
-  </pluginRepositories>
-
-  <distributionManagement>
-    <repository>
-      <id>pangaea_releases</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_releases</url>
-    </repository>
-    <snapshotRepository>
-      <id>pangaea_snapshots</id>
-      <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_snapshots</url>
-    </snapshotRepository>
-  </distributionManagement>
-  
-    <scm>
-    <connection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</connection>
-    <developerConnection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</developerConnection>
-    <tag>os</tag>
-    <url>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</url>
-  </scm>
-      
+    <pluginRepositories>
+        <pluginRepository>
+            <id>nexus_plugin_release</id>
+            <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>    
 </project>
