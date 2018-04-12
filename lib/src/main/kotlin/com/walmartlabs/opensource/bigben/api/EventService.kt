@@ -108,7 +108,7 @@ class EventService(private val hz: Hz, private val service: Service,
             if (eventLookup == null) {
                 status(NOT_FOUND).entity(eventResponse).build()
             } else {
-                val event = fetch<Event> { it.id = eventLookup.eventId; it.eventTime = eventLookup.eventTime; it.shard = eventLookup.shard }.result { null }
+                val event = fetch<Event> { it.id = eventLookup.eventId; it.eventTime = eventLookup.eventTime; it.shard = eventLookup.shard; it.bucketId = eventLookup.bucketId }.result { null }
                 if (event == null) {
                     eventResponse.apply { id = eventLookup.eventId; eventTime = eventLookup.eventTime?.toString() }
                     status(NOT_FOUND).entity(eventResponse).build()

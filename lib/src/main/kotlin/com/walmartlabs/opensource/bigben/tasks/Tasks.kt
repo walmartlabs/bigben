@@ -45,7 +45,7 @@ class BulkShardTask(private var shards: Collection<Pair<ZonedDateTime, Int>>? = 
     companion object {
         private val l = logger<BulkShardTask>()
         private val NO_OP = immediateFuture<List<ShardStatus>>(ArrayList())
-        private val loader = createProvider<EventLoader<Pair<ZonedDateTime?, String>>>()
+        private val loader = createProvider<EventLoader>()
     }
 
     private lateinit var hz: HazelcastInstance
@@ -97,11 +97,11 @@ class BulkShardTask(private var shards: Collection<Pair<ZonedDateTime, Int>>? = 
     }
 }
 
-class ShardTask<T>(private val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int,
-                   private val processor: EventProcessor<Event>, private val loader: EventLoader<T>) : Callable<ListenableFuture<ShardStatus>> {
+class ShardTask(private val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int,
+                private val processor: EventProcessor<Event>, private val loader: EventLoader) : Callable<ListenableFuture<ShardStatus>> {
 
     companion object {
-        private val l = logger<ShardTask<Any>>()
+        private val l = logger<ShardTask>()
 
         private val index = AtomicInteger()
         private val scheduler = listeningDecorator(ScheduledThreadPoolExecutor(
@@ -114,21 +114,26 @@ class ShardTask<T>(private val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int,
 
     override fun call(): ListenableFuture<ShardStatus> {
         if (l.isDebugEnabled) l.debug("{}, processing shard with fetch size: {}", executionKey, fetchSize)
-        return loader.load(null, p.first, p.second, fetchSize).transformAsync { loaded ->
-            if (loaded!!.second == null || loaded.second!!.isEmpty()) immediateFuture(loaded.first to loaded.second)
-            else loaded.second!!.map { e ->
+        return loader.load(p.first, p.second, fetchSize).transformAsync { rp ->
+            val events = rp!!.second
+            if (events.isEmpty()) immediateFuture(rp.first to events)
+            else events.filter { it.status != PROCESSED }.map { e ->
                 schedule(e).done({
                     l.error("{}/{}/{} event has error in processing", executionKey, e.eventTime, e.id, it.rootCause())
                 }) { if (l.isDebugEnabled) l.debug("{}/{}/{} event is processed successfully", executionKey, e.eventTime, e.id) }
-            }.reduce().transformAsync { loader.load(loaded.first, p.first, p.second, fetchSize) }
+            }.reduce().transformAsync {
+                if (events.size >= fetchSize)
+                    loader.load(p.first, p.second, fetchSize, events.last().eventTime!!, events.last().id!!, rp.first)
+                else immediateFuture(rp.first to events)
+            }
         }.transform {
-            it!!.second?.fold(false, { b, e -> b || e.status == ERROR })?.run {
+            it!!.second.fold(false, { b, e -> b || e.status == ERROR }).run {
                 if (l.isDebugEnabled) {
                     if (this) l.debug("{}, errors in processing shard", executionKey)
                     else l.debug("{}, shard processed successfully", executionKey)
                 }
                 ShardStatus(p.first, p.second, if (this) ERROR else PROCESSED)
-            } ?: ShardStatus(p.first, p.second, PROCESSED)
+            }
         }
     }
 

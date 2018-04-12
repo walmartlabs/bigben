@@ -1,6 +1,7 @@
 package com.walmartlabs.opensource.bigben.entities
 
 import com.google.common.util.concurrent.ListenableFuture
+import com.walmartlabs.opensource.bigben.extns.epoch
 import java.time.ZonedDateTime
 
 /**
@@ -12,8 +13,9 @@ interface EntityProvider<T> {
     fun fetch(selector: T): ListenableFuture<T?>
     fun save(selector: T): ListenableFuture<T>
     fun remove(selector: T): ListenableFuture<T>
+    fun unwrap(): Any?
 }
 
-interface EventLoader<T> {
-    fun load(t: T?, bucketId: ZonedDateTime, shard: Int, fetchSize: Int): ListenableFuture<Pair<T?, List<Event>?>>
+interface EventLoader {
+    fun load(bucketId: ZonedDateTime, shard: Int, fetchSize: Int, eventTime: ZonedDateTime = epoch(), eventId: String = "", context: Any? = null): ListenableFuture<Pair<Any?, List<Event>>>
 }

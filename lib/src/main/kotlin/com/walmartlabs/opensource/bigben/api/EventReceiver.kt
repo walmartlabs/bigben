@@ -52,8 +52,9 @@ class EventReceiver(val hz: Hz) {
                                 }
                             } else {
                                 if (l.isDebugEnabled) l.debug("event update received, event time changed, add new event -> update existing look up -> delete old event")
+                                val oldLookup = it
                                 addEvent0(eventRequest, bucketId, eventTime).transformAsync {
-                                    addLookup0(eventRequest, bucketId, it!!.shard!!, it.id!!, eventTime).transformAsync { removeEvent0(it!!) }.transform {
+                                    addLookup0(eventRequest, bucketId, it!!.shard!!, it.id!!, eventTime).transformAsync { removeEvent0(oldLookup) }.transform {
                                         eventRequest.toResponse().apply { eventId = it!!.eventId; eventStatus = UPDATED }
                                     }
                                 }
@@ -105,7 +106,7 @@ class EventReceiver(val hz: Hz) {
     }
 
     private fun removeEvent0(eventLookup: EventLookup): ListenableFuture<EventLookup> {
-        return { remove<Event> { it.eventTime = eventLookup.eventTime; it.id = eventLookup.eventId; it.shard = eventLookup.shard } }.
+        return { remove<Event> { it.eventTime = eventLookup.eventTime; it.id = eventLookup.eventId; it.shard = eventLookup.shard; it.bucketId = eventLookup.bucketId } }.
                 retriable("delete-event-${eventLookup.xrefId}",
                         Props.int("event.delete.max.retries", 3),
                         Props.int("event.delete.initial.delay", 1),
@@ -119,7 +120,7 @@ class EventReceiver(val hz: Hz) {
             if (el == null) immediateFuture(eventResponse)
             else {
                 if (l.isDebugEnabled) l.debug("removing event: {}/{}", tenant, id)
-                remove<Event> { it.eventTime = el.eventTime; it.shard = el.shard; it.tenant = el.tenant }.transformAsync {
+                remove<Event> { it.eventTime = el.eventTime; it.shard = el.shard; it.id = el.eventId; it.bucketId = el.bucketId }.transformAsync {
                     if (l.isDebugEnabled) l.debug("removing event look up: {}/{}", tenant, id)
                     remove<EventLookup> { it.tenant = el.tenant; it.xrefId = el.xrefId }.transform {
                         if (l.isDebugEnabled) l.debug("event removed successfully : {}/{}", tenant, id)

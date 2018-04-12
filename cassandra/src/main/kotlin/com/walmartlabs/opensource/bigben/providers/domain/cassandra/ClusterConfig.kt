@@ -1,6 +1,9 @@
 package com.walmartlabs.opensource.bigben.providers.domain.cassandra
 
 import com.datastax.driver.core.Cluster
+import com.datastax.driver.core.ConsistencyLevel
+import com.datastax.driver.core.ConsistencyLevel.EACH_QUORUM
+import com.datastax.driver.core.ConsistencyLevel.LOCAL_QUORUM
 import com.datastax.driver.core.SocketOptions.DEFAULT_CONNECT_TIMEOUT_MILLIS
 import com.datastax.driver.core.SocketOptions.DEFAULT_READ_TIMEOUT_MILLIS
 
@@ -25,6 +28,9 @@ class ClusterConfig {
     var username: String? = null
     var password: String? = null
     var downgradingConsistency: Boolean = false
+
+    var writeConsistency: ConsistencyLevel = EACH_QUORUM
+    var readConsistency: ConsistencyLevel = LOCAL_QUORUM
 }
 
 interface ClusterFactory {

@@ -89,10 +89,15 @@ data class ShardStatusList(var list: List<ShardStatus?>? = null) : Idso(SHARD_ST
 }
 
 enum class Mode { UPSERT, REMOVE }
-open class EventRequest(var id: String? = null, var eventTime: String? = null, var tenant: String? = null, var payload: String? = null, var mode: Mode = UPSERT)
+open class EventRequest(var id: String? = null, var eventTime: String? = null, var tenant: String? = null, var payload: String? = null, var mode: Mode = UPSERT) {
+    override fun toString() = "EventRequest(id=$id, eventTime=$eventTime, tenant=$tenant, payload=$payload, mode=$mode)"
+}
+
 class EventResponse(id: String? = null, eventTime: String? = null, tenant: String? = null, mode: Mode = UPSERT, payload: String? = null,
                     var eventId: String? = null, var triggeredAt: String? = null, var eventStatus: EventStatus? = null, var error: String? = null) :
-        EventRequest(id = id, eventTime = eventTime, tenant = tenant, mode = mode)
+        EventRequest(id = id, eventTime = eventTime, tenant = tenant, mode = mode, payload = payload) {
+    override fun toString() = super.toString() + "EventResponse(eventId=$eventId, triggeredAt=$triggeredAt, eventStatus=$eventStatus, error=$error)"
+}
 
 interface EventResponseMixin {
     var eventResponse: EventResponse?
