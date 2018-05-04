@@ -4,7 +4,7 @@
     <groupId>com.walmartlabs.opensource.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.2-SNAPSHOT</version>
+    <version>1.2</version>
     <modules>
         <module>core</module>
         <module>lib</module>
@@ -32,12 +32,12 @@
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>core</artifactId>
-                <version>1.2-SNAPSHOT</version>
+                <version>1.2</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.2-SNAPSHOT</version>
+                <version>1.2</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
@@ -318,7 +318,7 @@
     <scm>
     <connection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</connection>
     <developerConnection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</developerConnection>
-    <tag>os</tag>
+    <tag>bigben-1.2</tag>
     <url>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</url>
   </scm>
       

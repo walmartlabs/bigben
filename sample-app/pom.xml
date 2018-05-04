@@ -2,7 +2,7 @@
     <parent>
         <groupId>com.walmartlabs.opensource.bigben</groupId>
         <artifactId>bigben</artifactId>
-        <version>1.2-SNAPSHOT</version>
+        <version>1.2</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <artifactId>bigben-sample-app</artifactId>
@@ -27,12 +27,12 @@
         <dependency>
             <groupId>com.walmartlabs.opensource.bigben</groupId>
             <artifactId>bigben-lib</artifactId>
-            <version>1.2-SNAPSHOT</version>
+            <version>1.2</version>
         </dependency>
         <dependency>
             <groupId>com.walmartlabs.opensource.bigben</groupId>
             <artifactId>bigben-cassandra</artifactId>
-            <version>1.2-SNAPSHOT</version>
+            <version>1.2</version>
         </dependency>
         <dependency>
             <groupId>org.testng</groupId>
