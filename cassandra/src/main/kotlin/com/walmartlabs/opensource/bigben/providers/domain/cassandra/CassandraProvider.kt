@@ -24,7 +24,7 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
     companion object {
         private val l = logger<CassandraProvider<*>>()
         private val cluster: Cluster
-        private val mappingManager: MappingManager
+        val mappingManager: MappingManager
         private val loaderQuery: PreparedStatement
         private val session: Session
 
@@ -54,7 +54,6 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
     override fun raw(selector: T) = selector
 
     override fun fetch(selector: T): ListenableFuture<T?> {
-        if (l.isDebugEnabled) l.debug("fetching ")
         return mappingManager.mapper(selector::class.java).let {
             when (selector) {
                 is EventC -> {
@@ -73,7 +72,7 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
                 else -> throw IllegalArgumentException("unknown selector: $selector")
             }
         }.apply {
-            transform { println("fetching entity: $it") }
+            transform { if (l.isDebugEnabled) l.debug("fetched entity: {}", it) }
         }
     }
 
@@ -94,8 +93,8 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
                 }
                 else -> throw IllegalArgumentException("unknown selector: $selector")
             }
-            println("saving entity $selector")
-            m.saveAsync(selector, saveNullFields(false), writeConsistency).transform { _ -> selector }
+            if (l.isDebugEnabled) l.debug("saving entity {}", selector)
+            m.saveAsync(selector, saveNullFields(false), writeConsistency).transform { _ -> if (l.isDebugEnabled) l.debug("saved entity {}", selector); selector }
         }
     }
 
@@ -116,8 +115,8 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
                 }
                 else -> throw IllegalArgumentException("unknown selector: $selector")
             }
-            println("deleting entity $selector")
-            m.deleteAsync(selector, writeConsistency).transform { _ -> selector }
+            if (l.isDebugEnabled) l.debug("deleting entity: {}", selector)
+            m.deleteAsync(selector, writeConsistency).transform { _ -> if (l.isDebugEnabled) l.debug("deleted entity {}", selector); selector }
         }
     }
 
@@ -150,7 +149,12 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
                 }).also { if (clusterConfig.username != null) it.withCredentials(clusterConfig.username, clusterConfig.password) }
                 .addContactPoints(*(clusterConfig.contactPoints?.split(",")?.toTypedArray() ?:
                         throw ExceptionInInitializerError("contact points not provided")))
+                .apply { decorate(this) }
                 .build()
+    }
+
+    protected open fun decorate(builder: Cluster.Builder) {
+
     }
 
     override fun unwrap() = session

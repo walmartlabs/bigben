@@ -23,7 +23,7 @@ class Hz {
     val hz: HazelcastInstance
 
     init {
-        val config = typeRefJson<Map<String, Any>>(Props.string("bigben.hz.config", "{}")).let { map ->
+        val config = typeRefJson<Map<String, Any>>(Props.string("hz.config", "{}")).let { map ->
             val template = String(Hz::class.java.getResourceAsStream(Props.string("hz.file", "/hz.template.xml")).run { readBytes().also { close() } })
             StrSubstitutor(object : StrLookup<Any>() {
                 override fun lookup(key: String): String? {
@@ -41,6 +41,6 @@ class Hz {
             }).apply { setValueDelimiter(' ') }.replace(template)
         }
         hz = newHazelcastInstance(XmlConfigBuilder(ByteArrayInputStream(config.toByteArray())).build())
-        if (l.isInfoEnabled) l.info("hazelcast config file: {}", config)
+        if (l.isDebugEnabled) l.debug("hazelcast config file: {}", config)
     }
 }

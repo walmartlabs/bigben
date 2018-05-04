@@ -48,12 +48,11 @@ class BucketsLoader(private val lookbackRange: Int, private val fetchSize: Int, 
                     val bId = bucketId.minusSeconds((bucketIndex * bucketWidth).toLong())
                     if (!predicate.test(bId)) {
                         atLeastOne.set(true)
-                        l.info("loading bucket: {}, failures will be retried {} times, every {} seconds", bId, lookbackRange - bucketIndex + 1, bucketWidth)
-                        taskExecutor.async("bucket-load:" + bId, lookbackRange - bucketIndex + 1, bucketWidth, 1) { fetch<Bucket> { it.bucketId = bId } }
+                        if(l.isDebugEnabled) l.debug("loading bucket: {}, failures will be retried {} times, every {} seconds", bId, lookbackRange - bucketIndex + 1, bucketWidth)
+                        taskExecutor.async("bucket-load:$bId", lookbackRange - bucketIndex + 1, bucketWidth, 1) { fetch<Bucket> { it.bucketId = bId } }
                                 .done({ l.error("error in loading bucket {}, system is giving up", bId, it.rootCause()) }) {
-                                    if (l.isDebugEnabled)
-                                        l.info("bucket {} loaded successfully", bId)
-                                    consumer(it ?: BucketManager.emptyBucket(bucketId))
+                                    if (l.isDebugEnabled) l.debug("bucket {} loaded successfully", bId)
+                                    consumer(it ?: BucketManager.emptyBucket(bId))
                                 }
                     } else {
                         if (l.isDebugEnabled) l.debug("bucket {} already loaded (likely by checkpoint), skipping...", bId)

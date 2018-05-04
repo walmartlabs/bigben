@@ -65,7 +65,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         })
     }
 
-    internal fun getProcessableShardsForOrBefore(bucketId: ZonedDateTime): ListenableFuture<out Multimap<ZonedDateTime, Int>> {
+    fun getProcessableShardsForOrBefore(bucketId: ZonedDateTime): ListenableFuture<out Multimap<ZonedDateTime, Int>> {
         if (bucketsLoader == null) {
             if (l.isInfoEnabled) l.info("starting the background load of previous buckets")
             val fetchSize = Props.int("buckets.background.load.fetch.size", 10)
@@ -154,7 +154,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         }
     }
 
-    private fun purgeIfNeeded() {
+    fun purgeIfNeeded() {
         when {
             buckets.size <= maxBuckets -> if (l.isDebugEnabled) l.debug("nothing to purge")
             else -> {
