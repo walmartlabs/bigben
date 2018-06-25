@@ -23,7 +23,7 @@
     <map name="bucketCache">
         <in-memory-format>OBJECT</in-memory-format>
         <map-store initial-mode="LAZY">
-            <class-name>com.walmartlabs.opensource.bigben.hz.BucketStore</class-name>
+            <class-name>com.walmartlabs.bigben.hz.BucketStore</class-name>
             <write-delay-seconds>${map.store.writeDelay 60}</write-delay-seconds>
             <write-batch-size>${map.store.batchSize 1000}</write-batch-size>
             <write-coalescing>${map.store.writeCoalescing true}</write-coalescing>
@@ -40,7 +40,7 @@
     </map>
     <serialization>
         <data-serializable-factories>
-            <data-serializable-factory factory-id="1">com.walmartlabs.opensource.bigben.hz.HzObjectFactory
+            <data-serializable-factory factory-id="1">com.walmartlabs.bigben.hz.HzObjectFactory
             </data-serializable-factory>
         </data-serializable-factories>
     </serialization>
