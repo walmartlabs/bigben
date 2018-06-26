@@ -12,9 +12,10 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.utils.fromJson
+import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.transform
-import com.walmartlabs.bigben.utils.utils.Props
+import com.walmartlabs.bigben.utils.utils.Props.map
 import com.walmartlabs.bigben.utils.utils.Props.string
 import java.time.ZonedDateTime
 
@@ -31,14 +32,14 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
         private val kvAllQuery: PreparedStatement
         private val session: Session
 
-        private val clusterConfig = ClusterConfig::class.java.fromJson(Props.string("bigben.cassandra.config"))
+        private val clusterConfig = ClusterConfig::class.java.fromJson(map("cassandra.cluster").json())
         private val writeConsistency = consistencyLevel(clusterConfig.writeConsistency)
         private val readConsistency = consistencyLevel(clusterConfig.readConsistency)
 
         init {
             if (l.isInfoEnabled) l.info("initialing the Cassandra domain provider")
-            cluster = (Class.forName(string("bigben.cassandra.cluster.factory", CassandraProvider::class.java.name)).newInstance() as ClusterFactory).create()
-            session = cluster.connect(string("bigben.cassandra.keyspace"))
+            cluster = (Class.forName(string("domain.cluster.factory.class", CassandraProvider::class.java.name)).newInstance() as ClusterFactory).create()
+            session = cluster.connect(string("cassandra.keyspace"))
             mappingManager = MappingManager(session)
             loaderQuery = mappingManager.session.prepare("SELECT * FROM ${session.loggedKeyspace}.events WHERE bucket_id = ? AND shard = ? AND (event_time, id) > (?,?) LIMIT ?;")
             kvAllQuery = mappingManager.session.prepare("SELECT * FROM ${session.loggedKeyspace}.kv_table WHERE key = ?;")

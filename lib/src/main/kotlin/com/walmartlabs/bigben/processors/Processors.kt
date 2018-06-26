@@ -7,13 +7,14 @@ import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.google.common.net.MediaType.ANY_TYPE
 import com.google.common.net.MediaType.JSON_UTF_8
 import com.google.common.util.concurrent.Futures.immediateFailedFuture
-import com.google.common.util.concurrent.Futures.immediateFuture
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.ning.http.client.AsyncCompletionHandler
 import com.ning.http.client.AsyncHttpClient
 import com.ning.http.client.Response
+import com.walmartlabs.bigben.BigBen.messageProducerFactory
 import com.walmartlabs.bigben.entities.Event
+import com.walmartlabs.bigben.entities.EventResponse
 import com.walmartlabs.bigben.entities.EventStatus.*
 import com.walmartlabs.bigben.extns.kvs
 import com.walmartlabs.bigben.extns.nowUTC
@@ -34,14 +35,14 @@ typealias EventProcessor<T> = (t: T) -> ListenableFuture<T>
 
 data class ProcessorConfig(var tenant: String? = null, var type: Type? = null, var props: Map<String, Any>? = null) : Serializable {
     enum class Type {
-        KAFKA, HTTP, CUSTOM_CLASS
+        MESSAGING, HTTP, CUSTOM_CLASS
     }
 }
 
 class ProcessorRegistry : EventProcessor<Event> {
     companion object {
         private val l = logger<ProcessorRegistry>()
-        private val devNull = DevNull()
+        private val devNull = NoOpCustomClassProcessor()
         private val ASYNC_HTTP_CLIENT = AsyncHttpClient()
     }
 
@@ -68,16 +69,16 @@ class ProcessorRegistry : EventProcessor<Event> {
             e.processedAt = nowUTC()
 
             return { getOrCreate(configs[e.tenant]).invoke(e) }.retriable("processor-e-id: ${e.id}",
-                    Props.int("event.processor.max.retries", 3),
-                    Props.int("event.processor.initial.delay", 1),
-                    Props.int("event.processor.backoff.multiplier", 2)).apply {
+                    Props.int("event.processor.max.retries"),
+                    Props.int("event.processor.initial.delay"),
+                    Props.int("event.processor.backoff.multiplier")).apply {
                 transform {
                     if (TRIGGERED == e.status) {
                         e.status = e.error?.let { PROCESSED } ?: ERROR
                     }
                 }.catching {
                     l.error("error in processing event by processor after multiple retries, will be retried later if within " +
-                            "'events.backlog.check.limit', e-id: ${e.id}", it.rootCause())
+                            "'events.backlog.check.limit', e-id: ${e.xrefId}", it.rootCause())
                     e.status = ERROR
                     e.error = it?.let { getStackTraceAsString(it) } ?: "null error"
                 }
@@ -92,8 +93,15 @@ class ProcessorRegistry : EventProcessor<Event> {
     private fun getOrCreate(processorConfig: ProcessorConfig?): EventProcessor<Event> {
         return try {
             when (processorConfig?.type) {
-                KAFKA -> processorCache.get(processorConfig.tenant!!) {
-                    TODO("kafka")
+                MESSAGING -> processorCache.get(processorConfig.tenant!!) {
+                    if (l.isInfoEnabled) l.info("creating message processor for tenant: ${processorConfig.tenant}")
+                    val mp = messageProducerFactory.create(processorConfig.tenant!!, processorConfig.props!!)
+                    object : EventProcessor<Event> {
+                        override fun invoke(e: Event): ListenableFuture<Event> {
+                            if (l.isDebugEnabled) if (l.isDebugEnabled) l.debug("tenant: ${processorConfig.tenant}, processing event: ${e.xrefId}")
+                            return mp.produce(e.toResponse()).transform { if (l.isDebugEnabled) l.debug("tenant: ${processorConfig.tenant}, event produced successfully: ${e.xrefId}"); e }
+                        }
+                    }
                 }
                 HTTP -> {
                     processorCache.get(processorConfig.tenant!!) {
@@ -107,15 +115,16 @@ class ProcessorRegistry : EventProcessor<Event> {
                                         it.forEach { builder.setHeader(it.key, it.value) }
                                     }
                                     builder.setHeader(ACCEPT, ANY_TYPE.toString()).setHeader(CONTENT_TYPE, JSON_UTF_8.toString())
+                                    if (l.isDebugEnabled) l.debug("tenant: ${processorConfig.tenant}, processing event: ${it.xrefId}")
                                     builder.execute(object : AsyncCompletionHandler<Response>() {
                                         override fun onCompleted(response: Response): Response {
                                             val code = response.statusCode
                                             if (code in 200..299 || code in 400..499) {
                                                 if (code < 400) {
                                                     if (l.isDebugEnabled)
-                                                        l.debug(format("event processed successfully, response code: {}, response body: {}, event: {}", code, response.responseBody, it))
+                                                        l.debug(format("event processed successfully, response code: {}, response body: {}, event: {}", code, response.responseBody, it.xrefId))
                                                 } else {
-                                                    l.warn(format("got a 'bad request' response with status code: {}, event will not be retried anymore", code))
+                                                    l.warn(format("got a 'bad request' response with status code: {}, event will not be retried anymore, event: {}", code, it.xrefId))
                                                     it.error = response.responseBody
                                                 }
                                                 set(it)
@@ -171,11 +180,14 @@ class ProcessorRegistry : EventProcessor<Event> {
     }
 }
 
-class DevNull : EventProcessor<Event> {
-    override fun invoke(t: Event): ListenableFuture<Event> {
-        //l.warn("routing event response with no tenant to /dev/null: {}", t.eventResponse)
-        t.error = "/dev/null"
-        t.status = PROCESSED
-        return immediateFuture(t)
-    }
+interface MessageProducerFactory {
+    fun create(tenant: String, props: Map<String, Any>): MessageProducer
+}
+
+interface MessageProducer {
+    fun produce(e: EventResponse): ListenableFuture<*>
+}
+
+interface MessageProcessor {
+
 }

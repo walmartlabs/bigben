@@ -47,13 +47,13 @@ class ScheduleScanner(private val hz: Hz) : Service {
         private val index = AtomicInteger()
         private val shardIndexer = AtomicInteger()
         private val scheduler = listeningDecorator(ScheduledThreadPoolExecutor(getRuntime().availableProcessors()) { r -> Thread(r, "InternalScheduler#" + index.getAndIncrement()) })
-        private val shardSubmitters = listeningDecorator(newFixedThreadPool(int("num.shard.submitters", getRuntime().availableProcessors())) { r -> Thread(r, "ShardSubmitter#" + shardIndexer.getAndIncrement()) })
+        private val shardSubmitters = listeningDecorator(newFixedThreadPool(int("events.num.shard.submitters")) { r -> Thread(r, "ShardSubmitter#" + shardIndexer.getAndIncrement()) })
     }
 
     private val isShutdown = AtomicReference(false)
 
     private lateinit var bucketManager: BucketManager
-    private val bucketWidth = int("event.schedule.scan.interval.minutes", 1)
+    private val bucketWidth = int("events.schedule.scan.interval.minutes")
     @Volatile
     private lateinit var lastScan: ZonedDateTime
 
@@ -61,15 +61,15 @@ class ScheduleScanner(private val hz: Hz) : Service {
 
     override fun init() {
         if (l.isInfoEnabled) l.info("initing the event scheduler")
-        val lookbackRange = int("events.backlog.check.limit", 10)
-        val checkpointInterval = Props.long("event.bucket.manager.checkpoint.interval", 1)
-        val checkpointIntervalUnits = valueOf(string("event.bucket.manager.checkpoint.interval.units", MINUTES.name))
+        val lookbackRange = int("buckets.backlog.check.limit")
+        val checkpointInterval = Props.long("buckets.checkpoint.interval")
+        val checkpointIntervalUnits = valueOf(string("buckets.checkpoint.interval.units"))
         bucketManager = BucketManager(lookbackRange + 1, 2 * bucketWidth * 60, bucketWidth * 60, checkpointInterval, checkpointIntervalUnits, hz)
     }
 
     override fun execute() {
         if (l.isInfoEnabled) l.info("executing the EventScheduleScanner")
-        val scanInterval = int("event.schedule.scan.interval.minutes", 1)
+        val scanInterval = int("events.schedule.scan.interval.minutes")
         if (l.isInfoEnabled) l.info("calculating the next scan bucketId")
         val now = nowUTC()
         val nextScan = nextScan(now, scanInterval)
@@ -106,9 +106,9 @@ class ScheduleScanner(private val hz: Hz) : Service {
                             val iterator = Iterators.cycle<Member>(keys)
                             val executorService = hz.hz.getExecutorService(EVENT_SCHEDULER)
                             entries.map {
-                                { submitShards(executorService, iterator.next(), it.value, currentBucketId) }.retriable("shards-submit", int("event.submit.max.retries", 10),
-                                        int("event.submit.initial.delay", 1),
-                                        int("event.submit.backoff.multiplier", 1)).transform { it!!.list }
+                                { submitShards(executorService, iterator.next(), it.value, currentBucketId) }.retriable("shards-submit", int("event.submit.max.retries"),
+                                        int("events.submit.initial.delay"),
+                                        int("events.submit.backoff.multiplier")).transform { it!!.list }
                             }.reduce().done({ l.error("schedule for bucket {} finished abnormally", currentBucketId, it.rootCause()) }) {
                                 if (l.isDebugEnabled) l.debug("schedule for bucket {} finished normally => {}", currentBucketId, it)
                                 val buckets = it!!.map { it!! }.flatten().filterNotNull().groupBy { it.bucketId!! }.mapValues { it.value.fold(false) { hasError, ss -> hasError || (ss.status == ERROR) } }

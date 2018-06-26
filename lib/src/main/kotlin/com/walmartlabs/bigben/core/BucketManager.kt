@@ -40,7 +40,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         internal fun emptyBucket(bucketId: ZonedDateTime) = entityProvider<Bucket>().let { it.raw(it.selector(Bucket::class.java)).apply { this.bucketId = bucketId; count = 0L; status = EMPTY } }
     }
 
-    private val shardSize = Props.int("event.shard.size", 1000)
+    private val shardSize = Props.int("events.receiver.shard.size")
     private val checkpointHelper = CheckpointHelper()
     private val statusSyncer = StatusSyncer()
     private val buckets = ConcurrentHashMap<ZonedDateTime, BucketSnapshot>()
@@ -71,7 +71,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
     fun getProcessableShardsForOrBefore(bucketId: ZonedDateTime): ListenableFuture<out Multimap<ZonedDateTime, Int>> {
         if (bucketsLoader == null) {
             if (l.isInfoEnabled) l.info("starting the background load of previous buckets")
-            val fetchSize = Props.int("buckets.background.load.fetch.size", 10)
+            val fetchSize = Props.int("buckets.background.load.fetch.size")
             bucketsLoader = BucketsLoader(maxBuckets - 1, fetchSize, Predicate { buckets.containsKey(it) }, bucketWidth, bucketId) {
                 buckets[it.bucketId!!] = BucketSnapshot.with(it.bucketId!!, it.count!!, shardSize, it.status!!)
             }.apply { run() }

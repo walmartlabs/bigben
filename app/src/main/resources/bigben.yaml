@@ -1,0 +1,122 @@
+# domain related properties
+domain:
+  entity.provider.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
+  event.loader.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
+  cluster.factory.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
+
+# hazelcast properties
+hz:
+  template: /hz.template.xml
+  group:
+    name: bigben-dev
+    password: bigben-dev
+  autoIncrement: false
+  members: 127.0.0.1
+  port: 5701
+  map:
+    store:
+      write.delay: 60
+
+# message related properties
+messaging:
+  producer.factory.class: com.walmartlabs.bigben.kafka.KafkaMessageProducerFactory
+  #processor.class: com.walmartlabs.bigben.kafka.KafkaMessageProcessor
+
+# cassandra related properties
+cassandra:
+  keyspace: bigben
+  cluster:
+    contactPoints: 127.0.0.1
+    clusterName: bigben-cluster
+    port: 9042
+    localDataCenter: null
+    coreConnectionsPerHost: 8
+    maxHostsPerConnection: 32768
+    keepTCPConnectionAlive: true
+    connectionTimeOut: 5000
+    readTimeout: 12000
+    reconnectPeriod: 5
+    username: null
+    password: null
+    downgradingConsistency: false
+    writeConsistency: "LOCAL_QUORUM"
+    readConsistency: "LOCAL_QUORUM"
+
+# kafka consumer properties
+kafka:
+  consumer:
+    topics: null
+    poll.interval: 10000
+    config:
+      key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      bootstrap.servers: null
+      #fetch.min.bytes: 1
+      group.id: bigben-inbound
+      #heartbeat.interval.ms: 3000
+      #session.timeout.ms: 10000
+      auto.offset.reset: earliest
+      fetch.max.bytes: 324000
+      max.poll.interval.ms: 30000
+      max.poll.records: 100
+      receive.buffer.bytes: 65536
+      request.timeout.ms: 10000
+      #send.buffer.bytes: 131072
+      enable.auto.commit: false
+  producer:
+    key.serializer: org.apache.kafka.common.serialization.StringDeserializer
+    value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    acks: 1
+    bootstrap.servers: null
+    buffer.memory: 32400
+    retries: 3
+
+# system properties
+task:
+  executor:
+    #retry.thread.count: 8
+    delay: 1000
+    max.retries: 3
+    backoff.multiplier: 2
+
+generic.future.max.get.time: 60
+
+events:
+  schedule.scan.interval.minutes: 1
+  num.shard.submitters: 8
+  receiver:
+    shard.size: 1000
+    lapse.offset.minutes: 0
+    delete:
+      max.retries: 3
+      initial.delay: 1
+      backoff.multiplier: 1
+  submit:
+    initial.delay: 1
+    backoff.multiplier: 1
+    max.retries: 3
+  processor:
+    max.retries: 3
+    initial.delay: 1
+    backoff.multiplier: 2
+    eager.loading: true
+  tasks:
+    max.events.in.memory: 100000
+    scheduler.worker.threads: 8
+
+buckets:
+  backlog.check.limit: 10
+  background:
+    load.fetch.size: 10
+    load.wait.interval.seconds: 15
+  checkpoint:
+    interval: 60
+    interval.units: SECONDS
+
+
+
+
+
+
+
+

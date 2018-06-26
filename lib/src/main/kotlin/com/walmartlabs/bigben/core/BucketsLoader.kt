@@ -25,7 +25,7 @@ class BucketsLoader(private val lookbackRange: Int, private val fetchSize: Int, 
         private val l = logger<BucketsLoader>()
     }
 
-    private val waitInterval = Props.int("buckets.background.load.wait.interval.seconds", 15)
+    private val waitInterval = Props.int("buckets.background.load.wait.interval.seconds")
     private val runningJob = AtomicReference<ListenableScheduledFuture<*>>()
     private val taskExecutor = TaskExecutor(setOf(Exception::class.java))
 

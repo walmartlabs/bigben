@@ -30,8 +30,8 @@ class EventReceiver(val hz: Hz) {
         internal val CACHED_PROCESSOR = CountIncrementer()
     }
 
-    private val scanInterval = Props.int("event.schedule.scan.interval.minutes", 1)
-    private val lapseOffset = Props.int("event.lapse.offset.minutes", 0)
+    private val scanInterval = Props.int("events.schedule.scan.interval.minutes")
+    private val lapseOffset = Props.int("events.receiver.lapse.offset.minutes")
 
     init {
         if (l.isInfoEnabled) l.info("using event lapseOffset: {} minutes", lapseOffset)
@@ -95,7 +95,7 @@ class EventReceiver(val hz: Hz) {
                     if (l.isDebugEnabled) l.debug("{}, add-event: event-table: insert", eventRequest.id)
                     it.id = UUID.randomUUID().toString()
                     it.eventTime = eventTime
-                    it.shard = ((count - 1) / Props.int("event.shard.size", 1000)).toInt()
+                    it.shard = ((count - 1) / Props.int("events.receiver.shard.size")).toInt()
                     it.status = UN_PROCESSED
                     it.tenant = eventRequest.tenant
                     it.xrefId = eventRequest.id
@@ -107,9 +107,9 @@ class EventReceiver(val hz: Hz) {
 
     private fun removeEvent0(eventLookup: EventLookup): ListenableFuture<EventLookup> {
         return { remove<Event> { it.eventTime = eventLookup.eventTime; it.id = eventLookup.eventId; it.shard = eventLookup.shard; it.bucketId = eventLookup.bucketId } }.retriable("delete-event-${eventLookup.xrefId}",
-                Props.int("event.delete.max.retries", 3),
-                Props.int("event.delete.initial.delay", 1),
-                Props.int("event.delete.backoff.multiplier", 2)
+                Props.int("events.receiver.delete.max.retries"),
+                Props.int("events.receiver.delete.initial.delay"),
+                Props.int("events.receiver.delete.backoff.multiplier")
         ).transform { eventLookup }
     }
 
