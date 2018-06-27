@@ -236,6 +236,36 @@
                         <executable>maven</executable>
                     </configuration>
                 </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>license-maven-plugin</artifactId>
+                    <version>1.16</version>
+                    <configuration>
+                        <inceptionYear>2016</inceptionYear>
+                        <copyrightOwners>Sandeep Malik</copyrightOwners>
+                        <addJavaLicenseAfterPackage>false</addJavaLicenseAfterPackage>
+                        <organizationName>Walmart Inc.</organizationName>
+                        <licenseFile>${project.basedir}/LICENSE.txt</licenseFile>
+                        <canUpdateCopyright>true</canUpdateCopyright>
+                        <canUpdateDescription>true</canUpdateDescription>
+                        <canUpdateLicense>false</canUpdateLicense>
+                        <licenseName>apache_v2</licenseName>
+                        <sectionDelimiter>=======================================</sectionDelimiter>
+                        <roots>
+                            <root>src/</root>
+                        </roots>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>first</id>
+                            <goals>
+                                <goal>update-file-header</goal>
+                                <goal>update-project-license</goal>
+                            </goals>
+                            <phase>process-sources</phase>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
     </build>
