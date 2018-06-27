@@ -68,11 +68,14 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
             if (l.isInfoEnabled) l.info("starting the background load of previous buckets")
             val fetchSize = int("buckets.background.load.fetch.size")
             bucketsLoader = BucketsLoader(maxBuckets - 1, fetchSize, bucketWidth, bucketId) {
-                buckets[it.bucketId!!] = if (it.failedShards != null && it.failedShards!!.isNotEmpty()) {
-                    if (l.isInfoEnabled) l.info("bucket ${it.bucketId} has failed shards: ${it.failedShards}, scheduling them for reprocessing")
-                    BucketSnapshot(it.bucketId!!, it.count!!, BitSet(), it.failedShards!!.fold(BitSet()) { b, i -> b.apply { set(i) } })
-                } else {
-                    BucketSnapshot.with(it.bucketId!!, it.count!!, shardSize, it.status!!)
+                buckets[it.bucketId!!] = when (it.status) {
+                    in setOf(null, EMPTY, UN_PROCESSED, PROCESSED) -> BucketSnapshot.with(it.bucketId!!, it.count!!, shardSize, it.status ?: UN_PROCESSED)
+                    ERROR -> {
+                        require(it.failedShards != null && it.failedShards!!.isNotEmpty()) { "${it.bucketId} is marked $ERROR but has no failed shards information" }
+                        if (l.isInfoEnabled) l.info("bucket ${it.bucketId} has shard failures: ${it.failedShards}, scheduling them for reprocessing")
+                        BucketSnapshot(it.bucketId!!, it.count!!, BitSet(), it.failedShards!!.fold(BitSet()) { b, i -> b.apply { set(i) } })
+                    }
+                    else -> throw IllegalArgumentException("invalid bucket status: $it")
                 }
             }.apply { run() }
         }
@@ -145,7 +148,6 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         if (status == PROCESSED) {
             if (l.isInfoEnabled) l.info("bucket {} done, marking it as {}, all shards done", bucketId, status)
             bd.awaiting.clear()
-
         } else if (status == ERROR)
             l.warn("bucket {} done, marking it as {}, failed shards are: {}", bucketId, status, bd.awaiting)
         return statusSyncer.syncBucket(bucketId, status, true, bd.awaiting.toSet() + bd.processing.toSet())
