@@ -1,0 +1,11 @@
+tools:
+  jdk:
+    - 8
+  maven:
+    - 3.3.9
+
+flows:
+   default:
+   - mvn clean install
+   pr:
+   - call: default
