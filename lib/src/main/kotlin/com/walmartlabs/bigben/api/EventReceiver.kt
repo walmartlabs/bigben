@@ -34,7 +34,7 @@ import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.EVENT_RECEIVER_ADD_EVENT
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.hz.Hz
-import com.walmartlabs.bigben.utils.utils.Props
+import com.walmartlabs.bigben.utils.commons.Props
 import java.time.ZonedDateTime
 import java.util.*
 import kotlin.collections.MutableMap.MutableEntry

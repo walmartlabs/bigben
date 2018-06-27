@@ -40,7 +40,8 @@ import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.toResponse
 import com.walmartlabs.bigben.processors.ProcessorConfig.Type.*
 import com.walmartlabs.bigben.utils.*
-import com.walmartlabs.bigben.utils.utils.Props
+import com.walmartlabs.bigben.utils.commons.Props.boolean
+import com.walmartlabs.bigben.utils.commons.Props.int
 import java.io.Serializable
 import java.lang.String.format
 import java.util.concurrent.ConcurrentHashMap
@@ -52,7 +53,7 @@ import java.util.concurrent.ExecutionException
  */
 typealias EventProcessor<T> = (t: T) -> ListenableFuture<T>
 
-data class ProcessorConfig(var tenant: String? = null, var type: Type? = null, var props: Map<String, Any>? = null) : Serializable {
+data class ProcessorConfig(var tenant: String? = null, var type: Type? = null, var props: Json? = null) : Serializable {
     enum class Type {
         MESSAGING, HTTP, CUSTOM_CLASS
     }
@@ -61,7 +62,6 @@ data class ProcessorConfig(var tenant: String? = null, var type: Type? = null, v
 class ProcessorRegistry : EventProcessor<Event> {
     companion object {
         private val l = logger<ProcessorRegistry>()
-        private val devNull = NoOpCustomClassProcessor()
         private val ASYNC_HTTP_CLIENT = AsyncHttpClient()
     }
 
@@ -73,7 +73,7 @@ class ProcessorRegistry : EventProcessor<Event> {
         configs = ConcurrentHashMap(kvs { it.key = "tenants" }.result { l.error("error in loading tenant configs", it); throw it.rootCause()!! }
                 .map { ProcessorConfig::class.java.fromJson(it.value!!) }.associate { it.tenant!! to it })
         if (l.isInfoEnabled) l.info("configs parsed: {}", configs)
-        if (Props.boolean("processor.eager.loading", false)) {
+        if (boolean("events.processor.eager.loading", false)) {
             if (l.isInfoEnabled) l.info("creating the processors right away")
             configs.forEach { getOrCreate(it.value) }
             if (l.isInfoEnabled) l.info("all processors created")
@@ -88,16 +88,14 @@ class ProcessorRegistry : EventProcessor<Event> {
             e.processedAt = nowUTC()
 
             return { getOrCreate(configs[e.tenant]).invoke(e) }.retriable("processor-e-id: ${e.id}",
-                    Props.int("event.processor.max.retries"),
-                    Props.int("event.processor.initial.delay"),
-                    Props.int("event.processor.backoff.multiplier")).apply {
+                    int("events.processor.max.retries"), int("events.processor.initial.delay"), int("events.processor.backoff.multiplier")).apply {
                 transform {
                     if (TRIGGERED == e.status) {
-                        e.status = e.error?.let { PROCESSED } ?: ERROR
+                        e.status = e.error?.let { ERROR } ?: PROCESSED
                     }
                 }.catching {
                     l.error("error in processing event by processor after multiple retries, will be retried later if within " +
-                            "'events.backlog.check.limit', e-id: ${e.xrefId}", it.rootCause())
+                            "'buckets.backlog.check.limit', e-id: ${e.xrefId}", it.rootCause())
                     e.status = ERROR
                     e.error = it?.let { getStackTraceAsString(it) } ?: "null error"
                 }
@@ -167,12 +165,13 @@ class ProcessorRegistry : EventProcessor<Event> {
                 CUSTOM_CLASS -> processorCache.get(processorConfig.tenant!!) {
                     try {
                         @Suppress("UNCHECKED_CAST")
-                        (Class.forName(processorConfig.props!!["eventProcessorClass"].toString()) as Class<EventProcessor<Event>>).getConstructor(Map::class.java).newInstance(processorConfig.props)
+                        (Class.forName(processorConfig.props!!["eventProcessorClass"].toString()) as Class<EventProcessor<Event>>)
+                                .getConstructor(String::class.java, Map::class.java).newInstance(processorConfig.tenant, processorConfig.props)
                     } catch (ex: Exception) {
                         throw RuntimeException(ex.rootCause())
                     }
                 }
-                null -> devNull
+                null -> throw IllegalArgumentException("null processor type: $processorConfig")
             }
         } catch (e: ExecutionException) {
             throw RuntimeException(e)
@@ -200,13 +199,11 @@ class ProcessorRegistry : EventProcessor<Event> {
 }
 
 interface MessageProducerFactory {
-    fun create(tenant: String, props: Map<String, Any>): MessageProducer
+    fun create(tenant: String, props: Json): MessageProducer
 }
 
 interface MessageProducer {
     fun produce(e: EventResponse): ListenableFuture<*>
 }
 
-interface MessageProcessor {
-
-}
+interface MessageProcessor

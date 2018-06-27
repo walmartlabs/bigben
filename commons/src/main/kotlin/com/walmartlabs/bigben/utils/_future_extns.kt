@@ -24,9 +24,9 @@ import com.google.common.base.Throwables.getStackTraceAsString
 import com.google.common.util.concurrent.*
 import com.google.common.util.concurrent.MoreExecutors.directExecutor
 import com.hazelcast.core.ICompletableFuture
-import com.walmartlabs.bigben.utils.utils.ListenableFutureAdapter
-import com.walmartlabs.bigben.utils.utils.Props
-import com.walmartlabs.bigben.utils.utils.TaskExecutor
+import com.walmartlabs.bigben.utils.commons.ListenableFutureAdapter
+import com.walmartlabs.bigben.utils.commons.Props
+import com.walmartlabs.bigben.utils.commons.TaskExecutor
 import org.slf4j.LoggerFactory
 import java.util.UUID.randomUUID
 import java.util.concurrent.ExecutorService

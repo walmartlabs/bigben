@@ -40,8 +40,8 @@ import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.BULK_EVENT_TASK
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.SHUTDOWN_TASK
 import com.walmartlabs.bigben.processors.EventProcessor
 import com.walmartlabs.bigben.utils.*
+import com.walmartlabs.bigben.utils.commons.Props.int
 import com.walmartlabs.bigben.utils.hz.ClusterSingleton
-import com.walmartlabs.bigben.utils.utils.Props
 import java.lang.System.currentTimeMillis
 import java.time.Instant
 import java.time.ZoneOffset.UTC
@@ -81,7 +81,7 @@ class BulkShardTask(private var shards: Collection<Pair<ZonedDateTime, Int>>? = 
         val shards = shards!!
         if (shards.isEmpty()) return NO_OP
         if (l.isDebugEnabled) l.debug("{}, executing bulk event task for buckets/shards on node: {}", shards.map { "${it.first}/${it.second}" }, hz.cluster.localMember.socketAddress)
-        val fetchSizeHint = Props.int("events.max.events.in.memory") / shards.size
+        val fetchSizeHint = int("events.tasks.max.events.in.memory") / shards.size
         if (l.isInfoEnabled) l.info("starting processing of ${shards.sortedBy { it.first }}")
         return shards.map { s ->
             try {
@@ -124,8 +124,7 @@ class ShardTask(private val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int,
 
         private val index = AtomicInteger()
         private val scheduler = listeningDecorator(ScheduledThreadPoolExecutor(
-                Props.int("events.scheduler.worker.threads"),
-                ThreadFactory { Thread(it, "evt-processor#" + index.getAndIncrement()) }, CallerRunsPolicy()))
+                int("events.tasks.scheduler.worker.threads"), ThreadFactory { Thread(it, "event-processor#" + index.getAndIncrement()) }, CallerRunsPolicy()))
     }
 
     private val executionKey = "${p.first}[${p.second}]"

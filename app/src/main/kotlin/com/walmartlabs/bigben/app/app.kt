@@ -80,7 +80,6 @@ class App : Application() {
     private val l = logger<App>()
 
     init {
-        System.setProperty("props", "file://bigben.yaml")
         l.info("initializing BigBen")
         println("\n" +
                 "  ____  _       ____             \n" +

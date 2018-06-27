@@ -17,13 +17,14 @@
  * limitations under the License.
  * #L%
  */
-package com.walmartlabs.bigben.utils.utils
+package com.walmartlabs.bigben.utils.commons
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
+import com.walmartlabs.bigben.utils.Json
 import com.walmartlabs.bigben.utils.logger
 import java.util.*
 
@@ -33,32 +34,28 @@ import java.util.*
 object Props {
 
     private val l = logger<Props>()
-    private val props: Map<String, Any>
+    private val props: Json
 
     private val cache: Cache<String, Any> = CacheBuilder.newBuilder().build<String, Any>()
 
     init {
-        System.setProperty("props", "file://bigben.yaml")
         val om = ObjectMapper(YAMLFactory())
+        require(System.getProperty("props") != null) { "no 'props' system property found, system can't start" }
         l.info("initializing the properties")
-        props = if (System.getProperty("props") != null) {
-            val p = System.getProperty("props")
-            when {
-                p.startsWith("file://") -> {
-                    val f = p.substring("file://".length)
-                    l.info("reading properties from the file: $f")
-                    val url = Props::class.java.classLoader.getResource(f)
-                    val x: Map<String, Any> = om.readValue(url, object : TypeReference<Map<String, Any>>() {}); x
-                }
-                p.startsWith("base64:") -> {
-                    l.info("decoding encoded properties")
-                    val x: Map<String, Any> = om.readValue(String(Base64.getDecoder().decode(p.substring("base64:".length))), object : TypeReference<Map<String, Any>>() {}); x
-                }
-                else -> throw IllegalArgumentException("unknown properties format: $p")
+        val p = System.getProperty("props")
+        props = when {
+            p.startsWith("file://") -> {
+                val f = p.substring("file://".length)
+                l.info("reading properties from the file: $f")
+                val url = Props::class.java.classLoader.getResource(f)
+                require(url != null) { "could not resolve $f to a url" }
+                val x: Json = om.readValue(url, object : TypeReference<Json>() {}); x
             }
-        } else {
-            l.warn("no properties supplied, did you set some?")
-            emptyMap()
+            p.startsWith("base64:") -> {
+                l.info("decoding encoded properties")
+                val x: Json = om.readValue(String(Base64.getDecoder().decode(p.substring("base64:".length))), object : TypeReference<Json>() {}); x
+            }
+            else -> throw IllegalArgumentException("unknown properties format: $p")
         }
     }
 
@@ -80,7 +77,7 @@ object Props {
     fun string(name: String) = get(name, true)!!.toString()
     fun boolean(name: String) = get(name, true)!!.toString().toBoolean()
     @Suppress("UNCHECKED_CAST")
-    fun map(name: String) = get(name, true) as Map<String, Any>
+    fun map(name: String) = get(name, true) as Json
 
     private fun get(name: String, required: Boolean = false): Any? {
         val value = cache.get(name) { resolver(name) }
@@ -91,13 +88,13 @@ object Props {
 
     private val NULL: Any = Any()
 
-    private fun resolver(name: String, p: Map<String, Any> = props): Any {
+    private fun resolver(name: String, p: Json = props): Any {
         if (p.containsKey(name)) return p[name]!!
         else if (name.contains(".")) {
             val parts = name.split(".", limit = 2)
             return if (p.containsKey(parts[0]) && p[parts[0]] is Map<*, *>) {
                 @Suppress("UNCHECKED_CAST")
-                resolver(parts[1], p[parts[0]] as Map<String, Any>)
+                resolver(parts[1], p[parts[0]] as Json)
             } else NULL
         }
         return NULL

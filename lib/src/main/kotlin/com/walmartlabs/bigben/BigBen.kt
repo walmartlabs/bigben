@@ -30,8 +30,8 @@ import com.walmartlabs.bigben.processors.ProcessorRegistry
 import com.walmartlabs.bigben.utils.hz.ClusterSingleton
 import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.logger
-import com.walmartlabs.bigben.utils.utils.Props.exists
-import com.walmartlabs.bigben.utils.utils.Props.string
+import com.walmartlabs.bigben.utils.commons.Props.exists
+import com.walmartlabs.bigben.utils.commons.Props.string
 
 /**
  * Created by smalik3 on 6/24/18
@@ -52,6 +52,10 @@ object BigBen {
     inline fun <reified T> entityProvider() = entityProvider as EntityProvider<T>
 
     init {
+        if (System.getProperty("props") == null) {
+            l.warn("missing 'props' system property, using the default one: bigben.yaml")
+            System.setProperty("props", "file:///bigben.yaml")
+        }
         l.info("initializing entity provider")
         @Suppress("UNCHECKED_CAST")
         entityProvider = Class.forName(string("domain.entity.provider.class")).newInstance() as EntityProvider<Any>

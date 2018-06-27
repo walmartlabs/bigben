@@ -50,7 +50,7 @@ class ZdtCodec : TypeCodec<ZonedDateTime>(DataType.timestamp(), ZonedDateTime::c
     override fun deserialize(bytes: ByteBuffer?, protocolVersion: ProtocolVersion?) = bytes?.let { utc(bytes.duplicate().asLongBuffer().get()) }
 }
 
-class FailedShardsCodec<T> : TypeCodec<Set<Int>>(DataType.text(), object : TypeToken<Set<Int>>() {}) {
+class FailedShardsCodec : TypeCodec<Set<Int>>(DataType.text(), object : TypeToken<Set<Int>>() {}) {
     override fun format(value: Set<Int>?) = value?.json()
     override fun parse(value: String?): Set<Int>? = value?.let { typeRefJson<Set<Int>>(it) }
 

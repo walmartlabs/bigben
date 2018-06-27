@@ -19,7 +19,6 @@
  */
 package com.walmartlabs.bigben.core
 
-import com.google.common.base.Throwables.getRootCause
 import com.google.common.collect.HashMultimap
 import com.google.common.collect.Multimap
 import com.google.common.util.concurrent.Futures.immediateFuture
@@ -33,23 +32,20 @@ import com.walmartlabs.bigben.entities.EventStatus
 import com.walmartlabs.bigben.entities.EventStatus.*
 import com.walmartlabs.bigben.extns.toSet
 import com.walmartlabs.bigben.utils.*
+import com.walmartlabs.bigben.utils.commons.Props.int
 import com.walmartlabs.bigben.utils.hz.Hz
-import com.walmartlabs.bigben.utils.utils.Props
-import java.lang.Runtime.getRuntime
 import java.time.ZonedDateTime
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.ThreadFactory
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.function.Predicate
 
 /**
  * Created by smalik3 on 2/21/18
  */
-class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: Int, private val bucketWidth: Int,
-                    checkpointInterval: Long, checkpointUnit: TimeUnit, hz: Hz) {
+class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: Int, private val bucketWidth: Int, hz: Hz) {
 
     companion object {
         private val l = logger<BucketManager>()
@@ -59,8 +55,7 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         internal fun emptyBucket(bucketId: ZonedDateTime) = entityProvider<Bucket>().let { it.raw(it.selector(Bucket::class.java)).apply { this.bucketId = bucketId; count = 0L; status = EMPTY } }
     }
 
-    private val shardSize = Props.int("events.receiver.shard.size")
-    private val checkpointHelper = CheckpointHelper()
+    private val shardSize = int("events.receiver.shard.size")
     private val statusSyncer = StatusSyncer()
     private val buckets = ConcurrentHashMap<ZonedDateTime, BucketSnapshot>()
     private val cache = hz.hz.getMap<ZonedDateTime, Bucket>(BUCKET_CACHE)
@@ -68,31 +63,17 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
     @Volatile
     private var bucketsLoader: BucketsLoader? = null
 
-    init {
-        if (l.isDebugEnabled) l.debug("saving checkpoint every {} {}", checkpointInterval, checkpointUnit)
-        scheduler.scheduleAtFixedRate({ saveCheckpoint() }, checkpointInterval, checkpointInterval, checkpointUnit)
-        if (l.isDebugEnabled) l.debug("loading the previously saved checkpoint, if any")
-        try {
-            checkpointHelper.loadCheckpoint().transform {
-                if (l.isDebugEnabled) l.debug("loaded previous checkpoint: {}")
-                buckets.putAll(it!!)
-                purgeIfNeeded()
-            }.get()
-        } catch (e: Exception) {
-            l.error("could not load previous checkpoint", getRootCause(e))
-        }
-        getRuntime().addShutdownHook(Thread {
-            if (l.isInfoEnabled) l.info("saving checkpoint during shutdown")
-            saveCheckpoint()
-        })
-    }
-
     fun getProcessableShardsForOrBefore(bucketId: ZonedDateTime): ListenableFuture<out Multimap<ZonedDateTime, Int>> {
         if (bucketsLoader == null) {
             if (l.isInfoEnabled) l.info("starting the background load of previous buckets")
-            val fetchSize = Props.int("buckets.background.load.fetch.size")
-            bucketsLoader = BucketsLoader(maxBuckets - 1, fetchSize, Predicate { buckets.containsKey(it) }, bucketWidth, bucketId) {
-                buckets[it.bucketId!!] = BucketSnapshot.with(it.bucketId!!, it.count!!, shardSize, it.status!!)
+            val fetchSize = int("buckets.background.load.fetch.size")
+            bucketsLoader = BucketsLoader(maxBuckets - 1, fetchSize, bucketWidth, bucketId) {
+                buckets[it.bucketId!!] = if (it.failedShards != null && it.failedShards!!.isNotEmpty()) {
+                    if (l.isInfoEnabled) l.info("bucket ${it.bucketId} has failed shards: ${it.failedShards}, scheduling them for reprocessing")
+                    BucketSnapshot(it.bucketId!!, it.count!!, BitSet(), it.failedShards!!.fold(BitSet()) { b, i -> b.apply { set(i) } })
+                } else {
+                    BucketSnapshot.with(it.bucketId!!, it.count!!, shardSize, it.status!!)
+                }
             }.apply { run() }
         }
         return HashMultimap.create<ZonedDateTime, Int>().let { shards ->
@@ -170,43 +151,36 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
         return statusSyncer.syncBucket(bucketId, status, true, bd.awaiting.toSet() + bd.processing.toSet())
     }
 
-    @Synchronized
-    private fun saveCheckpoint() {
-        try {
-            purgeIfNeeded()
-            checkpointHelper.saveCheckpoint(buckets)
-        } catch (e: Throwable) {
-            l.error("failed to save checkpoint", e)
-        }
-    }
-
     fun purgeIfNeeded() {
         when {
             buckets.size <= maxBuckets -> if (l.isDebugEnabled) l.debug("nothing to purge")
             else -> {
                 if (l.isDebugEnabled) l.debug("initiating purge check for buckets: {}", this.buckets)
-                buckets.keys.sorted().take(buckets.size - maxBuckets).map { b ->
-                    buckets[b]!!.let {
-                        if (it.processing.cardinality() > 0) {
-                            if (l.isDebugEnabled) l.debug("skipping purge of bucket {}, shards are still being processed", b)
-                            immediateFuture(it)
-                        } else {
-                            if (l.isDebugEnabled) l.debug("purging bucket snapshot: {}", it)
-                            val bs = buckets.remove(it.id)
-                            when {
-                                it.count == 0L -> immediateFuture(it)
-                                it.awaiting.cardinality() == 0 -> {
-                                    if (l.isDebugEnabled) l.debug("bucket {} is processed", b)
-                                    statusSyncer.syncBucket(b, PROCESSED, false, bs!!.awaiting.toSet() + bs.processing.toSet()).transform { bs }
-                                }
-                                else -> {
-                                    l.warn("bucket {} is marked error as final status", b)
-                                    statusSyncer.syncBucket(b, ERROR, false, bs!!.awaiting.toSet() + bs.processing.toSet()).transform { bs }
+                val task = {
+                    buckets.keys.sorted().take(buckets.size - maxBuckets).map { b ->
+                        buckets[b]!!.let {
+                            if (it.processing.cardinality() > 0) {
+                                if (l.isDebugEnabled) l.debug("skipping purge of bucket {}, shards are still being processed", b)
+                                immediateFuture(it)
+                            } else {
+                                if (l.isDebugEnabled) l.debug("purging bucket snapshot: {}", it)
+                                val bs = buckets.remove(it.id)
+                                when {
+                                    it.count == 0L -> immediateFuture(it)
+                                    it.awaiting.cardinality() == 0 -> {
+                                        if (l.isDebugEnabled) l.debug("bucket {} is processed", b)
+                                        statusSyncer.syncBucket(b, PROCESSED, false, bs!!.awaiting.toSet() + bs.processing.toSet()).transform { bs }
+                                    }
+                                    else -> {
+                                        l.warn("bucket {} is marked error as final status", b)
+                                        statusSyncer.syncBucket(b, ERROR, false, bs!!.awaiting.toSet() + bs.processing.toSet()).transform { bs }
+                                    }
                                 }
                             }
                         }
-                    }
-                }.reduce().done({ l.error("error in purging snapshots", getRootCause(it!!)) }) {
+                    }.reduce()
+                }
+                task.retriable().done({ l.error("error in purging snapshots", it.rootCause()) }) {
                     if (l.isInfoEnabled) l.info("purged buckets: {}", it?.map { it!!.id })
                 }
             }

@@ -34,8 +34,8 @@ import com.walmartlabs.bigben.utils.fromJson
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.transform
-import com.walmartlabs.bigben.utils.utils.Props.map
-import com.walmartlabs.bigben.utils.utils.Props.string
+import com.walmartlabs.bigben.utils.commons.Props.map
+import com.walmartlabs.bigben.utils.commons.Props.string
 import java.time.ZonedDateTime
 
 /**

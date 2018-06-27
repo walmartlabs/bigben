@@ -63,7 +63,9 @@ val om = ObjectMapper().registerModule(KotlinModule()).apply {
         })
         registerModule(it)
     }
-}
+}!!
+
+typealias Json = Map<String, Any>
 
 fun Any.json(): String = om.writeValueAsString(this)
 fun <T> Class<T>.fromJson(s: String) = om.readValue(s, this)!!

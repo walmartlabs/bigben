@@ -22,11 +22,12 @@ package com.walmartlabs.bigben.utils.hz
 import com.hazelcast.config.XmlConfigBuilder
 import com.hazelcast.core.Hazelcast.newHazelcastInstance
 import com.hazelcast.core.HazelcastInstance
+import com.walmartlabs.bigben.utils.Json
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.typeRefJson
-import com.walmartlabs.bigben.utils.utils.Props.map
-import com.walmartlabs.bigben.utils.utils.Props.string
+import com.walmartlabs.bigben.utils.commons.Props.map
+import com.walmartlabs.bigben.utils.commons.Props.string
 import org.apache.commons.text.StrLookup
 import org.apache.commons.text.StrSubstitutor
 import java.io.ByteArrayInputStream
@@ -44,7 +45,7 @@ class Hz {
     val hz: HazelcastInstance
 
     init {
-        val config = typeRefJson<Map<String, Any>>(map("hz").json()).let { map ->
+        val config = typeRefJson<Json>(map("hz").json()).let { map ->
             val template = String(Hz::class.java.getResourceAsStream(string("hz.template")).run { readBytes().also { close() } })
             StrSubstitutor(object : StrLookup<Any>() {
                 override fun lookup(key: String): String? {

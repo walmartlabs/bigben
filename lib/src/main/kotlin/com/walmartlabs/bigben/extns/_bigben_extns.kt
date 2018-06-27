@@ -33,4 +33,4 @@ fun Event.toResponse() = eventResponse?.let { it }
 
 fun EventResponse.event() = entityProvider<Event>().let { it.raw(it.selector(Event::class.java)) }.also { it.tenant = tenant; it.xrefId = id; triggeredAt = nowUTC().toString(); it.payload = payload; it.eventResponse = this }
 
-fun BitSet.toSet() = stream().boxed().collect(Collectors.toSet())
+fun BitSet.toSet(): MutableSet<Int> = stream().boxed().collect(Collectors.toSet())!!

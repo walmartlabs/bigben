@@ -23,18 +23,19 @@ import com.google.common.util.concurrent.Futures.immediateFuture
 import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.bigben.entities.Event
 import com.walmartlabs.bigben.entities.EventResponse
+import com.walmartlabs.bigben.utils.Json
 
 /**
  * Created by smalik3 on 6/25/18
  */
-class NoOpCustomClassProcessor : EventProcessor<Event> {
+class NoOpCustomClassProcessor(tenant: String, props: Json) : EventProcessor<Event> {
     override fun invoke(t: Event): ListenableFuture<Event> {
         return immediateFuture(t)
     }
 }
 
 class NoOpMessageProducerFactory : MessageProducerFactory {
-    override fun create(tenant: String, props: Map<String, Any>): MessageProducer {
+    override fun create(tenant: String, props: Json): MessageProducer {
         return object : MessageProducer {
             override fun produce(e: EventResponse): ListenableFuture<*> {
                 return immediateFuture(e)

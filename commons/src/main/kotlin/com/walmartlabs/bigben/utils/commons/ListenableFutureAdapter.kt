@@ -17,7 +17,7 @@
  * limitations under the License.
  * #L%
  */
-package com.walmartlabs.bigben.utils.utils
+package com.walmartlabs.bigben.utils.commons
 
 import com.google.common.util.concurrent.AbstractFuture
 import com.hazelcast.core.ExecutionCallback

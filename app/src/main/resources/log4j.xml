@@ -32,9 +32,9 @@
         </layout>
     </appender>
 
-    <root>
+    <logger name="com.walmartlabs.bigben">
         <level value="INFO"/>
         <appender-ref ref="console"/>
-    </root>
+    </logger>
 
 </log4j:configuration>

@@ -17,7 +17,7 @@
  * limitations under the License.
  * #L%
  */
-package com.walmartlabs.bigben.utils.utils
+package com.walmartlabs.bigben.utils.commons
 
 import com.fasterxml.jackson.databind.util.ClassUtil.getRootCause
 import com.google.common.util.concurrent.Futures.immediateFailedFuture
@@ -26,8 +26,7 @@ import com.google.common.util.concurrent.MoreExecutors.listeningDecorator
 import com.walmartlabs.bigben.utils.catchingAsync
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.transformAsync
-import com.walmartlabs.bigben.utils.utils.Props.int
-import java.lang.Integer.getInteger
+import com.walmartlabs.bigben.utils.commons.Props.int
 import java.lang.Runtime.getRuntime
 import java.util.UUID.randomUUID
 import java.util.concurrent.*

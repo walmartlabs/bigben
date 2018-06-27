@@ -19,7 +19,7 @@
  */
 package com.walmartlabs.bigben.extns
 
-import com.walmartlabs.bigben.utils.utils.Props
+import com.walmartlabs.bigben.utils.commons.Props
 import java.time.Instant.EPOCH
 import java.time.Instant.ofEpochMilli
 import java.time.ZoneOffset.UTC

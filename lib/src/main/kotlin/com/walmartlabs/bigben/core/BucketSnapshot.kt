@@ -20,6 +20,8 @@
 package com.walmartlabs.bigben.core
 
 import com.walmartlabs.bigben.entities.EventStatus
+import com.walmartlabs.bigben.entities.EventStatus.ERROR
+import com.walmartlabs.bigben.entities.EventStatus.PROCESSED
 import com.walmartlabs.bigben.utils.logger
 import java.time.ZonedDateTime
 import java.util.*
@@ -32,14 +34,14 @@ internal data class BucketSnapshot(val id: ZonedDateTime, val count: Long, val p
 
         fun with(id: ZonedDateTime, count: Long, shardSize: Int, status: EventStatus): BucketSnapshot {
             val shards = (if (count % shardSize == 0L) count / shardSize else count / shardSize + 1).toInt()
-            val awaiting = if (count == 0L || EventStatus.PROCESSED == status) EMPTY else {
+            val awaiting = if (count == 0L || PROCESSED == status) EMPTY else {
                 BitSet(shards).apply { set(0, shards) }
             }
             when {
-                count == 0L -> l.info("bucket: {} => empty, no events", id)
-                awaiting === EMPTY -> l.info("bucket: {} => already done", id)
+                count == 0L -> if (l.isDebugEnabled) l.debug("bucket: {} => empty, no events", id)
+                awaiting === EMPTY -> if (l.isDebugEnabled) l.debug("bucket: {} => already done", id)
                 else -> {
-                    if (l.isInfoEnabled) l.info("bucket: {} => has {} events, resulting in {} shards", id, count, shards)
+                    if (l.isDebugEnabled) l.debug("bucket: {} => has {} events, resulting in {} shards", id, count, shards)
                 }
             }
             return BucketSnapshot(id, count, BitSet(), awaiting)
@@ -51,11 +53,11 @@ internal data class BucketSnapshot(val id: ZonedDateTime, val count: Long, val p
     fun done(shard: Int, status: EventStatus) {
         processing.clear(shard)
         when (status) {
-            EventStatus.PROCESSED -> {
+            PROCESSED -> {
                 if (l.isInfoEnabled) l.info("shard: {}[{}] finished successfully", id, shard)
                 awaiting.clear(shard)
             }
-            EventStatus.ERROR -> {
+            ERROR -> {
                 if (l.isInfoEnabled) l.info("shard: {}[{}] finished with error", id, shard)
                 awaiting.set(shard)
             }

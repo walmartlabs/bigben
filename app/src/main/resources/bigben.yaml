@@ -105,9 +105,9 @@ events:
     scheduler.worker.threads: 8
 
 buckets:
-  backlog.check.limit: 10
+  backlog.check.limit: 300
   background:
-    load.fetch.size: 10
+    load.fetch.size: 100
     load.wait.interval.seconds: 15
   checkpoint:
     interval: 60

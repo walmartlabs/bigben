@@ -28,9 +28,9 @@ import com.walmartlabs.bigben.processors.MessageProcessor
 import com.walmartlabs.bigben.processors.MessageProducer
 import com.walmartlabs.bigben.processors.MessageProducerFactory
 import com.walmartlabs.bigben.utils.*
-import com.walmartlabs.bigben.utils.utils.Props.long
-import com.walmartlabs.bigben.utils.utils.Props.map
-import com.walmartlabs.bigben.utils.utils.Props.string
+import com.walmartlabs.bigben.utils.commons.Props.long
+import com.walmartlabs.bigben.utils.commons.Props.map
+import com.walmartlabs.bigben.utils.commons.Props.string
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -44,10 +44,10 @@ import java.util.concurrent.atomic.AtomicReference
  * Created by smalik3 on 6/25/18
  */
 class KafkaMessageProducerFactory : MessageProducerFactory {
-    override fun create(tenant: String, props: Map<String, Any>) = KafkaMessageProducer(tenant, props)
+    override fun create(tenant: String, props: Json) = KafkaMessageProducer(tenant, props)
 }
 
-class KafkaMessageProducer(private val tenant: String, props: Map<String, Any>) : MessageProducer {
+class KafkaMessageProducer(private val tenant: String, props: Json) : MessageProducer {
 
     companion object {
         val l = logger<KafkaMessageProducer>()
