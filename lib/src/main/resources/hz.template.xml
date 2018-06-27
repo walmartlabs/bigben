@@ -24,19 +24,19 @@
            xmlns="http://www.hazelcast.com/schema/config"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <group>
-        <name>${hz.group.name bigben}</name>
-        <password>${hz.group.password bigben-pass}</password>
+        <name>${group.name bigben}</name>
+        <password>${group.password bigben-pass}</password>
     </group>
-    <management-center>${hz.management.url http://localhost:8080/mancenter}</management-center>
+    <management-center>${management.url http://localhost:8080/mancenter}</management-center>
     <network>
-        <port auto-increment="${hz.autoIncrement false}">${hz.port 5701}</port>
+        <port auto-increment="${network.autoIncrementPort false}">${network.port 5701}</port>
         <outbound-ports>
             <ports>0</ports>
         </outbound-ports>
         <join>
             <multicast enabled="false"/>
             <tcp-ip enabled="true">
-                <members>${hz.members 127.0.0.1}</members>
+                <members>${network.members 127.0.0.1}</members>
             </tcp-ip>
         </join>
     </network>

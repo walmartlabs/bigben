@@ -79,6 +79,15 @@ object Props {
     @Suppress("UNCHECKED_CAST")
     fun map(name: String) = get(name, true) as Json
 
+    @Suppress("UNCHECKED_CAST")
+    fun flattenedMap(json: Json): Json {
+        return json.entries.map { e ->
+            if (e.value !is Map<*, *>) listOf(e.key to e.value) else {
+                flattenedMap(e.value as Json).entries.map { "${e.key}.${it.key}" to it.value }
+            }
+        }.flatten().associate { it.first to it.second }
+    }
+
     private fun get(name: String, required: Boolean = false): Any? {
         val value = cache.get(name) { resolver(name) }
         if (value == NULL && required)

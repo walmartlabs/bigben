@@ -10,12 +10,13 @@ hz:
   group:
     name: bigben-dev
     password: bigben-dev
-  autoIncrement: false
-  members: 127.0.0.1
-  port: 5701
+  network:
+    autoIncrementPort: true
+    members: 127.0.0.1
+    port: 5701
   map:
     store:
-      write.delay: 60
+      writeDelay: 30
 
 # message related properties
 messaging:
