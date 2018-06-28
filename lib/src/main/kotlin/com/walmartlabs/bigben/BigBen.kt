@@ -27,11 +27,13 @@ import com.walmartlabs.bigben.entities.EventLoader
 import com.walmartlabs.bigben.processors.MessageProcessor
 import com.walmartlabs.bigben.processors.MessageProducerFactory
 import com.walmartlabs.bigben.processors.ProcessorRegistry
+import com.walmartlabs.bigben.utils.commons.Props.boolean
+import com.walmartlabs.bigben.utils.commons.Props.exists
+import com.walmartlabs.bigben.utils.commons.Props.string
 import com.walmartlabs.bigben.utils.hz.ClusterSingleton
 import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.logger
-import com.walmartlabs.bigben.utils.commons.Props.exists
-import com.walmartlabs.bigben.utils.commons.Props.string
+import java.util.concurrent.Executors.newSingleThreadExecutor
 
 /**
  * Created by smalik3 on 6/24/18
@@ -46,7 +48,7 @@ object BigBen {
     val processorRegistry: ProcessorRegistry
     val hz: Hz
     val messageProducerFactory: MessageProducerFactory
-    private val messageProcessor: MessageProcessor?
+    val messageProcessor: MessageProcessor?
 
     @Suppress("UNCHECKED_CAST")
     inline fun <reified T> entityProvider() = entityProvider as EntityProvider<T>
@@ -61,23 +63,31 @@ object BigBen {
         entityProvider = Class.forName(string("domain.entity.provider.class")).newInstance() as EntityProvider<Any>
         l.info("initializing event loader")
         eventLoader = if (entityProvider is EventLoader) entityProvider else Class.forName(string("domain.event.loader.class")).newInstance() as EventLoader
+        l.info("initializing message producer factory")
+        messageProducerFactory = Class.forName(string("messaging.producer.factory.class")).newInstance() as MessageProducerFactory
         l.info("loading processors")
         processorRegistry = ProcessorRegistry()
         l.info("initializing hazelcast")
         hz = Hz()
         l.info("initializing schedule scanner")
         val service = ScheduleScanner(hz)
-        l.info("initializing cluster master")
-        ClusterSingleton(service, hz)
+        if (boolean("events.disable.scheduler")) {
+            l.info("skipping initializing cluster scheduler")
+        } else {
+            l.info("initializing cluster scheduler")
+            ClusterSingleton(service, hz)
+        }
         l.info("initializing event receiver")
         eventReceiver = EventReceiver(hz)
         l.info("initializing event service")
         eventService = EventService(hz, service, eventReceiver)
-        l.info("initializing message producer factory")
-        messageProducerFactory = Class.forName(string("messaging.producer.factory.class")).newInstance() as MessageProducerFactory
         messageProcessor = if (exists("messaging.processor.class")) {
             Class.forName(string("messaging.processor.class")).newInstance() as MessageProcessor
         } else null
+        messageProcessor?.run {
+            l.info("stating the message processor")
+            newSingleThreadExecutor { Thread(it, "bigben-message-processor") }.submit { init() }
+        }
         l.info("BigBen initialized successfully")
     }
 }

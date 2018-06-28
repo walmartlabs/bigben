@@ -20,8 +20,8 @@ hz:
 
 # message related properties
 messaging:
-  producer.factory.class: com.walmartlabs.bigben.kafka.KafkaMessageProducerFactory
-  #processor.class: com.walmartlabs.bigben.kafka.KafkaMessageProcessor
+  producer.factory.class: com.walmartlabs.bigben.kafka.MockMessageProducerFactory
+  processor.class: com.walmartlabs.bigben.kafka.MockKafkaProcessor
 
 # cassandra related properties
 cassandra:
@@ -46,7 +46,7 @@ cassandra:
 # kafka consumer properties
 kafka:
   consumer:
-    topics: null
+    topics: inbound
     poll.interval: 10000
     config:
       key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -83,11 +83,11 @@ task:
 generic.future.max.get.time: 60
 
 events:
-  disable.scheduler: false
+  disable.scheduler: true
   schedule.scan.interval.minutes: 1
   num.shard.submitters: 8
   receiver:
-    shard.size: 1000
+    shard.size: 10
     lapse.offset.minutes: 0
     delete:
       max.retries: 3
@@ -107,18 +107,10 @@ events:
     scheduler.worker.threads: 8
 
 buckets:
-  backlog.check.limit: 300
+  backlog.check.limit: 30
   background:
-    load.fetch.size: 100
-    load.wait.interval.seconds: 15
+    load.fetch.size: 10
+    load.wait.interval.seconds: 1
   checkpoint:
     interval: 60
     interval.units: SECONDS
-
-
-
-
-
-
-
-

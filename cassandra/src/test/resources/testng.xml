@@ -20,6 +20,6 @@
   -->
 
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="bigben-integration-tests">
-    <test name="integration-tests" verbose="1" parallel="false"/>
+<suite name="bigben-domain-tests">
+    <test name="domain-tests" verbose="1" parallel="false"/>
 </suite>

@@ -24,6 +24,7 @@ import com.google.common.util.concurrent.SettableFuture
 import com.walmartlabs.bigben.BigBen.eventReceiver
 import com.walmartlabs.bigben.entities.EventRequest
 import com.walmartlabs.bigben.entities.EventResponse
+import com.walmartlabs.bigben.entities.Mode.UPSERT
 import com.walmartlabs.bigben.processors.MessageProcessor
 import com.walmartlabs.bigben.processors.MessageProducer
 import com.walmartlabs.bigben.processors.MessageProducerFactory
@@ -31,8 +32,10 @@ import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Props.long
 import com.walmartlabs.bigben.utils.commons.Props.map
 import com.walmartlabs.bigben.utils.commons.Props.string
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.WakeupException
@@ -47,25 +50,28 @@ class KafkaMessageProducerFactory : MessageProducerFactory {
     override fun create(tenant: String, props: Json) = KafkaMessageProducer(tenant, props)
 }
 
-class KafkaMessageProducer(private val tenant: String, props: Json) : MessageProducer {
+open class KafkaMessageProducer(private val tenant: String, props: Json) : MessageProducer {
 
     companion object {
         val l = logger<KafkaMessageProducer>()
     }
 
-    private val kafkaProducer = KafkaProducer<String, String>(props)
-    private val topic = props["topic"]!!.toString()
+    private val kafkaProducer = this.createProducer(props)
+    private val topic = require(props.containsKey("topic")) { "no topic in props" }.run { props["topic"]!!.toString() }
+
+    protected open fun createProducer(props: Json): Producer<String, String> = KafkaProducer<String, String>(props)
+            .apply { if (l.isInfoEnabled) l.info("kafka producer for tenant $tenant created successfully") }
 
     override fun produce(e: EventResponse): ListenableFuture<*> {
-        if (l.isDebugEnabled) l.debug("tenant: $tenant, topic: $topic, event: ${e.eventId}")
+        if (l.isDebugEnabled) l.debug("tenant: $tenant, topic: $topic, event: ${e.id}")
         return SettableFuture.create<Any>().apply {
             kafkaProducer.send(ProducerRecord(topic, e.id, e.json())) { recordMetadata, exception ->
                 if (exception != null) {
-                    l.error("tenant: $tenant, topic: $topic, event: ${e.eventId}, failed", exception.rootCause())
+                    l.error("tenant: $tenant, topic: $topic, event: ${e.id}, failed", exception.rootCause())
                     setException(exception.rootCause()!!)
                 } else if (l.isDebugEnabled) {
-                    l.debug("tenant: $tenant, topic: $topic, event: ${e.eventId}, " +
-                            "successful, partition: ${recordMetadata.partition()}, offset: ${recordMetadata.offset()}")
+                    l.debug("producer:success: tenant: $tenant, topic: $topic, event: ${e.id}, " +
+                            "partition: ${recordMetadata.partition()}, offset: ${recordMetadata.offset()}")
                     set(e)
                 }
             }
@@ -73,16 +79,18 @@ class KafkaMessageProducer(private val tenant: String, props: Json) : MessagePro
     }
 }
 
-class KafkaMessageProcessor : MessageProcessor {
-    private val consumer = KafkaConsumer<String, String>(map("kafka.consumer.config"))
-    private val topics = string("topics").split(",")
+open class KafkaMessageProcessor : MessageProcessor {
+    private val consumer = this.createConsumer()
+    private val topics = string("kafka.consumer.topics").split(",")
     private val closed = AtomicBoolean()
 
     companion object {
         private val l = logger<KafkaMessageProcessor>()
     }
 
-    init {
+    protected open fun createConsumer(): Consumer<String, String> = KafkaConsumer<String, String>(map("kafka.consumer.config"))
+
+    override fun init() {
         if (l.isInfoEnabled) l.info("starting the kafka consumer for topic(s): $topics")
         consumer.subscribe(topics)
         val task = AtomicReference<ListenableFuture<List<EventResponse>>?>()
@@ -108,7 +116,13 @@ class KafkaMessageProcessor : MessageProcessor {
                         }
                     }.flatten()
                     if (l.isDebugEnabled) l.debug("submitting records for processing for topic(s): $topics")
-                    val f = { records.map { eventReceiver.addEvent(EventRequest::class.java.fromJson(it.value())) }.reduce() }
+                    val f = {
+                        records.map {
+                            val eventRequest = EventRequest::class.java.fromJson(it.value())
+                            if (eventRequest.mode == UPSERT) eventReceiver.addEvent(eventRequest)
+                            else eventReceiver.removeEvent(eventRequest.id!!, eventRequest.tenant!!)
+                        }.reduce()
+                    }
                     task.set(f.retriable(maxRetries = 10))
                 }
             } catch (e: Exception) {

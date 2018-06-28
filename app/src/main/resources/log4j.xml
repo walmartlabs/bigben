@@ -37,4 +37,9 @@
         <appender-ref ref="console"/>
     </logger>
 
+    <logger name="com.walmartlabs.bigben.kafka" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="console"/>
+    </logger>
+
 </log4j:configuration>

@@ -206,4 +206,6 @@ interface MessageProducer {
     fun produce(e: EventResponse): ListenableFuture<*>
 }
 
-interface MessageProcessor
+interface MessageProcessor {
+    fun init()
+}

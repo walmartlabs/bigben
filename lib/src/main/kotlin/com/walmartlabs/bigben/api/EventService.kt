@@ -39,7 +39,8 @@ import java.util.concurrent.Callable
 import javax.ws.rs.*
 import javax.ws.rs.core.MediaType.APPLICATION_JSON
 import javax.ws.rs.core.Response
-import javax.ws.rs.core.Response.Status.*
+import javax.ws.rs.core.Response.Status.BAD_REQUEST
+import javax.ws.rs.core.Response.Status.PARTIAL_CONTENT
 import javax.ws.rs.core.Response.ok
 import javax.ws.rs.core.Response.status
 
@@ -107,23 +108,23 @@ class EventService(private val hz: Hz, private val service: Service,
     @Path("/dryrun")
     fun dryrun(@QueryParam("bucketId") id: String, @QueryParam("tenant") tenant: String) = response { EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, true) } }
 
-    private fun find(eventRequest: EventRequest, fire: Boolean) = response m@{
+    private fun find(eventRequest: EventRequest, fire: Boolean): EventResponse? {
         val eventResponse = eventRequest.toResponse()
-        return@m if (eventRequest.id != null && eventRequest.id!!.trim().isNotEmpty()) {
+        return if (eventRequest.id != null && eventRequest.id!!.trim().isNotEmpty()) {
             val eventLookup = fetch<EventLookup> { it.xrefId = eventRequest.id; it.tenant = eventRequest.tenant }.result { null }
             if (eventLookup == null) {
-                status(NOT_FOUND).entity(eventResponse)
+                null
             } else {
                 val event = fetch<Event> { it.id = eventLookup.eventId; it.eventTime = eventLookup.eventTime; it.shard = eventLookup.shard; it.bucketId = eventLookup.bucketId }.result { null }
                 if (event == null) {
                     eventResponse.apply { id = eventLookup.eventId; eventTime = eventLookup.eventTime?.toString() }
-                    status(NOT_FOUND).entity(eventResponse)
+                    null
                 } else {
                     event.payload = eventLookup.payload
                     if (fire) {
                         processorRegistry(event)
                     }
-                    status(OK).entity(event.toResponse())
+                    event.toResponse()
                 }
             }
         } else {

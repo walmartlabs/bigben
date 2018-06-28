@@ -19,14 +19,14 @@
  */
 package com.walmartlabs.bigben.cassandra.tests
 
-import com.datastax.driver.core.Cluster
-import com.datastax.driver.core.CodecRegistry
-import com.datastax.driver.mapping.MappingManager
-import com.walmartlabs.bigben.entities.EventStatus
+import com.walmartlabs.bigben.api.EventService
+import com.walmartlabs.bigben.entities.EventStatus.PROCESSED
 import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.nowUTC
-import com.walmartlabs.bigben.providers.domain.cassandra.*
-import org.testng.annotations.BeforeClass
+import com.walmartlabs.bigben.providers.domain.cassandra.BucketC
+import com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider.Companion.mappingManager
+import com.walmartlabs.bigben.providers.domain.cassandra.EventC
+import com.walmartlabs.bigben.providers.domain.cassandra.EventLookupC
 import org.testng.annotations.Test
 import java.util.*
 import kotlin.test.assertEquals
@@ -36,35 +36,27 @@ import kotlin.test.assertEquals
  */
 class ORMTests {
 
-    private lateinit var cluster: Cluster
-    private lateinit var mappingManager: MappingManager
-
-    @BeforeClass
-    fun `set up cluster`() {
-        cluster = Cluster.builder()
-                .withClusterName("bigben_test_cluster")
-                .addContactPoint("127.0.0.1")
-                .withCodecRegistry(CodecRegistry().
-                        register(EnumCodec(EventStatus.values().toSet())).
-                        register(ZdtCodec())
-                )
-                .build()
-        mappingManager = MappingManager(cluster.connect())
+    companion object {
+        init {
+            System.setProperty("props", "file://bigben-test.yaml")
+            System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
+            EventService.DEBUG_FLAG.set(false)
+        }
     }
 
     @Test
     fun `test bucket orm`() {
-        val b = BucketC(nowUTC(), EventStatus.PROCESSED, 10, nowUTC(), nowUTC())
+        val b = BucketC(nowUTC(), PROCESSED, 10, nowUTC(), nowUTC())
         val mapper = mappingManager.mapper(BucketC::class.java)
         mapper.save(b)
-        val newBucket = mapper[b.id]
+        val newBucket = mapper[b.bucketId]
         assertEquals(b, newBucket)
     }
 
     @Test
     fun `test event orm`() {
         val eventTime = nowUTC()
-        val e = EventC(eventTime, UUID.randomUUID().toString(), eventTime.bucket(), 1, EventStatus.PROCESSED, null,
+        val e = EventC(eventTime, UUID.randomUUID().toString(), eventTime.bucket(), 1, PROCESSED, null,
                 "default", processedAt = eventTime.plusSeconds(1), xrefId = "xref_1", payload = "{payload}")
         val mapper = mappingManager.mapper(EventC::class.java)
         mapper.save(e)

@@ -20,14 +20,15 @@
 package com.walmartlabs.bigben.tests
 
 import com.datastax.driver.core.Session
+import com.google.common.util.concurrent.ListeningScheduledExecutorService
+import com.sun.net.httpserver.HttpServer
 import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.BigBen.entityProvider
-import com.walmartlabs.bigben.api.EventReceiver
+import com.walmartlabs.bigben.BigBen.eventService
+import com.walmartlabs.bigben.BigBen.hz
 import com.walmartlabs.bigben.api.EventService
-import com.walmartlabs.bigben.app.App
 import com.walmartlabs.bigben.core.BucketManager
 import com.walmartlabs.bigben.core.BucketsLoader
-import com.walmartlabs.bigben.core.ScheduleScanner
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.entities.EventStatus.*
 import com.walmartlabs.bigben.entities.Mode.REMOVE
@@ -35,22 +36,31 @@ import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.fetch
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.save
-import com.walmartlabs.bigben.providers.domain.cassandra.ClusterConfig
-import com.walmartlabs.bigben.utils.hz.Hz
+import com.walmartlabs.bigben.kafka.MockKafkaProcessor
+import com.walmartlabs.bigben.processors.NoOpCustomClassProcessor
+import com.walmartlabs.bigben.processors.ProcessorConfig
+import com.walmartlabs.bigben.processors.ProcessorConfig.Type.*
+import com.walmartlabs.bigben.utils.commons.Props.int
+import com.walmartlabs.bigben.utils.commons.TaskExecutor
+import com.walmartlabs.bigben.utils.fromJson
 import com.walmartlabs.bigben.utils.json
-import com.walmartlabs.bigben.utils.utils.Props
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.testng.annotations.BeforeClass
 import org.testng.annotations.BeforeMethod
 import org.testng.annotations.Test
-import java.lang.Thread.*
+import java.lang.Thread.sleep
+import java.net.InetSocketAddress
 import java.time.ZonedDateTime
 import java.util.*
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit.HOURS
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit.MINUTES
-import java.util.function.Predicate
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.reflect.full.memberProperties
+import kotlin.reflect.jvm.isAccessible
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+
 
 /**
  * Created by smalik3 on 4/11/18
@@ -59,41 +69,28 @@ class BigBenTests {
 
     companion object {
         init {
-            System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.opensource.bigben", "warn")
-            System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.opensource.bigben.core.BucketManager", "debug")
-            //System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.opensource.bigben.providers.domain.cassandra", "debug")
-            val cc = ClusterConfig()
-            cc.contactPoints = "127.0.0.1"
-            System.setProperty("bigben.cassandra.config", cc.json())
-            System.setProperty("bigben.hz.config", mapOf<String, Any>(
-                    "map" to mapOf("store" to mapOf<String, Any>("writeDelay" to 0))).json())
-            System.setProperty("skip.tenant.validation", "yes")
-            System.setProperty("event.shard.size", 10.toString())
-            if (System.getProperty("bigben.cassandra.config") == null) {
-                System.setProperty("bigben.cassandra.config", ClusterConfig().apply { contactPoints = "127.0.0.1" }.json())
-            }
-            System.setProperty("skip.tenant.validation", "yes")
-            if (System.getProperty("hz.config") == null) {
-                System.setProperty("hz.config", mapOf<String, Any>(
-                        "hz" to mapOf("autoIncrement" to true),
-                        "map" to mapOf("store" to mapOf<String, Any>("writeDelay" to 10))).json())
-            }
-            System.setProperty("bigben.entity.provider.class", "com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider")
+            System.setProperty("props", "file://bigben-test.yaml")
+            System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
+            EventService.DEBUG_FLAG.set(false)
         }
+    }
 
-        private val hz = Hz()
-        private val service = ScheduleScanner(hz)
-        private val eventReceiver = EventReceiver(hz)
-        val es = EventService(hz, service, eventReceiver)
+    @BeforeClass
+    fun `set up tenant`() {
+        `clean up db`()
+        eventService.registerProcessor(ProcessorConfig("default", CUSTOM_CLASS,
+                mapOf("eventProcessorClass" to NoOpCustomClassProcessor::class.java.name))).apply { assertEquals(this.status, 200) }
+        println("tenant set up done")
     }
 
     @BeforeMethod
-    fun `clean up db`() {
+    private fun `clean up db`() {
         println("cleaning up the db")
         (entityProvider.unwrap() as Session).apply {
             execute("truncate bigben.events;")
             execute("truncate bigben.lookups;")
             execute("truncate bigben.buckets;")
+            execute("truncate bigben.kv_table;")
         }
     }
 
@@ -104,10 +101,10 @@ class BigBenTests {
         val xrefId = "abc"
 
         //add:
-        es.schedule(listOf(EventRequest(xrefId, eventTime.toString(), tenant, "P"))).apply {
+        eventService.schedule(listOf(EventRequest(xrefId, eventTime.toString(), tenant, "P"))).apply {
             assertEquals(status, 200)
         }
-        es.find(xrefId, tenant).apply {
+        eventService.find(xrefId, tenant).apply {
             assertEquals(status, 200)
             (entity as EventResponse).apply {
                 assertEquals(ZonedDateTime.parse(this.eventTime), eventTime)
@@ -116,10 +113,10 @@ class BigBenTests {
         }
 
         //update payload:
-        es.schedule(listOf(EventRequest(xrefId, eventTime.toString(), tenant, "P1"))).apply {
+        eventService.schedule(listOf(EventRequest(xrefId, eventTime.toString(), tenant, "P1"))).apply {
             assertEquals(status, 200)
         }
-        es.find(xrefId, tenant).apply {
+        eventService.find(xrefId, tenant).apply {
             assertEquals(status, 200)
             (entity as EventResponse).apply {
                 assertEquals(ZonedDateTime.parse(this.eventTime), eventTime)
@@ -128,10 +125,10 @@ class BigBenTests {
         }
 
         // update time:
-        es.schedule(listOf(EventRequest(xrefId, eventTime.plusMinutes(1).toString(), tenant, "P2"))).apply {
+        eventService.schedule(listOf(EventRequest(xrefId, eventTime.plusMinutes(1).toString(), tenant, "P2"))).apply {
             assertEquals(status, 200)
         }
-        es.find(xrefId, tenant).apply {
+        eventService.find(xrefId, tenant).apply {
             assertEquals(status, 200)
             (entity as EventResponse).apply {
                 assertEquals(ZonedDateTime.parse(this.eventTime), eventTime.plusMinutes(1))
@@ -140,10 +137,10 @@ class BigBenTests {
         }
 
         //remove event:
-        es.schedule(listOf(EventRequest(xrefId, eventTime.plusMinutes(1).toString(), tenant, "P2", REMOVE))).apply {
+        eventService.schedule(listOf(EventRequest(xrefId, eventTime.plusMinutes(1).toString(), tenant, "P2", REMOVE))).apply {
             assertEquals(status, 200)
         }
-        es.find(xrefId, tenant).apply {
+        eventService.find(xrefId, tenant).apply {
             assertEquals(status, 404)
         }
     }
@@ -153,13 +150,13 @@ class BigBenTests {
         val r = Random()
         val time = nowUTC().plusMinutes(2).bucket()
         (0..100).forEach {
-            es.schedule(listOf(EventRequest("id_$it", time.plusSeconds(r.nextInt(60).toLong()).toString(), "default", "Payload_$it")))
+            eventService.schedule(listOf(EventRequest("id_$it", time.plusSeconds(r.nextInt(60).toLong()).toString(), "default", "Payload_$it")))
         }
         (0..100).forEach { i ->
-            es.find("id_$i", "default").apply {
+            eventService.find("id_$i", "default").apply {
                 assertEquals(status, 200)
                 fetch<EventLookup> { it.xrefId = "id_$i"; it.tenant = "default" }.get()!!.apply {
-                    assertEquals(shard, i / Props.int("event.shard.size"))
+                    assertEquals(shard, i / int("events.receiver.shard.size"))
                     fetch<Event> { it.bucketId = time; it.shard = shard; it.eventTime = eventTime; it.id = eventId }.get()!!.apply {
                         assertEquals(status, UN_PROCESSED)
                     }
@@ -170,7 +167,6 @@ class BigBenTests {
 
     @Test
     fun `test bucket loader`() {
-        System.setProperty("buckets.background.load.wait.interval.seconds", 1.toString())
         val bucketId = nowUTC().bucket()
         val toBeLoaded = (1..10).map { bucketId.minusMinutes(it.toLong()) }.toSet()
 
@@ -178,7 +174,7 @@ class BigBenTests {
 
         val latch = CountDownLatch(10)
         val now = System.currentTimeMillis()
-        BucketsLoader(10, 5, Predicate { false }, 60, bucketId) {
+        BucketsLoader(10, 5, 60, bucketId) {
             try {
                 assertTrue { toBeLoaded.contains(it.bucketId) }
                 if (it.bucketId == bucketId.minusMinutes(3)) {
@@ -206,7 +202,7 @@ class BigBenTests {
         val shards = range.toList()
         // test back ground load
         range.forEach { i -> save<Bucket> { it.bucketId = time.minusMinutes(i.toLong()); it.count = 100L; it.status = UN_PROCESSED }.get()!! }
-        val bm = BucketManager(10, 2 * 60, 60, 1, HOURS, BigBen.hz)
+        val bm = BucketManager(10, 2 * 60, 60, hz)
         bm.getProcessableShardsForOrBefore(time).get()!!
 
         sleep(2000)
@@ -229,11 +225,200 @@ class BigBenTests {
     }
 
     @Test
-    fun `start app`() {
-        Executors.newCachedThreadPool().apply {
-            submit { currentThread().isDaemon = true; App() }
-            //submit { currentThread().isDaemon = true; App() }
+    fun `test http processor - ok case`() {
+        var server: HttpServer? = null
+        try {
+            val port = 8383
+            eventService.registerProcessor(ProcessorConfig("http", HTTP,
+                    mapOf
+                    (
+                            "url" to "http://localhost:$port/test",
+                            "headers" to mapOf("header" to "Header1")
+                    ))
+            ).apply { assertEquals(this.status, 200) }
+            val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "http", "Payload1")
+            server = HttpServer.create(InetSocketAddress(port), 0)
+            val latch = CountDownLatch(1)
+            server.createContext("/test") {
+                try {
+                    val eResp = EventResponse::class.java.fromJson(String(it.requestBody.readBytes()))
+                    assertEquals(it.requestHeaders.getFirst("header"), "Header1")
+                    assertEquals(eReq.id, eResp.id)
+                    assertEquals(eReq.eventTime, eResp.eventTime)
+                    assertEquals(eReq.payload, eResp.payload)
+                    assertEquals(eReq.tenant, eResp.tenant)
+                    assertEquals(eReq.mode, eResp.mode)
+                    assertTrue(eResp.eventId == null)
+                    assertTrue(eResp.eventStatus == TRIGGERED)
+                    mapOf("status" to "OK").json().apply {
+                        it.sendResponseHeaders(200, length.toLong())
+                        it.responseBody.write(toByteArray())
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    mapOf("status" to "error").json().apply {
+                        it.sendResponseHeaders(500, length.toLong())
+                        it.responseBody.write(toByteArray())
+                    }
+                } finally {
+                    it.close()
+                }
+                latch.countDown()
+            }
+            server.start()
+            eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
+            if (!latch.await(1, MINUTES))
+                throw AssertionError("latch not down")
+        } finally {
+            server?.run { stop(0) }
         }
-        Thread.sleep(Long.MAX_VALUE)
+    }
+
+    @Test
+    fun `test http processor - error case`() {
+        var server: HttpServer? = null
+        try {
+            val port = 8383
+            eventService.registerProcessor(ProcessorConfig("http", HTTP,
+                    mapOf
+                    (
+                            "url" to "http://localhost:$port/test",
+                            "header" to "Header1"
+                    ))
+            ).apply { assertEquals(this.status, 200) }
+            val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "http", "Payload1")
+            server = HttpServer.create(InetSocketAddress(port), 0)
+            val latch = CountDownLatch(1)
+            val tries = AtomicInteger()
+            server.createContext("/test") {
+                try {
+                    tries.incrementAndGet()
+                    mapOf("status" to "error").json().apply {
+                        it.sendResponseHeaders(500, length.toLong())
+                        it.responseBody.write(toByteArray())
+                    }
+                } finally {
+                    it.close()
+                }
+                latch.countDown()
+            }
+            server.start()
+            eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
+            if (!latch.await(1, MINUTES))
+                throw AssertionError("latch not down")
+            var passed = false
+            loop@ for (i in (1..10)) {
+                if (tries.get() != 4)
+                    sleep(1000)
+                else {
+                    passed = true; break@loop
+                }
+            }
+            assertTrue(passed)
+        } finally {
+            server?.run { stop(0) }
+        }
+    }
+
+    @Test
+    fun `test http processor - bad request case`() {
+        var server: HttpServer? = null
+        try {
+            val port = 8383
+            eventService.registerProcessor(ProcessorConfig("http", HTTP,
+                    mapOf
+                    (
+                            "url" to "http://localhost:$port/test",
+                            "header" to "Header1"
+                    ))
+            ).apply { assertEquals(this.status, 200) }
+            val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "http", "Payload1")
+            server = HttpServer.create(InetSocketAddress(port), 0)
+            val latch = CountDownLatch(1)
+            val tries = AtomicInteger()
+            server.createContext("/test") {
+                try {
+                    tries.incrementAndGet()
+                    mapOf("status" to "error").json().apply {
+                        it.sendResponseHeaders(400, length.toLong())
+                        it.responseBody.write(toByteArray())
+                    }
+                } finally {
+                    it.close()
+                }
+                latch.countDown()
+            }
+            server.start()
+            eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
+            if (!latch.await(1, MINUTES))
+                throw AssertionError("latch not down")
+            var passed = false
+            loop@ for (i in (1..5)) {
+                if (tries.get() != 1)
+                    sleep(1000)
+                else {
+                    passed = true; break@loop
+                }
+            }
+            sleep(2000)
+            assertTrue(passed)
+        } finally {
+            server?.run { stop(0) }
+        }
+    }
+
+    @Test
+    fun `test kafka integration - ok case`() {
+        eventService.registerProcessor(ProcessorConfig("kafka", MESSAGING,
+                mapOf
+                (
+                        "topic" to "test",
+                        "brokers.url" to ""
+                ))
+        ).apply { assertEquals(this.status, 200) }
+        val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", "Payload1")
+        eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
+    }
+
+    @Test
+    fun `test kafka integration - error case`() {
+        val x: ScheduledThreadPoolExecutor = (TaskExecutor.Companion::class.memberProperties
+                .filter { it.name == "RETRY_POOL" }[0]
+                .apply { isAccessible = true }.get(TaskExecutor.Companion) as ListeningScheduledExecutorService)
+                .let { it::class.java.getDeclaredField("delegate").apply { isAccessible = true }.get(it) } as ScheduledThreadPoolExecutor
+        val current = x.completedTaskCount
+        eventService.registerProcessor(ProcessorConfig("kafka", MESSAGING,
+                mapOf
+                (
+                        "topic" to "test",
+                        "brokers.url" to "",
+                        "fail" to true
+                ))
+        ).apply { assertEquals(this.status, 200) }
+        val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", "Payload1")
+        eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
+        sleep(10000)
+        assertTrue(x.completedTaskCount - current >= 3.toLong())
+    }
+
+    @Test
+    fun `test kafka consumer`() {
+        eventService.registerProcessor(ProcessorConfig("inbound", MESSAGING,
+                mapOf
+                (
+                        "topic" to "inbound",
+                        "brokers.url" to ""
+                ))
+        ).apply { assertEquals(this.status, 200) }
+        val consumer = (BigBen.messageProcessor!! as MockKafkaProcessor).consumer
+        val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", "Payload1")
+        (1..10).forEach {
+            consumer.schedulePollTask {
+                println("scheduling task")
+                sleep(500)
+                consumer.addRecord(ConsumerRecord("inbound", 0, 1, "", eReq.json()))
+            }
+        }
+        sleep(Long.MAX_VALUE)
     }
 }

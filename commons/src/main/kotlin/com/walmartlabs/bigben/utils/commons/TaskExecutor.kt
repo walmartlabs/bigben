@@ -24,9 +24,9 @@ import com.google.common.util.concurrent.Futures.immediateFailedFuture
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors.listeningDecorator
 import com.walmartlabs.bigben.utils.catchingAsync
+import com.walmartlabs.bigben.utils.commons.Props.int
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.transformAsync
-import com.walmartlabs.bigben.utils.commons.Props.int
 import java.lang.Runtime.getRuntime
 import java.util.UUID.randomUUID
 import java.util.concurrent.*
@@ -39,16 +39,18 @@ import java.util.function.Supplier
  */
 class TaskExecutor(private val logErrorStackDuringIntermediateRetries: Boolean = false, private val isRetriable: (t: Throwable) -> Boolean) {
     constructor(retriableExceptions: Set<Class<*>>, logErrorStackDuringIntermediateRetries: Boolean = false) : this(logErrorStackDuringIntermediateRetries,
-            fun(t: Throwable?): Boolean {
-                return t?.let { retriableExceptions.find { t -> t.isAssignableFrom(t::class.java) } != null }
-                        ?: false
-            })
+            fun(t: Throwable?): Boolean { return isRetriable(t, retriableExceptions) })
 
     companion object {
         private val l = logger<TaskExecutor>()
         private val serial = AtomicInteger()
         private val RETRY_POOL = listeningDecorator(ScheduledThreadPoolExecutor(int("task.executor.retry.thread.count", getRuntime().availableProcessors()),
                 ThreadFactory { r -> Thread(r, "task-executor-retry-worker#" + serial.getAndIncrement()) }, ThreadPoolExecutor.CallerRunsPolicy()))
+
+        fun isRetriable(cause: Throwable?, retriableExceptions: Set<Class<*>>): Boolean {
+            return cause?.let { retriableExceptions.find { t -> t.isAssignableFrom(cause::class.java) } != null }
+                    ?: false
+        }
     }
 
     fun <R> async(taskId: String = randomUUID().toString(), maxRetries: Int = int("task.executor.max.retries"), delay: Int = int("task.executor.delay"),
@@ -77,9 +79,9 @@ class TaskExecutor(private val logErrorStackDuringIntermediateRetries: Boolean =
             if (retryCount < maxRetries) {
                 if (l.isWarnEnabled) {
                     if (logErrorStackDuringIntermediateRetries) l.warn("operation failed, taskId='{}', retrying after {} {}, retry={}, maxRetry={}, exception='{}'",
-                            taskId, delay, timeUnit, retryCount, maxRetries, if (cause.message == null) cause::class.java.name else cause.message)
-                    else l.warn("operation failed, taskId='{}', retrying after {} {}, retry={}, maxRetry={}, exception='{}'",
                             taskId, delay, timeUnit, retryCount, maxRetries, if (cause.message == null) cause::class.java.name else cause.message, cause)
+                    else l.warn("operation failed, taskId='{}', retrying after {} {}, retry={}, maxRetry={}, exception='{}'",
+                            taskId, delay, timeUnit, retryCount, maxRetries, if (cause.message == null) cause::class.java.name else cause.message)
                 }
                 RETRY_POOL.schedule(Callable { async(taskId, retryCount + 1, maxRetries, backoffMultiplier * delay, backoffMultiplier, timeUnit, task) }, delay.toLong(), timeUnit).transformAsync { it -> it!! }
             } else {
