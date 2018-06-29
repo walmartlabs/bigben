@@ -48,6 +48,7 @@ kafka:
   consumer:
     topics: null
     poll.interval: 10000
+    message.retry.max.count: 1
     config:
       key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -65,18 +66,20 @@ kafka:
       #send.buffer.bytes: 131072
       enable.auto.commit: false
   producer:
-    key.serializer: org.apache.kafka.common.serialization.StringDeserializer
-    value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
-    acks: 1
-    bootstrap.servers: null
-    buffer.memory: 32400
-    retries: 3
+    config:
+      key.serializer: org.apache.kafka.common.serialization.StringSerializer
+      value.serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: "1"
+      bootstrap.servers: null
+      buffer.memory: 32400
+      retries: 3
 
 # system properties
 task:
   executor:
     #retry.thread.count: 8
-    delay: 1000
+    retry.time.units: SECONDS
+    delay: 1
     max.retries: 3
     backoff.multiplier: 2
 

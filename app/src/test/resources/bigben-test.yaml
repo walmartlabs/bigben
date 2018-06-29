@@ -21,7 +21,7 @@ hz:
 # message related properties
 messaging:
   producer.factory.class: com.walmartlabs.bigben.kafka.MockMessageProducerFactory
-  processor.class: com.walmartlabs.bigben.kafka.MockKafkaProcessor
+  processor.class: com.walmartlabs.bigben.kafka.KafkaMessageProcessor
 
 # cassandra related properties
 cassandra:
@@ -45,13 +45,15 @@ cassandra:
 
 # kafka consumer properties
 kafka:
+  num.consumers: 1
   consumer:
     topics: inbound
     poll.interval: 10000
+    message.retry.max.count: 1
     config:
       key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      bootstrap.servers: null
+      bootstrap.servers: localhost:9092
       #fetch.min.bytes: 1
       group.id: bigben-inbound
       #heartbeat.interval.ms: 3000
@@ -65,18 +67,20 @@ kafka:
       #send.buffer.bytes: 131072
       enable.auto.commit: false
   producer:
-    key.serializer: org.apache.kafka.common.serialization.StringDeserializer
-    value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
-    acks: 1
-    bootstrap.servers: null
-    buffer.memory: 32400
-    retries: 3
+    config:
+        key.serializer: org.apache.kafka.common.serialization.StringSerializer
+        value.serializer: org.apache.kafka.common.serialization.StringSerializer
+        acks: "1"
+        bootstrap.servers: localhost:9091
+        buffer.memory: 32400
+        retries: 3
 
 # system properties
 task:
   executor:
     #retry.thread.count: 8
-    delay: 1000
+    retry.time.units: SECONDS
+    delay: 1
     max.retries: 3
     backoff.multiplier: 2
 

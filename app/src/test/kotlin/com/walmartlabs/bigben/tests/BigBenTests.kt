@@ -22,7 +22,6 @@ package com.walmartlabs.bigben.tests
 import com.datastax.driver.core.Session
 import com.google.common.util.concurrent.ListeningScheduledExecutorService
 import com.sun.net.httpserver.HttpServer
-import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.BigBen.entityProvider
 import com.walmartlabs.bigben.BigBen.eventService
 import com.walmartlabs.bigben.BigBen.hz
@@ -36,15 +35,18 @@ import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.fetch
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.save
-import com.walmartlabs.bigben.kafka.MockKafkaProcessor
 import com.walmartlabs.bigben.processors.NoOpCustomClassProcessor
 import com.walmartlabs.bigben.processors.ProcessorConfig
 import com.walmartlabs.bigben.processors.ProcessorConfig.Type.*
 import com.walmartlabs.bigben.utils.commons.Props.int
+import com.walmartlabs.bigben.utils.commons.Props.map
 import com.walmartlabs.bigben.utils.commons.TaskExecutor
 import com.walmartlabs.bigben.utils.fromJson
 import com.walmartlabs.bigben.utils.json
-import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.commons.text.RandomStringGenerator
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.testng.annotations.BeforeClass
 import org.testng.annotations.BeforeMethod
 import org.testng.annotations.Test
@@ -401,24 +403,58 @@ class BigBenTests {
         assertTrue(x.completedTaskCount - current >= 3.toLong())
     }
 
-    @Test
+    @Test(enabled = false)
     fun `test kafka consumer`() {
-        eventService.registerProcessor(ProcessorConfig("inbound", MESSAGING,
+        eventService.registerProcessor(ProcessorConfig("kafka", MESSAGING,
                 mapOf
                 (
-                        "topic" to "inbound",
-                        "brokers.url" to ""
+                        "topic" to "outbound",
+                        "brokers.url" to "localhost:9092"
                 ))
         ).apply { assertEquals(this.status, 200) }
-        val consumer = (BigBen.messageProcessor!! as MockKafkaProcessor).consumer
+        /*val consumer = (BigBen.messageProcessors[0] as MockKafkaProcessor).consumer
+        consumer.rebalance(setOf(TopicPartition("inbound", 1)))
+        consumer.updateBeginningOffsets(mapOf(TopicPartition("inbound", 0) to 1.toLong()))
+        consumer.updateBeginningOffsets(mapOf(TopicPartition("inbound", 0) to Long.MAX_VALUE))*/
         val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", "Payload1")
-        (1..10).forEach {
-            consumer.schedulePollTask {
-                println("scheduling task")
-                sleep(500)
-                consumer.addRecord(ConsumerRecord("inbound", 0, 1, "", eReq.json()))
-            }
+        println(eReq.json())
+        //sleep(Long.MAX_VALUE)
+    }
+
+    @Test(enabled = false)
+    fun `end to end kafka`() {
+        eventService.registerProcessor(ProcessorConfig("kafka", MESSAGING,
+                mapOf
+                (
+                        "topic" to "outbound",
+                        "bootstrap.servers" to "localhost:9092"
+                ))
+        ).apply { assertEquals(this.status, 200) }
+
+
+        val producer = KafkaProducer<String, String>(map("kafka.producer.config").mapKeys { it.key.removePrefix("kafka.producer.config.") } +
+                mapOf
+                (
+                        "topic" to "outbound",
+                        "bootstrap.servers" to "localhost:9092"
+                ))
+        (1..100).forEach {
+            println("sending $it")
+            val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", RandomStringGenerator.Builder().build().generate(1024))
+            producer.send(ProducerRecord("outbound", eReq.json())).get()
         }
-        sleep(Long.MAX_VALUE)
+        sleep(3000)
+    }
+
+    @Test(enabled = false)
+    fun `test consumer`() {
+        val consumer = KafkaConsumer<String, String>(map("kafka.consumer.config") + mapOf("group.id" to UUID.randomUUID().toString()))
+        consumer.subscribe(setOf("outbound"))
+        while(true) {
+            println("polling outbound")
+            val records = consumer.poll(3000)
+            println(records.count())
+            consumer.commitSync()
+        }
     }
 }

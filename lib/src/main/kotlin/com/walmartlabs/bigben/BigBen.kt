@@ -29,11 +29,13 @@ import com.walmartlabs.bigben.processors.MessageProducerFactory
 import com.walmartlabs.bigben.processors.ProcessorRegistry
 import com.walmartlabs.bigben.utils.commons.Props.boolean
 import com.walmartlabs.bigben.utils.commons.Props.exists
+import com.walmartlabs.bigben.utils.commons.Props.int
 import com.walmartlabs.bigben.utils.commons.Props.string
 import com.walmartlabs.bigben.utils.hz.ClusterSingleton
 import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.logger
-import java.util.concurrent.Executors.newSingleThreadExecutor
+import java.util.concurrent.Executors.newFixedThreadPool
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Created by smalik3 on 6/24/18
@@ -48,7 +50,7 @@ object BigBen {
     val processorRegistry: ProcessorRegistry
     val hz: Hz
     val messageProducerFactory: MessageProducerFactory
-    val messageProcessor: MessageProcessor?
+    val messageProcessors: List<MessageProcessor>
 
     @Suppress("UNCHECKED_CAST")
     inline fun <reified T> entityProvider() = entityProvider as EntityProvider<T>
@@ -81,12 +83,15 @@ object BigBen {
         eventReceiver = EventReceiver(hz)
         l.info("initializing event service")
         eventService = EventService(hz, service, eventReceiver)
-        messageProcessor = if (exists("messaging.processor.class")) {
-            Class.forName(string("messaging.processor.class")).newInstance() as MessageProcessor
-        } else null
-        messageProcessor?.run {
-            l.info("stating the message processor")
-            newSingleThreadExecutor { Thread(it, "bigben-message-processor") }.submit { init() }
+        messageProcessors = if (exists("messaging.processor.class")) {
+            (1..int("kafka.num.consumers")).map { Class.forName(string("messaging.processor.class")).newInstance() as MessageProcessor }
+        } else emptyList()
+        if (messageProcessors.isNotEmpty()) {
+            l.info("starting ${messageProcessors.size} message processors")
+            val index = AtomicInteger(0)
+            newFixedThreadPool(messageProcessors.size) { Thread(it, "messageProcessor#${index.getAndIncrement()}") }.apply {
+                messageProcessors.forEach { submit { it.init() } }
+            }
         }
         l.info("BigBen initialized successfully")
     }

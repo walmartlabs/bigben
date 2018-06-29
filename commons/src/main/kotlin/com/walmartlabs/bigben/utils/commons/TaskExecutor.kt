@@ -25,12 +25,12 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors.listeningDecorator
 import com.walmartlabs.bigben.utils.catchingAsync
 import com.walmartlabs.bigben.utils.commons.Props.int
+import com.walmartlabs.bigben.utils.commons.Props.string
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.transformAsync
 import java.lang.Runtime.getRuntime
 import java.util.UUID.randomUUID
 import java.util.concurrent.*
-import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
 
@@ -54,12 +54,14 @@ class TaskExecutor(private val logErrorStackDuringIntermediateRetries: Boolean =
     }
 
     fun <R> async(taskId: String = randomUUID().toString(), maxRetries: Int = int("task.executor.max.retries"), delay: Int = int("task.executor.delay"),
-                  backoffMultiplier: Int = int("task.executor.backoff.multiplier"), timeUnit: TimeUnit = SECONDS, task: () -> ListenableFuture<R>): ListenableFuture<R> {
+                  backoffMultiplier: Int = int("task.executor.backoff.multiplier"), timeUnit: TimeUnit = TimeUnit.valueOf(string("task.executor.retry.time.units")),
+                  task: () -> ListenableFuture<R>): ListenableFuture<R> {
         return async(taskId, maxRetries, delay, backoffMultiplier, timeUnit, Supplier { Callable { task() } })
     }
 
     fun <R> async(taskId: String = randomUUID().toString(), maxRetries: Int = int("task.executor.max.retries"), delay: Int = int("task.executor.delay"),
-                  backoffMultiplier: Int = int("task.executor.backoff.multiplier"), timeUnit: TimeUnit = SECONDS, supplier: Supplier<Callable<ListenableFuture<R>>>): ListenableFuture<R> {
+                  backoffMultiplier: Int = int("task.executor.backoff.multiplier"),
+                  timeUnit: TimeUnit = TimeUnit.valueOf(string("task.executor.retry.time.units")), supplier: Supplier<Callable<ListenableFuture<R>>>): ListenableFuture<R> {
         return async(taskId, 0, maxRetries, delay, backoffMultiplier, timeUnit, supplier)
     }
 

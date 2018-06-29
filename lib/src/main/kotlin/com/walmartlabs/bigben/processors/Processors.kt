@@ -42,6 +42,7 @@ import com.walmartlabs.bigben.processors.ProcessorConfig.Type.*
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Props.boolean
 import com.walmartlabs.bigben.utils.commons.Props.int
+import com.walmartlabs.bigben.utils.commons.Props.map
 import java.io.Serializable
 import java.lang.String.format
 import java.util.concurrent.ConcurrentHashMap
@@ -112,7 +113,7 @@ class ProcessorRegistry : EventProcessor<Event> {
             when (processorConfig?.type) {
                 MESSAGING -> processorCache.get(processorConfig.tenant!!) {
                     if (l.isInfoEnabled) l.info("creating message processor for tenant: ${processorConfig.tenant}")
-                    val mp = messageProducerFactory.create(processorConfig.tenant!!, processorConfig.props!!)
+                    val mp = messageProducerFactory.create(processorConfig.tenant!!, map("kafka.producer.config").mapKeys { it.key.removePrefix("kafka.producer.config.") } + processorConfig.props!!)
                     object : EventProcessor<Event> {
                         override fun invoke(e: Event): ListenableFuture<Event> {
                             if (l.isDebugEnabled) if (l.isDebugEnabled) l.debug("tenant: ${processorConfig.tenant}, processing event: ${e.xrefId}")

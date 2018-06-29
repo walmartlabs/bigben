@@ -30,10 +30,6 @@ import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.fetch
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.save
-import org.cassandraunit.CassandraCQLUnit
-import org.cassandraunit.utils.EmbeddedCassandraServerHelper
-import org.testng.annotations.AfterClass
-import org.testng.annotations.BeforeClass
 import org.testng.annotations.BeforeMethod
 import org.testng.annotations.Test
 import kotlin.test.assertEquals
@@ -50,16 +46,6 @@ class IntegrationTests {
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
             EventService.DEBUG_FLAG.set(false)
         }
-    }
-
-    @BeforeClass
-    fun `set up`() {
-        EmbeddedCassandraServerHelper.startEmbeddedCassandra(EmbeddedCassandraServerHelper.CASSANDRA_RNDPORT_YML_FILE)
-    }
-
-    @AfterClass
-    fun `tear down`() {
-        EmbeddedCassandraServerHelper.stopEmbeddedCassandra()
     }
 
     @BeforeMethod
