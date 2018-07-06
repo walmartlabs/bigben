@@ -23,6 +23,7 @@ import com.walmartlabs.bigben.BigBen.entityProvider
 import com.walmartlabs.bigben.entities.Event
 import com.walmartlabs.bigben.entities.EventRequest
 import com.walmartlabs.bigben.entities.EventResponse
+import java.time.ZonedDateTime
 import java.util.*
 import java.util.stream.Collectors
 
@@ -31,6 +32,10 @@ fun Event.toResponse() = eventResponse?.let { it }
         ?: EventResponse(id = xrefId, eventId = id, triggeredAt = processedAt?.toString(),
                 tenant = tenant, eventTime = eventTime?.toString(), payload = payload, eventStatus = status)
 
-fun EventResponse.event() = entityProvider<Event>().let { it.raw(it.selector(Event::class.java)) }.also { it.tenant = tenant; it.xrefId = id; triggeredAt = nowUTC().toString(); it.payload = payload; it.eventResponse = this }
+fun EventResponse.event() = entityProvider<Event>().let { it.raw(it.selector(Event::class.java)) }.also {
+    val t = ZonedDateTime.parse(triggeredAt)
+    it.tenant = tenant; it.xrefId = id; it.eventTime = t; it.payload = payload; it.eventResponse = this
+    it.id = eventId; it.bucketId = t.bucket(); it.processedAt = t
+}
 
 fun BitSet.toSet(): MutableSet<Int> = stream().boxed().collect(Collectors.toSet())!!

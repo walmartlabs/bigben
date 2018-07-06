@@ -87,7 +87,7 @@ task:
 generic.future.max.get.time: 60
 
 events:
-  disable.scheduler: false
+  disable.scheduler: true
   schedule.scan.interval.minutes: 1
   num.shard.submitters: 8
   receiver:
@@ -119,10 +119,15 @@ buckets:
     interval: 60
     interval.units: SECONDS
 
+modules:
+  - object: com.walmartlabs.bigben.cron.CronRunner
+    name: cron
 
-
-
-
-
-
-
+cron:
+  runner:
+    core.pool.size: 8
+  load:
+    max.retries: 10
+    delay: 1
+    backoff.multiplier: 1
+    time.units: "SECONDS"

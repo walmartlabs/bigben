@@ -31,14 +31,9 @@ import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.hz.Service
 import java.io.Serializable
-import java.time.LocalDateTime
-import java.time.ZoneOffset.UTC
-import java.time.format.DateTimeParseException
-import java.util.*
 import java.util.concurrent.Callable
 import javax.ws.rs.*
 import javax.ws.rs.core.MediaType.APPLICATION_JSON
-import javax.ws.rs.core.Response
 import javax.ws.rs.core.Response.Status.BAD_REQUEST
 import javax.ws.rs.core.Response.Status.PARTIAL_CONTENT
 import javax.ws.rs.core.Response.ok
@@ -134,38 +129,5 @@ class EventService(private val hz: Hz, private val service: Service,
 
     class ProcessRegisterTask(private val config: ProcessorConfig) : Serializable, Callable<ProcessorConfig?> {
         override fun call() = processorRegistry.register(config)
-    }
-
-    private fun String.base64() = Base64.getEncoder().encodeToString(this.json().toByteArray())
-
-    fun response(f: () -> Any?): Response {
-        val begin = LocalDateTime.now()
-        val r = try {
-            f()?.run { this as? Response.ResponseBuilder ?: ok(this) }
-                    ?: status(404).entity(mapOf("status" to "not found"))
-        } catch (e: Exception) {
-            val t = e.rootCause()!!
-            l.error("error in processing request", t)
-            val status = if (t is IllegalArgumentException || t is DateTimeParseException) 400 else 500
-            val message = "please contact engineering team with the below error signature"
-            status(status).entity(
-                    mutableMapOf("message"
-                            to (t.message?.let { """${t.message}${if (status == 500) " ($message)" else ""}""" }
-                            ?: "Unexpected error, $message")).apply {
-                        if (status == 500) {
-                            this["error"] = mapOf("stack" to t.stackTraceAsString()!!,
-                                    "node" to hz.hz.cluster.localMember.address.host,
-                                    "start_time" to begin,
-                                    "duration" to (LocalDateTime.now().toInstant(UTC).toEpochMilli() - begin.toInstant(UTC).toEpochMilli())
-                            ).json().run { if (DEBUG_FLAG.get()) this else base64() }
-                        }
-                    }
-            )
-        }
-        val end = LocalDateTime.now()
-        r.header("Start-Time", begin).header("End-Time", end)
-                .header("Duration", "${end.toInstant(UTC).toEpochMilli() - begin.toInstant(UTC).toEpochMilli()} ms")
-                .header("Node", hz.hz.cluster.localMember.address.host)
-        return r.build()
     }
 }

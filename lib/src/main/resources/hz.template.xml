@@ -58,6 +58,16 @@
         <min-eviction-check-millis>${map.evictionCheckMillis 2000}</min-eviction-check-millis>
         <merge-policy>${map.mergePolicy com.hazelcast.map.merge.LatestUpdateMapMergePolicy}</merge-policy>
     </map>
+    <map name="crons">
+        <in-memory-format>OBJECT</in-memory-format>
+        <map-store initial-mode="EAGER">
+            <class-name>com.walmartlabs.bigben.cron.CronMapStore</class-name>
+        </map-store>
+        <backup-count>${cron.backupCount 1}</backup-count>
+        <async-backup-count>${cron.async.backupCount 0}</async-backup-count>
+        <time-to-live-seconds>0</time-to-live-seconds>
+        <eviction-policy>NONE</eviction-policy>
+    </map>
     <serialization>
         <data-serializable-factories>
             <data-serializable-factory factory-id="1">com.walmartlabs.bigben.hz.HzObjectFactory

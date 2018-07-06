@@ -25,10 +25,12 @@ package com.walmartlabs.bigben.app
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider
 import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.api.EventService.Companion.DEBUG_FLAG
+import com.walmartlabs.bigben.cron.CronService
 import com.walmartlabs.bigben.entities.EventRequest
 import com.walmartlabs.bigben.entities.EventStatus.REJECTED
 import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.nowUTC
+import com.walmartlabs.bigben.extns.response
 import com.walmartlabs.bigben.utils.*
 import java.time.Duration
 import java.time.ZonedDateTime
@@ -59,7 +61,7 @@ class JsonProvider : JacksonJsonProvider(om)
 @Produces(APPLICATION_JSON)
 class ExceptionMapper : ExceptionMapper<Throwable> {
     override fun toResponse(t: Throwable): Response {
-        val r = BigBen.eventService.response { throw t }
+        val r = response { throw t }
         return Response.status(r.status)
                 .entity(r.entity.json()).apply { r.headers.forEach { t, u -> u.forEach { header(t, it) } } }
                 .header("Content-Type", "application/json")
@@ -90,10 +92,11 @@ class App : Application() {
                 " |____/|_|\\__, |____/ \\___|_| |_|\n" +
                 "           __/ |                 \n" +
                 "          |___/                  \n")
-        l.info("$BigBen initialization complete")
+        BigBen.init()
+        l.info("initialization complete")
     }
 
-    override fun getSingletons() = setOf(BigBen.eventService, EventGenerator)
+    override fun getSingletons() = setOf(BigBen.eventService, EventGenerator, CronService)
     override fun getClasses() = setOf(JsonProvider::class.java, com.walmartlabs.bigben.app.ExceptionMapper::class.java, DebugFlagSetter::class.java)
 }
 

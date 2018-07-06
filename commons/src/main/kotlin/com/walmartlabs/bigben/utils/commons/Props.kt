@@ -59,7 +59,7 @@ object Props {
         }
     }
 
-    fun exists(name: String): Boolean = get(name) != NULL
+    fun exists(name: String): Boolean = get(name) != null
 
     fun int(name: String, defaultValue: Int = 0) = get(name) as? Int ?: defaultValue
 
@@ -80,6 +80,9 @@ object Props {
     fun map(name: String) = get(name, true) as Json
 
     @Suppress("UNCHECKED_CAST")
+    fun list(name: String) = get(name, true) as List<Any>
+
+    @Suppress("UNCHECKED_CAST")
     fun flattenedMap(json: Json): Json {
         return json.entries.map { e ->
             if (e.value !is Map<*, *>) listOf(e.key to e.value) else {
@@ -90,9 +93,11 @@ object Props {
 
     private fun get(name: String, required: Boolean = false): Any? {
         val value = cache.get(name) { resolver(name) }
-        if (value == NULL && required)
-            throw IllegalArgumentException("no property with name: $name")
-        else return value
+        return when {
+            value == NULL && required -> throw IllegalArgumentException("no property with name: $name")
+            value == NULL -> null
+            else -> value
+        }
     }
 
     private val NULL: Any = Any()
