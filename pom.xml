@@ -20,7 +20,8 @@
         <module>app</module>
     </modules>
     <name>BigBen:parent</name>
-    <url>http://maven.apache.org</url>
+    <url>http://walmartlabds.com</url>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.2.20</kotlin.version>
@@ -35,6 +36,36 @@
         <commons-lang3.version>3.7</commons-lang3.version>
         <commons-text.version>1.2</commons-text.version>
     </properties>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>wmt</id>
+            <name>WalmartLabs Open Source Developers</name>
+            <email>opensource@walmartlabs.com</email>
+            <roles>
+                <role>Contributor</role>
+            </roles>
+            <timezone>-8</timezone>
+        </developer>
+        <developer>
+            <id>smalik3</id>
+            <name>Sandeep Malik</name>
+            <email>smalik@walmartlabs.com</email>
+            <roles>
+                <role>Project Lead</role>
+            </roles>
+            <timezone>-8</timezone>
+        </developer>
+    </developers>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -135,7 +166,6 @@
         </dependency>
     </dependencies>
 
-
     <build>
         <pluginManagement>
             <plugins>
@@ -207,6 +237,11 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>2.22.0</version>
+                    <configuration>
+                        <systemPropertyVariables>
+                            <buildDirectory>${project.build.directory}</buildDirectory>
+                        </systemPropertyVariables>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -248,7 +283,7 @@
                     <version>1.16</version>
                     <configuration>
                         <inceptionYear>2016</inceptionYear>
-                        <copyrightOwners>Sandeep Malik</copyrightOwners>
+                        <copyrightOwners>Walmart Inc.</copyrightOwners>
                         <addJavaLicenseAfterPackage>false</addJavaLicenseAfterPackage>
                         <organizationName>Walmart Inc.</organizationName>
                         <licenseFile>${project.basedir}/LICENSE.txt</licenseFile>
@@ -311,56 +346,11 @@
         </repository>
     </repositories>
 
-    <pluginRepositories>
-        <pluginRepository>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-                <updatePolicy>daily</updatePolicy>
-            </snapshots>
-            <id>central</id>
-            <url>http://central</url>
-        </pluginRepository>
-        <pluginRepository>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-            <id>nexus_plugin_release</id>
-            <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public/</url>
-        </pluginRepository>
-        <pluginRepository>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <id>nexus_plugin_snapshot</id>
-            <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public_snapshot/</url>
-        </pluginRepository>
-    </pluginRepositories>
-
-    <distributionManagement>
-        <repository>
-            <id>pangaea_releases</id>
-            <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_releases</url>
-        </repository>
-        <snapshotRepository>
-            <id>pangaea_snapshots</id>
-            <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_snapshots</url>
-        </snapshotRepository>
-    </distributionManagement>
-
     <scm>
-        <connection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</connection>
-        <developerConnection>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</developerConnection>
-        <tag>os</tag>
-        <url>scm:git:git@gecgithub01.walmart.com:services/dist-evt-scheduler.git</url>
+        <connection>scm:git:git@gecgithub01.walmart.com:smalik3/bigben.git</connection>
+        <developerConnection>scm:git:git@gecgithub01.walmart.com:smalik3/bigben.git</developerConnection>
+        <tag>master</tag>
+        <url>scm:git:git@gecgithub01.walmart.com:smalik3/bigben.git</url>
     </scm>
 
 </project>
