@@ -21,15 +21,18 @@ package com.walmartlabs.bigben.cassandra.tests
 
 import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.entities.EventStatus.PROCESSED
-import com.walmartlabs.bigben.extns.bucket
-import com.walmartlabs.bigben.extns.nowUTC
+import com.walmartlabs.bigben.entities.KV
+import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.providers.domain.cassandra.BucketC
 import com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider.Companion.mappingManager
 import com.walmartlabs.bigben.providers.domain.cassandra.EventC
 import com.walmartlabs.bigben.providers.domain.cassandra.EventLookupC
+import com.walmartlabs.bigben.utils.commons.Props
 import org.testng.annotations.Test
 import java.util.*
+import java.util.concurrent.TimeUnit.MINUTES
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 /**
  * Created by smalik3 on 3/2/18
@@ -38,7 +41,7 @@ class ORMTests {
 
     companion object {
         init {
-            System.setProperty("props", "file://bigben-test.yaml")
+            Props.load("file://bigben-test.yaml")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
             EventService.DEBUG_FLAG.set(false)
         }
@@ -71,5 +74,21 @@ class ORMTests {
         mapper.save(el)
         val newEventLookupC = mapper[el.tenant, el.xrefId]
         assertEquals(el, newEventLookupC)
+    }
+
+    @Test
+    fun `test kv`() {
+        val key = UUID.randomUUID().toString()
+        save<KV> { it.key = key; it.column = 1.toString(); it.value = "Value1" }.get(1, MINUTES)
+        save<KV> { it.key = key; it.column = 2.toString(); it.value = "Value2" }.get(1, MINUTES)
+        val kv = fetch<KV> { it.key = key; it.column = 1.toString() }.get(1, MINUTES)
+        assertNotNull(kv)
+        assertEquals(kv!!.value, "Value1")
+        val kvs = kvs { it.key = key }.get(1, MINUTES)
+        assertEquals(kvs.size, 2)
+        kvs.associate { it.column to it.value }.apply {
+            assertEquals(this[1.toString()], "Value1")
+            assertEquals(this[2.toString()], "Value2")
+        }
     }
 }

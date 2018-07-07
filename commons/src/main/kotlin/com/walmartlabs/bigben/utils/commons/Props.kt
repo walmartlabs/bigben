@@ -20,13 +20,12 @@
 package com.walmartlabs.bigben.utils.commons
 
 import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
-import com.walmartlabs.bigben.utils.Json
-import com.walmartlabs.bigben.utils.logger
+import com.walmartlabs.bigben.utils.*
 import java.util.*
+import java.util.concurrent.atomic.AtomicReference
+import java.util.function.Supplier
 
 /**
  * Created by smalik3 on 2/21/18
@@ -34,29 +33,37 @@ import java.util.*
 object Props {
 
     private val l = logger<Props>()
-    private val props: Json
+    private val props = AtomicReference<Json>()
 
     private val cache: Cache<String, Any> = CacheBuilder.newBuilder().build<String, Any>()
 
-    init {
-        val om = ObjectMapper(YAMLFactory())
-        require(System.getProperty("props") != null) { "no 'props' system property found, system can't start" }
-        l.info("initializing the properties")
-        val p = System.getProperty("props")
-        props = when {
-            p.startsWith("file://") -> {
-                val f = p.substring("file://".length)
+    fun load(supplier: Supplier<String>) = load(supplier.get())
+
+    fun load(props: String) {
+        l.info("loading props")
+        this.props.set(when {
+            props.startsWith("file://") -> {
+                val f = props.substring("file://".length)
                 l.info("reading properties from the file: $f")
                 val url = Props::class.java.classLoader.getResource(f)
                 require(url != null) { "could not resolve $f to a url" }
-                val x: Json = om.readValue(url, object : TypeReference<Json>() {}); x
+                val x: Json = omYaml.readValue(url, object : TypeReference<Json>() {}); x
             }
-            p.startsWith("base64:") -> {
-                l.info("decoding encoded properties")
-                val x: Json = om.readValue(String(Base64.getDecoder().decode(p.substring("base64:".length))), object : TypeReference<Json>() {}); x
+            props.startsWith("base64://") -> {
+                l.info("loading properties from encoded string")
+                val x: Json = omYaml.readValue(String(Base64.getDecoder().decode(props.substring("base64://".length))), object : TypeReference<Json>() {}); x
             }
-            else -> throw IllegalArgumentException("unknown properties format: $p")
-        }
+            props.startsWith("yaml://") -> {
+                l.info("loading properties from yaml configuration")
+                val x: Json = omYaml.readValue(props.substring("yaml://".length), object : TypeReference<Json>() {}); x
+            }
+            props.startsWith("json://") -> {
+                l.info("loading properties from json configuration")
+                val x: Json = om.readValue(props.substring("json://".length), object : TypeReference<Json>() {}); x
+            }
+            else -> throw IllegalArgumentException("unknown properties format: $props")
+        }).apply { cache.invalidateAll() }
+        if (l.isDebugEnabled) l.debug("loaded props: \n${this.props.get().yaml()}")
     }
 
     fun exists(name: String): Boolean = get(name) != null
@@ -102,7 +109,7 @@ object Props {
 
     private val NULL: Any = Any()
 
-    private fun resolver(name: String, p: Json = props): Any {
+    private fun resolver(name: String, p: Json = props.get()): Any {
         if (p.containsKey(name)) return p[name]!!
         else if (name.contains(".")) {
             val parts = name.split(".", limit = 2)

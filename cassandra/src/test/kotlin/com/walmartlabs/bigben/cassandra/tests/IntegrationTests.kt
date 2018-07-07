@@ -42,7 +42,7 @@ class IntegrationTests {
 
     companion object {
         init {
-            System.setProperty("props", "file://bigben-test.yaml")
+            System.setProperty("bigben.props", "file://bigben-test.yaml")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
             EventService.DEBUG_FLAG.set(false)
         }

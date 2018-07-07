@@ -71,7 +71,7 @@ class BigBenTests {
 
     companion object {
         init {
-            System.setProperty("props", "file://bigben-test.yaml")
+            System.setProperty("bigben.props", "file://bigben-test.yaml")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
             EventService.DEBUG_FLAG.set(false)
         }
@@ -239,11 +239,13 @@ class BigBenTests {
                     ))
             ).apply { assertEquals(this.status, 200) }
             val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "http", "Payload1")
+            println("event request: $eReq")
             server = HttpServer.create(InetSocketAddress(port), 0)
             val latch = CountDownLatch(1)
             server.createContext("/test") {
                 try {
                     val eResp = EventResponse::class.java.fromJson(String(it.requestBody.readBytes()))
+                    println("event response: $eResp")
                     assertEquals(it.requestHeaders.getFirst("header"), "Header1")
                     assertEquals(eReq.id, eResp.id)
                     assertEquals(eReq.eventTime, eResp.eventTime)
@@ -256,12 +258,13 @@ class BigBenTests {
                         it.sendResponseHeaders(200, length.toLong())
                         it.responseBody.write(toByteArray())
                     }
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     e.printStackTrace()
                     mapOf("status" to "error").json().apply {
                         it.sendResponseHeaders(500, length.toLong())
                         it.responseBody.write(toByteArray())
                     }
+                    throw AssertionError("test failed")
                 } finally {
                     it.close()
                 }

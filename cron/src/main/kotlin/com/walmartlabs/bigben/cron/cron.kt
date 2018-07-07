@@ -8,10 +8,6 @@ import com.cronutils.parser.CronParser
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY
 import com.google.common.util.concurrent.ListenableFuture
-import com.hazelcast.map.AbstractEntryProcessor
-import com.hazelcast.nio.ObjectDataInput
-import com.hazelcast.nio.ObjectDataOutput
-import com.hazelcast.nio.serialization.DataSerializable
 import com.walmartlabs.bigben.BigBen.hz
 import com.walmartlabs.bigben.BigBen.processorRegistry
 import com.walmartlabs.bigben.cron.CronRunner.crons
@@ -23,7 +19,6 @@ import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Module
 import com.walmartlabs.bigben.utils.commons.Props.int
-import java.io.Serializable
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.time.temporal.ChronoUnit.*
@@ -35,7 +30,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.ws.rs.*
 import javax.ws.rs.core.MediaType.APPLICATION_JSON
-import kotlin.collections.ArrayList
 
 /**
  * Created by smalik3 on 6/29/18
@@ -95,9 +89,6 @@ object CronRunner : Module {
                     @Suppress("UNCHECKED_CAST")
                     val matches = (crons.executeOnKeys(crons.localKeySet(), CronMatchExecutionTimeProcessor(
                             now.toInstant().toEpochMilli())) as MutableMap<Int, List<String>>).values.flatten().map { Cron::class.java.fromJson(it) }
-                    /*val matches = mutableListOf<Cron>().apply {
-                        //crons.localKeySet().forEach { crons[it]!!.crons.forEach { if (it.value.executionTime().isMatch(now)) this.add(it.value) } }
-                    }*/
                     if (matches.isNotEmpty()) {
                         matches.map { c ->
                             val e = EventResponse(c.id, nowString, c.tenant, eventId = "${c.type}/$nowString",
@@ -126,26 +117,10 @@ object CronRunner : Module {
             f.transformAsync {
                 save<KV> {
                     it.key = "${cron.cronId()}:${cron.toGranularity(executionTime)}"
-                    it.column = executionTime.toString(); it.value = event.json()
+                    it.column = executionTime.toString(); it.value = event.toResponse().yaml()
                 }.transform { cron }
             }
         } else f
-    }
-
-    class CronMatchExecutionTimeProcessor(private var millis: Long? = null) : AbstractEntryProcessor<Int, Crons>(true), DataSerializable {
-        override fun process(entry: MutableMap.MutableEntry<Int, Crons>): List<String> {
-            val zdt = utc(millis!!)
-            return ArrayList(entry.value.crons.filter { it.value.executionTime().isMatch(zdt) }.values.map { it.json() })
-        }
-
-        override fun writeData(out: ObjectDataOutput) = out.run { println("here in write"); writeLong(millis!!) }
-        override fun readData(`in`: ObjectDataInput) = `in`.run { millis = readLong(); println("here in read") }
-    }
-
-    class CronUpdateExecutionTimeEntryProcessor(private val cronId: String, private val lastExecution: String) : AbstractEntryProcessor<Int, Crons>(true), Serializable {
-        override fun process(entry: MutableMap.MutableEntry<Int, Crons?>): Any? {
-            return entry.setValue(entry.value.apply { this!!.crons[cronId]?.let { it.lastExecutionTime = ZonedDateTime.parse(lastExecution) } }).let { null }
-        }
     }
 }
 
@@ -165,7 +140,7 @@ object CronService {
         val cronId = cron.cronId()
         val pId = cron.partition()
         if (l.isDebugEnabled) l.debug("cron: $cronId hashed to partition: $pId")
-        crons.executeOnKey(pId, CronEntryProcessor(cron.copy(lastUpdated = nowUTC(), lastExecutionTime = null)))
+        crons.executeOnKey(pId, CronEntryProcessor(cron.copy(lastUpdated = nowUTC(), lastExecutionTime = null).json()))
         if (l.isDebugEnabled) l.debug("cron: $cronId updated successfully")
         mapOf("status" to "OK")
     }
@@ -194,15 +169,9 @@ object CronService {
         crons.values.flatMap { it.crons.values.filter { it.tenant == tenant && it.id == id } }.map { CronDescription(it, describe?.run { it.describe() }) }
     }
 
-    class CronDeleteEntryProcessor(private val cronId: String) : AbstractEntryProcessor<Int, Crons>(true), Serializable {
-        override fun process(entry: MutableMap.MutableEntry<Int, Crons?>): Any? {
-            return entry.setValue(entry.value.apply { this!!.crons.remove(cronId) }).let { null }
-        }
-    }
-
-    class CronEntryProcessor(private val cron: Cron) : AbstractEntryProcessor<Int, Crons>(true), Serializable {
-        override fun process(entry: MutableMap.MutableEntry<Int, Crons?>): Any? {
-            return entry.setValue(entry.value.apply { this!!.crons[cron.cronId()] = cron }).let { null }
-        }
+    @GET
+    @Path("/describe")
+    fun describe(cron: Cron) = response {
+        CronDescription(cron, cron.describe())
     }
 }

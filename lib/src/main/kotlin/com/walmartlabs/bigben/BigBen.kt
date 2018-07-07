@@ -29,6 +29,7 @@ import com.walmartlabs.bigben.processors.MessageProducerFactory
 import com.walmartlabs.bigben.processors.ProcessorRegistry
 import com.walmartlabs.bigben.utils.Json
 import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.commons.Props.boolean
 import com.walmartlabs.bigben.utils.commons.Props.exists
 import com.walmartlabs.bigben.utils.commons.Props.int
@@ -67,10 +68,10 @@ object BigBen {
 
     init {
         try {
-            if (System.getProperty("props") == null) {
-                l.warn("missing 'props' system property, using the default one: bigben.yaml")
-                System.setProperty("props", "file:///bigben.yaml")
-            }
+            if (System.getProperty("bigben.props") == null) {
+                l.warn("missing 'bigben.props' system property, using the default: file://bigben.yaml")
+                Props.load("file:///bigben.yaml")
+            } else Props.load(System.getProperty("bigben.props"))
             l.info("initializing entity provider")
             @Suppress("UNCHECKED_CAST")
             entityProvider = Class.forName(string("domain.entity.provider.class")).newInstance() as EntityProvider<Any>

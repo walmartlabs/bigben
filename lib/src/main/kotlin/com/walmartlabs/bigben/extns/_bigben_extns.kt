@@ -34,7 +34,7 @@ fun Event.toResponse() = eventResponse?.let { it }
 
 fun EventResponse.event() = entityProvider<Event>().let { it.raw(it.selector(Event::class.java)) }.also {
     val t = ZonedDateTime.parse(triggeredAt)
-    it.tenant = tenant; it.xrefId = id; it.eventTime = t; it.payload = payload; it.eventResponse = this
+    it.tenant = tenant; it.xrefId = id; it.eventTime = ZonedDateTime.parse(eventTime)!!; it.payload = payload
     it.id = eventId; it.bucketId = t.bucket(); it.processedAt = t
 }
 
