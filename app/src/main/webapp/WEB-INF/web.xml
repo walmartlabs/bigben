@@ -31,6 +31,10 @@
             <param-name>javax.ws.rs.Application</param-name>
             <param-value>com.walmartlabs.bigben.app.App</param-value>
         </init-param>
+        <init-param>
+            <param-name>jaxrs.providers</param-name>
+            <param-value>com.walmartlabs.bigben.app.JsonProvider,com.walmartlabs.bigben.app.ExceptionMapper,com.walmartlabs.bigben.app.DebugFlagSetter</param-value>
+        </init-param>
         <load-on-startup>1</load-on-startup>
     </servlet>
 

@@ -32,6 +32,8 @@ import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.response
 import com.walmartlabs.bigben.utils.*
+import com.walmartlabs.bigben.utils.commons.Module
+import org.slf4j.Logger
 import java.time.Duration
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
@@ -50,6 +52,7 @@ import javax.ws.rs.core.MediaType.APPLICATION_JSON
 import javax.ws.rs.core.Response
 import javax.ws.rs.ext.ExceptionMapper
 import javax.ws.rs.ext.Provider
+import kotlin.system.exitProcess
 
 @Provider
 @Consumes("*/*")
@@ -79,21 +82,39 @@ class DebugFlagSetter : ContainerRequestFilter {
 
 class App : Application() {
 
-    private val l = logger<App>()
-
     init {
-        l.info("initializing BigBen")
-        println("\n" +
-                "  ____  _       ____             \n" +
-                " |  _ \\(_)     |  _ \\            \n" +
-                " | |_) |_  __ _| |_) | ___ _ __  \n" +
-                " |  _ <| |/ _` |  _ < / _ \\ '_ \\ \n" +
-                " | |_) | | (_| | |_) |  __/ | | |\n" +
-                " |____/|_|\\__, |____/ \\___|_| |_|\n" +
-                "           __/ |                 \n" +
-                "          |___/                  \n")
-        BigBen.init()
-        l.info("initialization complete")
+        try {
+            val lifecycle = typeRefYaml<Map<String, String?>>(App::class.java.classLoader.getResource("/bigben-lifecycle.yaml").readText())
+            initPhase("pre-init", lifecycle, null)
+            val l = logger<App>()
+            l.info("phase:pre-init finished")
+            println("\n" +
+                    "  ____  _       ____             \n" +
+                    " |  _ \\(_)     |  _ \\            \n" +
+                    " | |_) |_  __ _| |_) | ___ _ __  \n" +
+                    " |  _ <| |/ _` |  _ < / _ \\ '_ \\ \n" +
+                    " | |_) | | (_| | |_) |  __/ | | |\n" +
+                    " |____/|_|\\__, |____/ \\___|_| |_|\n" +
+                    "           __/ |                 \n" +
+                    "          |___/                  \n")
+            initPhase("init", lifecycle, l)
+            initPhase("post-init", lifecycle, l)
+            l.info("Bigben => successfully started")
+        } catch (e: Exception) {
+            try {
+                val l: Logger = logger<App>()
+                l.error("Bigben:error => unknown error, system will exit", e.rootCause()!!)
+            } catch (ignore: Exception) {
+            }
+            exitProcess(1)
+        }
+    }
+
+    private fun initPhase(phase: String, lifecycle: Map<String, String?>, l: Logger?) {
+        l?.info("phase:$phase started")
+        lifecycle["$phase-class"]?.run { (Class.forName(this).newInstance() as Module).init() }
+                ?: lifecycle["$phase-object"]?.run { (Class.forName(this).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null) as Module).init() }
+        l?.info("phase:$phase finished")
     }
 
     override fun getSingletons() = setOf(BigBen.eventService, EventGenerator, CronService)

@@ -47,7 +47,7 @@ import kotlin.system.exitProcess
 /**
  * Created by smalik3 on 6/24/18
  */
-object BigBen {
+object BigBen : Module {
     private val l = logger<BigBen>()
 
     val eventService: EventService
@@ -70,7 +70,7 @@ object BigBen {
         try {
             if (System.getProperty("bigben.props") == null) {
                 l.warn("missing 'bigben.props' system property, using the default: file://bigben.yaml")
-                Props.load("file:///bigben.yaml")
+                Props.load("file://bigben.yaml")
             } else Props.load(System.getProperty("bigben.props"))
             l.info("initializing entity provider")
             @Suppress("UNCHECKED_CAST")
@@ -112,7 +112,7 @@ object BigBen {
         }
     }
 
-    fun init() {
+    override fun init() {
         modules = unmodifiableMap(if (exists("modules")) {
             @Suppress("UNCHECKED_CAST")
             val modules = list("modules") as List<Json>

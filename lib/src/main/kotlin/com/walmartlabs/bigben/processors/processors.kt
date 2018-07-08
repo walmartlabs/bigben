@@ -163,11 +163,22 @@ class ProcessorRegistry : EventProcessor<Event> {
                         }
                     }
                 }
-                CUSTOM_CLASS -> processorCache.get(processorConfig.tenant!!) {
+                CUSTOM_CLASS -> processorCache.get(processorConfig.tenant!!) custom@{
                     try {
                         @Suppress("UNCHECKED_CAST")
-                        (Class.forName(processorConfig.props!!["eventProcessorClass"].toString()) as Class<EventProcessor<Event>>)
-                                .getConstructor(String::class.java, Map::class.java).newInstance(processorConfig.tenant, processorConfig.props)
+                        (Class.forName(processorConfig.props!!["eventProcessorClass"].toString()) as Class<EventProcessor<Event>>).run {
+                            constructors.forEach {
+                                when {
+                                    it.parameterCount == 0 -> return@custom it.newInstance() as EventProcessor<Event>
+                                    it.parameterCount == 2
+                                            && it.parameterTypes[0] == String::class.java
+                                            && Map::class.java.isAssignableFrom(it.parameterTypes[1]) ->
+                                        return@custom it.newInstance(processorConfig.tenant, processorConfig.props) as EventProcessor<Event>
+                                }
+                            }
+                            throw IllegalArgumentException("no suitable constructor found for custom processor: $this, " +
+                                    "either a no-args constructor or a constructor with parameters (String, Map<String, Object>) is required")
+                        }
                     } catch (ex: Exception) {
                         throw RuntimeException(ex.rootCause())
                     }
