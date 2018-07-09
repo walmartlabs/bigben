@@ -337,6 +337,18 @@
         </pluginManagement>
     </build>
 
+    <distributionManagement>
+        <repository>
+            <id>pangaea_releases</id>
+            <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_releases</url>
+        </repository>
+        <snapshotRepository>
+            <id>pangaea_snapshots</id>
+            <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_snapshots</url>
+            <uniqueVersion>false</uniqueVersion>
+        </snapshotRepository>
+    </distributionManagement>
+
     <repositories>
         <repository>
             <releases>
