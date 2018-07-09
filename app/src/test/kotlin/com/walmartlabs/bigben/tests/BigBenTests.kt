@@ -67,7 +67,7 @@ import kotlin.test.assertTrue
 /**
  * Created by smalik3 on 4/11/18
  */
-private class BigBenTests {
+class BigBenTests {
 
     companion object {
         init {

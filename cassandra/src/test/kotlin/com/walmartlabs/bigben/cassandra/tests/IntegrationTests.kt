@@ -38,7 +38,7 @@ import kotlin.test.assertTrue
 /**
  * Created by smalik3 on 4/12/18
  */
-private class IntegrationTests {
+class IntegrationTests {
 
     companion object {
         init {

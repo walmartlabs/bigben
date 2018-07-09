@@ -37,7 +37,7 @@ import kotlin.test.assertNotNull
 /**
  * Created by smalik3 on 3/2/18
  */
-private class ORMTests {
+class ORMTests {
 
     companion object {
         init {
