@@ -1,11 +1,32 @@
 tools:
-  jdk:
-    - 8
-  maven:
-    - 3.3.9
+  jdk: 8
+  maven: 3.5.2
+
+triggers:
+  - manual: Run default
+  - manual:
+      name: Release Build
+      call: release
 
 flows:
-   default:
-   - mvn clean install
-   pr:
-   - call: default
+  default:
+    - call: versionsCheck
+    - call: build
+
+  pr:
+    - echo "Running build for $GITHUB_PR_URL"
+    - call: versionsCheck
+    - (name Maven build) mvn -B clean install
+
+  versionsCheck:
+    - (name JDK Version) java -version
+    - (name Maven version) mvn -v
+
+  build:
+   - exposeVars(maven)
+   - (name Project information) echo "Building ${MAVEN_GROUP_ID}:${MAVEN_ARTIFACT_ID}:${MAVEN_VERSION}"
+   - (name Maven deploy) mvn -B clean deploy
+
+  release:
+    - call: versionsCheck
+    - (name Maven release) mvn -B clean release:prepare release:perform

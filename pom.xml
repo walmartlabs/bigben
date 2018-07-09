@@ -283,7 +283,10 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-release-plugin</artifactId>
-                    <version>2.5.2</version>
+                    <version>2.5.3</version>
+                    <configuration>
+                        <localCheckout>true</localCheckout>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
@@ -370,10 +373,10 @@
     </repositories>
 
     <scm>
-        <connection>scm:git:git@gecgithub01.walmart.com:smalik3/bigben.git</connection>
-        <developerConnection>scm:git:git@gecgithub01.walmart.com:smalik3/bigben.git</developerConnection>
-        <tag>master</tag>
-        <url>scm:git:git@gecgithub01.walmart.com:smalik3/bigben.git</url>
+        <connection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</connection>
+        <developerConnection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben</developerConnection>
+        <tag>HEAD</tag>
+        <url>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</url>
     </scm>
 
 </project>
