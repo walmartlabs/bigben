@@ -25,8 +25,8 @@ flows:
   build:
    - exposeVars(maven)
    - (name Project information) echo "Building ${MAVEN_GROUP_ID}:${MAVEN_ARTIFACT_ID}:${MAVEN_VERSION}"
-   - (name Maven deploy) mvn -B clean deploy
+   - (name Maven deploy) mvn -B -DskipTests clean deploy
 
   release:
     - call: versionsCheck
-    - (name Maven release) mvn -B clean release:prepare release:perform
+    - (name Maven release) mvn -B -DskipTests clean release:prepare release:perform
