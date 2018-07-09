@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <!--<parent>
         <groupId>com.walmartlabs</groupId>
         <artifactId>walmartlabs-pom</artifactId>
@@ -10,7 +9,7 @@
     <groupId>com.walmartlabs.opensource.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <modules>
         <module>commons</module>
         <module>lib</module>
@@ -71,27 +70,27 @@
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-commons</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
+                <version>1.0.0</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
+                <version>1.0.0</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-cassandra</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
+                <version>1.0.0</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-kafka</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
+                <version>1.0.0</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>cron</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
+                <version>1.0.0</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -387,7 +386,7 @@
     <scm>
         <connection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</connection>
         <developerConnection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben</developerConnection>
-        <tag>HEAD</tag>
+        <tag>bigben-1.0.0</tag>
         <url>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</url>
     </scm>
 
