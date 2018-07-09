@@ -9,7 +9,7 @@
     <groupId>com.walmartlabs.opensource.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>1.0.1</version>
     <modules>
         <module>commons</module>
         <module>lib</module>
@@ -70,27 +70,27 @@
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-commons</artifactId>
-                <version>1.0.1-SNAPSHOT</version>
+                <version>1.0.1</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.0.1-SNAPSHOT</version>
+                <version>1.0.1</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-cassandra</artifactId>
-                <version>1.0.1-SNAPSHOT</version>
+                <version>1.0.1</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>bigben-kafka</artifactId>
-                <version>1.0.1-SNAPSHOT</version>
+                <version>1.0.1</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.opensource.bigben</groupId>
                 <artifactId>cron</artifactId>
-                <version>1.0.1-SNAPSHOT</version>
+                <version>1.0.1</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -386,7 +386,7 @@
     <scm>
         <connection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</connection>
         <developerConnection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben</developerConnection>
-        <tag>HEAD</tag>
+        <tag>bigben-1.0.1</tag>
         <url>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</url>
     </scm>
 
