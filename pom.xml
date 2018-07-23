@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
-    <!--<parent>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
         <groupId>com.walmartlabs</groupId>
         <artifactId>walmartlabs-pom</artifactId>
         <version>1</version>
-    </parent>-->
-    <modelVersion>4.0.0</modelVersion>
-    <groupId>com.walmartlabs.opensource.bigben</groupId>
+    </parent>
+    <groupId>com.walmartlabs.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
     <version>1.0.2-SNAPSHOT</version>
@@ -68,27 +69,27 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>com.walmartlabs.opensource.bigben</groupId>
+                <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-commons</artifactId>
                 <version>1.0.2-SNAPSHOT</version>
             </dependency>
             <dependency>
-                <groupId>com.walmartlabs.opensource.bigben</groupId>
+                <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
                 <version>1.0.2-SNAPSHOT</version>
             </dependency>
             <dependency>
-                <groupId>com.walmartlabs.opensource.bigben</groupId>
+                <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cassandra</artifactId>
                 <version>1.0.2-SNAPSHOT</version>
             </dependency>
             <dependency>
-                <groupId>com.walmartlabs.opensource.bigben</groupId>
+                <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-kafka</artifactId>
                 <version>1.0.2-SNAPSHOT</version>
             </dependency>
             <dependency>
-                <groupId>com.walmartlabs.opensource.bigben</groupId>
+                <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>cron</artifactId>
                 <version>1.0.2-SNAPSHOT</version>
             </dependency>

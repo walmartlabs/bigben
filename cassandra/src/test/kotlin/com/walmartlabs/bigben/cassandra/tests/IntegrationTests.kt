@@ -51,11 +51,16 @@ class IntegrationTests {
     @BeforeMethod
     private fun `clean up db`() {
         println("cleaning up the db")
-        (BigBen.entityProvider.unwrap() as Session).apply {
-            execute("truncate bigben.events;")
-            execute("truncate bigben.lookups;")
-            execute("truncate bigben.buckets;")
-            execute("truncate bigben.kv_table;")
+        try {
+            (BigBen.entityProvider.unwrap() as Session).apply {
+                execute("truncate bigben.events;")
+                execute("truncate bigben.lookups;")
+                execute("truncate bigben.buckets;")
+                execute("truncate bigben.kv_table;")
+            }
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            throw e
         }
     }
 

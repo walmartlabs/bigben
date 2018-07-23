@@ -108,7 +108,7 @@ object BigBen : Module {
             l.info("BigBen initialized successfully")
         } catch (e: Throwable) {
             l.error("error in starting BigBen, the system will exit", e.rootCause())
-            exitProcess(1)
+            throw ExceptionInInitializerError(e)
         }
     }
 

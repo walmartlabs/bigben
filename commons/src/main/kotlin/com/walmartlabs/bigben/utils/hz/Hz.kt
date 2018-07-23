@@ -47,6 +47,7 @@ class Hz {
 
     init {
         val config = typeRefJson<Json>(flattenedMap(map("hz")).json()).let { map ->
+            if(l.isDebugEnabled) l.debug("using the hazelcast config from: ${Hz::class.java.getResource(string("hz.template"))}")
             val template = String(Hz::class.java.getResourceAsStream(string("hz.template")).run { readBytes().also { close() } })
             StrSubstitutor(object : StrLookup<Any>() {
                 override fun lookup(key: String): String? {
