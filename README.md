@@ -44,10 +44,10 @@ for a full description of various design elements of `BigBen`
 
 *It is strongly recommended to use `kafka` for better scalability*
 
-![inflow](/docs/assets/inflow.png, "Events Inflow diagram")
+![inflow](/docs/assets/inflow.png "Events Inflow diagram")
 
 ## Shard
-![shard design](https://cdn-images-1.medium.com/max/1600/1*euaHLOnw6G96SigfXxWhtA.png, "BigBen processing flow")
+![shard design](https://cdn-images-1.medium.com/max/1600/1*euaHLOnw6G96SigfXxWhtA.png "BigBen processing flow")
 
             
     
