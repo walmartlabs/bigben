@@ -35,6 +35,7 @@
         <jackson-module-kotlin.version>2.9.4.1</jackson-module-kotlin.version>
         <commons-lang3.version>3.7</commons-lang3.version>
         <commons-text.version>1.2</commons-text.version>
+        <skipTests>false</skipTests>
     </properties>
 
     <licenses>
@@ -261,6 +262,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>2.22.0</version>
                     <configuration>
+                        <skipTests>${skipTests}</skipTests>
                         <systemPropertyVariables>
                             <buildDirectory>${project.build.directory}</buildDirectory>
                         </systemPropertyVariables>
@@ -336,53 +338,6 @@
             </plugins>
         </pluginManagement>
     </build>
-
-    <distributionManagement>
-        <repository>
-            <id>pangaea_releases</id>
-            <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_releases</url>
-        </repository>
-        <snapshotRepository>
-            <id>pangaea_snapshots</id>
-            <url>http://gec-maven-nexus.walmart.com/nexus/content/repositories/pangaea_snapshots</url>
-            <uniqueVersion>false</uniqueVersion>
-        </snapshotRepository>
-    </distributionManagement>
-
-    <repositories>
-        <repository>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-            <id>nexus_release</id>
-            <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public/</url>
-        </repository>
-        <repository>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-                <updatePolicy>daily</updatePolicy>
-            </snapshots>
-            <id>central</id>
-            <url>http://central</url>
-        </repository>
-        <repository>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-                <updatePolicy>daily</updatePolicy>
-            </snapshots>
-            <id>nexus_snapshot</id>
-            <url>http://gec-maven-nexus.walmart.com/nexus/content/groups/public_snapshot/</url>
-        </repository>
-    </repositories>
 
     <scm>
         <connection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</connection>

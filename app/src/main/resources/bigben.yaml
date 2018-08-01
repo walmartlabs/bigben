@@ -87,7 +87,7 @@ task:
 generic.future.max.get.time: 60
 
 events:
-  disable.scheduler: true
+  disable.scheduler: false
   schedule.scan.interval.minutes: 1
   num.shard.submitters: 8
   receiver:
@@ -115,9 +115,6 @@ buckets:
   background:
     load.fetch.size: 100
     load.wait.interval.seconds: 15
-  checkpoint:
-    interval: 60
-    interval.units: SECONDS
 
 modules:
   - object: com.walmartlabs.bigben.cron.CronRunner

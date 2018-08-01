@@ -97,11 +97,11 @@ class EventService(private val hz: Hz, private val service: Service,
 
     @GET
     @Path("/find")
-    fun find(@QueryParam("bucketId") id: String, @QueryParam("tenant") tenant: String) = response { EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, false) } }
+    fun find(@QueryParam("id") id: String, @QueryParam("tenant") tenant: String) = response { EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, false) } }
 
     @POST
     @Path("/dryrun")
-    fun dryrun(@QueryParam("bucketId") id: String, @QueryParam("tenant") tenant: String) = response { EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, true) } }
+    fun dryrun(@QueryParam("id") id: String, @QueryParam("tenant") tenant: String) = response { EventRequest().apply { this.id = id; this.tenant = tenant }.let { find(it, true) } }
 
     private fun find(eventRequest: EventRequest, fire: Boolean): EventResponse? {
         val eventResponse = eventRequest.toResponse()
