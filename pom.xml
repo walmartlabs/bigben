@@ -340,10 +340,10 @@
     </build>
 
     <scm>
-        <connection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</connection>
-        <developerConnection>scm:git:https://gecgithub01.walmart.com/smalik3/bigben</developerConnection>
+        <connection>scm:git:https://github.com/walmartlabs/bigben.git</connection>
+        <developerConnection>scm:git:https://github.com/walmartlabs/bigben</developerConnection>
         <tag>HEAD</tag>
-        <url>scm:git:https://gecgithub01.walmart.com/smalik3/bigben.git</url>
+        <url>scm:git:https://github.com/walmartlabs/bigben.git</url>
     </scm>
 
 </project>
