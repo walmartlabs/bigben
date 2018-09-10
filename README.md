@@ -212,7 +212,7 @@ A tenant can be registered by calling the following API
 {
      "tenant": "TenantB/ProgramB/EnvC",
      "type": "HTTP",
-     "properties": {
+     "props": {
           "url": "http://someurl",
           "headers": {
             "header1": "value1",
@@ -242,7 +242,7 @@ A tenant can be registered by calling the following API
     },
     "eventTime": {
       "type": "string",
-      "description": "An ISO-8601 formatted timestamp e.g. 2018-01-31T04:00.000Z"
+      "description": "An ISO-8601 formatted timestamp e.g. 2018-01-31T04:00.00Z"
     },
     "tenant": {
       "type": "string"
@@ -265,7 +265,7 @@ A tenant can be registered by calling the following API
 ```
 
 ### find an event
-`GET /event/find?id=?&tenant=?`
+`GET /events/find?id=?&tenant=?`
 
 ### dry run
 `POST /events/dryrun?id=?&tenant=?`
