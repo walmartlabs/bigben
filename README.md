@@ -201,7 +201,7 @@ A tenant can be registered by calling the following API
 {
     "tenant": "TenantA/ProgramB/EnvC",
     "type": "MESSAGING",
-    "properties": {
+    "props": {
         "topic": "some topic name",
         "bootstrap.servers": "node1:9092,node2:9092"
     }
