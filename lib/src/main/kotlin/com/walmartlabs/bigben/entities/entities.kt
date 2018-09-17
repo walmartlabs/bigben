@@ -26,6 +26,7 @@ import com.walmartlabs.bigben.entities.Mode.UPSERT
 import com.walmartlabs.bigben.hz.HzObjectFactory
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.SHARD_STATUS
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.SHARD_STATUS_LIST
+import com.walmartlabs.bigben.utils.json
 import java.time.Instant.ofEpochMilli
 import java.time.ZoneOffset.UTC
 import java.time.ZonedDateTime
@@ -116,13 +117,13 @@ data class ShardStatusList(var list: List<ShardStatus?>? = null) : Idso(SHARD_ST
 
 enum class Mode { UPSERT, REMOVE }
 open class EventRequest(var id: String? = null, var eventTime: String? = null, var tenant: String? = null, var payload: String? = null, var mode: Mode = UPSERT) {
-    override fun toString() = "EventRequest(id=$id, eventTime=$eventTime, tenant=$tenant, payload=$payload, mode=$mode)"
+    override fun toString() = "EventRequest(${json()})"
 }
 
 class EventResponse(id: String? = null, eventTime: String? = null, tenant: String? = null, mode: Mode = UPSERT, payload: String? = null,
                     var eventId: String? = null, var triggeredAt: String? = null, var eventStatus: EventStatus? = null, var error: Error? = null) :
         EventRequest(id = id, eventTime = eventTime, tenant = tenant, mode = mode, payload = payload) {
-    override fun toString() = super.toString() + "EventResponse(eventId=$eventId, triggeredAt=$triggeredAt, eventStatus=$eventStatus, error=$error)"
+    override fun toString() = "EventResponse(${json()})"
 }
 
 data class Error(val code: Int, val message: String?)

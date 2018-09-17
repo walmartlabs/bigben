@@ -19,3 +19,9 @@ buildNumber.properties
 .DS_Store
 .idea/
 .modules/
+app/app.iml
+cassandra/bigben-cassandra.iml
+commons/bigben-commons.iml
+cron/cron.iml
+kafka/bigben-kafka.iml
+lib/bigben-lib.iml

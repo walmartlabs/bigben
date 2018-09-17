@@ -28,6 +28,7 @@ import com.walmartlabs.bigben.BigBen.hz
 import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.core.BucketManager
 import com.walmartlabs.bigben.core.BucketsLoader
+import com.walmartlabs.bigben.core.ScheduleScanner
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.entities.EventStatus.*
 import com.walmartlabs.bigben.entities.Mode.REMOVE
@@ -227,7 +228,7 @@ class BigBenTests {
     }
 
     @Test
-    fun `test http processor - ok case`() {
+    fun `test http processor - ok case - past event`() {
         var server: HttpServer? = null
         try {
             val port = 8383
@@ -273,6 +274,65 @@ class BigBenTests {
             server.start()
             eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
             if (!latch.await(1, MINUTES))
+                throw AssertionError("latch not down")
+        } finally {
+            server?.run { stop(0) }
+        }
+    }
+
+    @Test
+    fun `test http processor - ok case - future event`() {
+        var server: HttpServer? = null
+        try {
+            val port = 8383
+            eventService.registerProcessor(ProcessorConfig("http", HTTP,
+                    mapOf
+                    (
+                            "url" to "http://localhost:$port/test",
+                            "headers" to mapOf("header" to "Header1")
+                    ))
+            ).apply { assertEquals(this.status, 200) }
+            val time = nowUTC().plusMinutes(1).withSecond(10).withNano(0)
+            val eReq = EventRequest("id123", time.toString(), "http", "Payload1")
+            println("event request: $eReq")
+            server = HttpServer.create(InetSocketAddress(port), 0)
+            val latch = CountDownLatch(1)
+            server.createContext("/test") {
+                try {
+                    val eResp = EventResponse::class.java.fromJson(String(it.requestBody.readBytes()))
+                    println("event response: $eResp")
+                    assertEquals(it.requestHeaders.getFirst("header"), "Header1")
+                    assertEquals(eReq.id, eResp.id)
+                    assertEquals(eReq.eventTime, eResp.eventTime)
+                    assertEquals(eReq.payload, eResp.payload)
+                    assertEquals("Payload2", eResp.payload)
+                    assertEquals(eReq.tenant, eResp.tenant)
+                    assertEquals(eReq.mode, eResp.mode)
+                    assertTrue(eResp.eventId != null)
+                    assertTrue(eResp.eventStatus == TRIGGERED)
+                    mapOf("status" to "OK").json().apply {
+                        it.sendResponseHeaders(200, length.toLong())
+                        it.responseBody.write(toByteArray())
+                    }
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                    mapOf("status" to "error").json().apply {
+                        it.sendResponseHeaders(500, length.toLong())
+                        it.responseBody.write(toByteArray())
+                    }
+                    throw AssertionError("test failed")
+                } finally {
+                    it.close()
+                }
+                latch.countDown()
+            }
+            server.start()
+            eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
+            eventService.schedule(listOf(eReq.apply { payload = "Payload2" })).apply { assertEquals(200, status) }
+            val bm = BucketManager(1, 2 * 60, 60, hz)
+            println("manually scheduling $time")
+            ScheduleScanner(hz).scan(time.withSecond(0).withNano(0), bm)
+            if (!latch.await(2, MINUTES))
                 throw AssertionError("latch not down")
         } finally {
             server?.run { stop(0) }

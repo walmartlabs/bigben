@@ -65,9 +65,9 @@ class EventReceiver(val hz: Hz) {
                         if (it != null) {
                             if (it.eventTime == eventTime) {
                                 if (l.isDebugEnabled) l.debug("{}, event update received, no change in event time", eventRequest.id)
-                                save<EventLookup> { it.xrefId = eventRequest.id; it.tenant = eventRequest.tenant; it.payload = eventRequest.payload }.transform {
+                                save<Event> { e -> e.bucketId = it.bucketId; e.shard = it.shard; e.eventTime = it.eventTime; e.id = it.eventId; e.payload = eventRequest.payload}.transform {
                                     if (l.isDebugEnabled) l.debug("{}, event updated successfully", eventRequest.id)
-                                    eventRequest.toResponse().apply { eventId = it!!.eventId; eventStatus = UPDATED }
+                                    eventRequest.toResponse().apply { eventId = it!!.id; eventStatus = UPDATED }
                                 }
                             } else {
                                 if (l.isDebugEnabled) l.debug("event update received, event time changed, add new event -> update existing look up -> delete old event")
@@ -101,7 +101,6 @@ class EventReceiver(val hz: Hz) {
             it.shard = shard
             it.eventTime = eventTime
             it.eventId = eventId
-            it.payload = eventRequest.payload
             if (l.isDebugEnabled) l.debug("{}, add-event: event-lookup-table: insert", eventRequest.id)
         }
     }
@@ -119,6 +118,7 @@ class EventReceiver(val hz: Hz) {
                     it.tenant = eventRequest.tenant
                     it.xrefId = eventRequest.id
                     it.bucketId = eventTime.bucket()
+                    it.payload = eventRequest.payload
                 }
             }
         }

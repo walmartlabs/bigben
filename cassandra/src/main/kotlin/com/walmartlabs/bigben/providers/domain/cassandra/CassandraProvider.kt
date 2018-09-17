@@ -118,7 +118,7 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
             val m = it as Mapper<Any>
             when (selector) {
                 is EventC -> {
-                    require(selector.eventTime != null && selector.id != null &&
+                    require(selector.eventTime != null && selector.id != null && selector.bucketId != null &&
                             selector.shard != null && selector.shard!! >= 0) { "event keys not provided: $selector" }
                 }
                 is BucketC -> {
@@ -203,6 +203,6 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
     override fun unwrap() = session
 
     override fun load(bucketId: ZonedDateTime, shard: Int, fetchSize: Int, eventTime: ZonedDateTime, eventId: String, context: Any?): ListenableFuture<Pair<Any?, List<Event>>> {
-        return mappingManager.session.executeAsync(loaderQuery.bind(bucketId, shard, eventTime, eventId)).transform { null to mappingManager.mapper(EventC::class.java).map(it!!).toList() }
+        return mappingManager.session.executeAsync(loaderQuery.bind(bucketId, shard, eventTime, eventId, fetchSize)).transform { null to mappingManager.mapper(EventC::class.java).map(it!!).toList() }
     }
 }

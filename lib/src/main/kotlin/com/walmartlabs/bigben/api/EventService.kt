@@ -22,8 +22,7 @@ package com.walmartlabs.bigben.api
 import com.google.common.base.Throwables.getStackTraceAsString
 import com.walmartlabs.bigben.BigBen.processorRegistry
 import com.walmartlabs.bigben.entities.*
-import com.walmartlabs.bigben.entities.EventStatus.REJECTED
-import com.walmartlabs.bigben.entities.EventStatus.TRIGGERED
+import com.walmartlabs.bigben.entities.EventStatus.*
 import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.processors.ProcessorConfig
 import com.walmartlabs.bigben.tasks.StatusTask
@@ -106,20 +105,13 @@ class EventService(private val hz: Hz, private val service: Service,
     private fun find(eventRequest: EventRequest, fire: Boolean): EventResponse? {
         val eventResponse = eventRequest.toResponse()
         return if (eventRequest.id != null && eventRequest.id!!.trim().isNotEmpty()) {
-            val eventLookup = fetch<EventLookup> { it.xrefId = eventRequest.id; it.tenant = eventRequest.tenant }.result { null }
-            if (eventLookup == null) {
-                null
-            } else {
-                val event = fetch<Event> { it.id = eventLookup.eventId; it.eventTime = eventLookup.eventTime; it.shard = eventLookup.shard; it.bucketId = eventLookup.bucketId }.result { null }
-                if (event == null) {
-                    eventResponse.apply { id = eventLookup.eventId; eventTime = eventLookup.eventTime?.toString() }
-                    null
-                } else {
-                    event.payload = eventLookup.payload
-                    if (fire) {
-                        processorRegistry(event)
-                    }
-                    event.toResponse()
+            fetch<EventLookup> { it.xrefId = eventRequest.id; it.tenant = eventRequest.tenant }.result { null }?.let { el ->
+                fetch<Event> { it.id = el.eventId; it.eventTime = el.eventTime; it.shard = el.shard; it.bucketId = el.bucketId }.result { null }?.run {
+                    eventResponse.also {
+                        it.eventId = id; it.eventTime = eventTime?.toString(); it.payload = payload
+                        it.eventStatus = status; if (status != UN_PROCESSED && status != null) it.triggeredAt = processedAt?.toString()
+                        if (error != null) it.error = com.walmartlabs.bigben.entities.Error(500, error)
+                    }.also { if (fire) processorRegistry(this) }
                 }
             }
         } else {

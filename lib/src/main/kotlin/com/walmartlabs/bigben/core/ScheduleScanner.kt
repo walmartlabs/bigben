@@ -106,49 +106,53 @@ class ScheduleScanner(private val hz: Hz) : Service {
             }
             val currentBucketId = lastScan.plusMinutes(bucketWidth.toLong())
             lastScan = currentBucketId
-            if (l.isInfoEnabled) l.info("scanning the schedule(s) for bucket: {}", currentBucketId)
-
-            bucketManager.getProcessableShardsForOrBefore(currentBucketId).done({ l.error("error in processing bucket: {}", currentBucketId, it!!.rootCause()) }) {
-                try {
-                    if (it!!.isEmpty) {
-                        if (l.isInfoEnabled) l.info("nothing to schedule for bucket: {}", currentBucketId)
-                        return@done
-                    }
-                    shardSubmitters.submit {
-                        try {
-                            if (l.isDebugEnabled) l.debug("{}, shards to be processed: => {}", currentBucketId, it)
-                            calculateDistro(it).asMap().run {
-                                if (l.isInfoEnabled) l.info("{}, schedule distribution: => {}", currentBucketId,
-                                        mapKeys { it.key.address.toString() }.mapValues { it.value.joinToString(",") { "${it.first}[${it.second}]" } }.toSortedMap())
-
-                                val iterator = Iterators.cycle<Member>(keys)
-                                val executorService = hz.hz.getExecutorService(EVENT_SCHEDULER)
-                                entries.map {
-                                    { submitShards(executorService, iterator.next(), it.value, currentBucketId) }.retriable("shards-submit", int("events.submit.max.retries"),
-                                            int("events.submit.initial.delay"),
-                                            int("events.submit.backoff.multiplier")).transform { it!!.list }
-                                }.reduce().done({ l.error("schedule for bucket {} finished abnormally", currentBucketId, it.rootCause()) }) {
-                                    if (l.isDebugEnabled) l.debug("schedule for bucket {} finished normally => {}", currentBucketId, it)
-                                    val buckets = it!!.map { it!! }.flatten().filterNotNull().groupBy { it.bucketId!! }.mapValues { it.value.fold(false) { hasError, ss -> hasError || (ss.status == ERROR) } }
-                                    if (l.isDebugEnabled) l.debug("bucket-scan: {}, final buckets with statuses to be persisted: {}", currentBucketId, buckets)
-                                    buckets.map { bucketManager.bucketProcessed(it.key, if (it.value) ERROR else PROCESSED) }.done({ l.error("bucket-scan: {}, failed to update the scan-status: {}", currentBucketId, buckets.keys, it.rootCause()) }) {
-                                        if (l.isDebugEnabled) l.debug("bucket-scan: {}, successfully updated the scan-status: {}", currentBucketId, buckets.keys)
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            l.error("error in processing bucket: {}", currentBucketId, e.rootCause())
-                        }
-                    }
-                } catch (e: Exception) {
-                    l.error("error in processing bucket: {}", currentBucketId, e.rootCause())
-                }
-            }
+            scan(currentBucketId, bucketManager)
         } catch (e: Throwable) {
             l.error("error in running the scheduler", e.rootCause())
             if (e is Error) {
                 l.error("system will exit now")
                 exitProcess(1)
+            }
+        }
+    }
+
+    fun scan(currentBucketId: ZonedDateTime, bucketManager: BucketManager) {
+        if (l.isInfoEnabled) l.info("scanning the schedule(s) for bucket: {}", currentBucketId)
+
+        bucketManager.getProcessableShardsForOrBefore(currentBucketId).done({ l.error("error in processing bucket: {}", currentBucketId, it!!.rootCause()) }) {
+            try {
+                if (it!!.isEmpty) {
+                    if (l.isInfoEnabled) l.info("nothing to schedule for bucket: {}", currentBucketId)
+                    return@done
+                }
+                shardSubmitters.submit {
+                    try {
+                        if (l.isDebugEnabled) l.debug("{}, shards to be processed: => {}", currentBucketId, it)
+                        calculateDistro(it).asMap().run {
+                            if (l.isInfoEnabled) l.info("{}, schedule distribution: => {}", currentBucketId,
+                                    mapKeys { it.key.address.toString() }.mapValues { it.value.joinToString(",") { "${it.first}[${it.second}]" } }.toSortedMap())
+
+                            val iterator = Iterators.cycle<Member>(keys)
+                            val executorService = hz.hz.getExecutorService(EVENT_SCHEDULER)
+                            entries.map {
+                                { submitShards(executorService, iterator.next(), it.value, currentBucketId, bucketManager) }.retriable("shards-submit", int("events.submit.max.retries"),
+                                        int("events.submit.initial.delay"),
+                                        int("events.submit.backoff.multiplier")).transform { it!!.list }
+                            }.reduce().done({ l.error("schedule for bucket {} finished abnormally", currentBucketId, it.rootCause()) }) {
+                                if (l.isDebugEnabled) l.debug("schedule for bucket {} finished normally => {}", currentBucketId, it)
+                                val buckets = it!!.map { it!! }.flatten().filterNotNull().groupBy { it.bucketId!! }.mapValues { it.value.fold(false) { hasError, ss -> hasError || (ss.status == ERROR) } }
+                                if (l.isDebugEnabled) l.debug("bucket-scan: {}, final buckets with statuses to be persisted: {}", currentBucketId, buckets)
+                                buckets.map { bucketManager.bucketProcessed(it.key, if (it.value) ERROR else PROCESSED) }.done({ l.error("bucket-scan: {}, failed to update the scan-status: {}", currentBucketId, buckets.keys, it.rootCause()) }) {
+                                    if (l.isDebugEnabled) l.debug("bucket-scan: {}, successfully updated the scan-status: {}", currentBucketId, buckets.keys)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        l.error("error in processing bucket: {}", currentBucketId, e.rootCause())
+                    }
+                }
+            } catch (e: Exception) {
+                l.error("error in processing bucket: {}", currentBucketId, e.rootCause())
             }
         }
     }
@@ -165,7 +169,7 @@ class ScheduleScanner(private val hz: Hz) : Service {
         }
     }
 
-    private fun submitShards(executorService: IExecutorService, member: Member, shardsData: Collection<Pair<ZonedDateTime, Int>>, bucket: ZonedDateTime): ListenableFuture<ShardStatusList> {
+    private fun submitShards(executorService: IExecutorService, member: Member, shardsData: Collection<Pair<ZonedDateTime, Int>>, bucket: ZonedDateTime, bucketManager: BucketManager): ListenableFuture<ShardStatusList> {
         if (l.isDebugEnabled) l.debug("{}, submitting  for execution to member {}, shards: {}", bucket, member.socketAddress, shardsData)
         bucketManager.registerForProcessing(shardsData)
         return executorService.submitToMember(BulkShardTask(shardsData), member).listenable().catching { ShardStatusList(shardsData.map { ShardStatus(it.first, it.second, ERROR) }) }.done({
