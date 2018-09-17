@@ -184,7 +184,7 @@ A tenant can be registered by calling the following API
   "required": [
     "tenant",
     "type",
-    "properties"
+    "props"
   ]
 }
 ```
@@ -194,7 +194,7 @@ A tenant can be registered by calling the following API
     is the only supported messaging system.
     * HTTP - specifies that `tenant` wants events delivered via an http callback URL. 
     * CUSTOM_CLASS - specifies a custom event processor implemented for custom processing of events
-* `properties` - A bag of properties needed for each type of tenant. 
+* `props` - A bag of properties needed for each type of tenant. 
 
 * kafka sample:
 ```json
