@@ -177,7 +177,7 @@ A tenant can be registered by calling the following API
     "type": {
       "type": "string"
     },
-    "properties": {
+    "props": {
       "type": "object"
     }
   },
