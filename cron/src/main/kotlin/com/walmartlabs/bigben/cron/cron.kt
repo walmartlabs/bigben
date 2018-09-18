@@ -37,6 +37,7 @@ import com.walmartlabs.bigben.entities.KV
 import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.ModuleLoader
 import com.walmartlabs.bigben.utils.commons.Props.int
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
@@ -96,7 +97,7 @@ object CronRunner : Module {
     private val l = logger<CronRunner>()
     internal val crons = hz.hz.getMap<Int, Crons>("crons")
 
-    override fun init() {
+    override fun init(loader: ModuleLoader) {
         l.info("initializing the cron module: starting the cron runner(s)")
         val lastRun = AtomicReference<ZonedDateTime?>()
         workers.scheduleAtFixedRate({

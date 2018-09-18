@@ -35,7 +35,11 @@ import com.walmartlabs.bigben.extns.nextScan
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.tasks.BulkShardTask
 import com.walmartlabs.bigben.utils.*
+import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.ModuleLoader
+import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.commons.Props.int
+import com.walmartlabs.bigben.utils.hz.ClusterSingleton
 import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.hz.Service
 import java.lang.Runtime.getRuntime
@@ -54,7 +58,7 @@ import kotlin.system.exitProcess
 /**
  * Created by smalik3 on 2/23/18
  */
-class ScheduleScanner(private val hz: Hz) : Service {
+class ScheduleScanner(private val hz: Hz) : Service, Module {
 
     companion object {
         internal const val BUCKET_CACHE = "bucketCache"
@@ -76,6 +80,16 @@ class ScheduleScanner(private val hz: Hz) : Service {
     private lateinit var lastScan: ZonedDateTime
 
     override val name: String = "ScheduleScanner"
+
+    override fun init(loader: ModuleLoader) {
+        if (Props.boolean("events.disable.scheduler")) {
+            l.info("skipping initializing cluster scheduler")
+        } else {
+            l.info("initializing cluster singleton")
+            ClusterSingleton(this, hz)
+        }
+        l.info("Scheduler module initialized successfully")
+    }
 
     override fun init() {
         if (l.isInfoEnabled) l.info("initing the event scheduler")

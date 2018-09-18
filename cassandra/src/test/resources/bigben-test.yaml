@@ -1,8 +1,8 @@
 # domain related properties
 domain:
-  entity.provider.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
-  event.loader.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
-  cluster.factory.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
+  entity.provider.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraModule
+  event.loader.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraModule
+  cluster.factory.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraModule
 
 # hazelcast properties
 hz:

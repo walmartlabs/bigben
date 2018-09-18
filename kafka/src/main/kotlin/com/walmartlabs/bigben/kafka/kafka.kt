@@ -19,43 +19,39 @@
  */
 package com.walmartlabs.bigben.kafka
 
-import com.google.common.util.concurrent.Futures.immediateFailedFuture
-import com.google.common.util.concurrent.Futures.immediateFuture
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
-import com.walmartlabs.bigben.BigBen.eventReceiver
-import com.walmartlabs.bigben.BigBen.processorRegistry
-import com.walmartlabs.bigben.entities.EventRequest
 import com.walmartlabs.bigben.entities.EventResponse
-import com.walmartlabs.bigben.entities.EventStatus.*
-import com.walmartlabs.bigben.entities.Mode.UPSERT
-import com.walmartlabs.bigben.extns.event
-import com.walmartlabs.bigben.processors.MessageProcessor
 import com.walmartlabs.bigben.processors.MessageProducer
 import com.walmartlabs.bigben.processors.MessageProducerFactory
 import com.walmartlabs.bigben.utils.*
+import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.ModuleLoader
+import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.commons.Props.boolean
 import com.walmartlabs.bigben.utils.commons.Props.int
 import com.walmartlabs.bigben.utils.commons.Props.long
 import com.walmartlabs.bigben.utils.commons.Props.map
-import com.walmartlabs.bigben.utils.commons.Props.string
-import org.apache.kafka.clients.consumer.CommitFailedException
-import org.apache.kafka.clients.consumer.Consumer
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.*
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.WakeupException
+import java.util.concurrent.Executors.newFixedThreadPool
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 
 /**
  * Created by smalik3 on 6/25/18
  */
-class KafkaMessageProducerFactory : MessageProducerFactory {
+class KafkaMessageProducerFactory : MessageProducerFactory, Module {
+    override fun init(loader: ModuleLoader) {
+    }
+
     override fun create(tenant: String, props: Json) = KafkaMessageProducer(tenant, props)
 }
 
@@ -88,88 +84,131 @@ open class KafkaMessageProducer(private val tenant: String, props: Json) : Messa
     }
 }
 
-open class KafkaMessageProcessor : MessageProcessor {
-    private val consumer = this.createConsumer()
-    private val topics = string("kafka.consumer.topics").split(",")
+object KafkaModule : Module {
+
+    private val l = logger<KafkaModule>()
+
+    override fun init(loader: ModuleLoader) {
+        l.info("initializing kafka processor(s)")
+        Props.list("kafka").forEach {
+            @Suppress("UNCHECKED_CAST")
+            val p = Props.parse(it as Json)
+            require(p.exists("config.group.id")) { "group.id is required" }
+            val index = AtomicInteger(0)
+            newFixedThreadPool(p.int("num.consumers")) { Thread(it, "kafkaProcessor[${p.string("config.group.id")}]#${index.getAndIncrement()}") }.apply {
+                submit {
+                    try {
+                        "processor.class".apply {
+                            require(p.exists(this)) { "$this is required" }
+                            Class.forName(p.string(this)).newInstance()
+                        }
+                    } catch (e: Exception) {
+                        l.error("unexpected error in starting kafka processor", e.rootCause())
+                    }
+                }
+            }
+        }
+    }
+}
+
+abstract class KafkaMessageProcessor : Runnable {
+    private val topics = Props.string("kafka.consumer.topics").split(",")
     private val closed = AtomicBoolean()
     private val autoCommit = boolean("kafka.consumer.config.enable.auto.commit")
-    private val offsets = AtomicReference<Map<TopicPartition, OffsetAndMetadata>?>()
+    private var numUnknownExceptionRetries = int("kafka.unknown.exception.retries", 5)
 
     companion object {
         private val l = logger<KafkaMessageProcessor>()
     }
 
-    protected open fun createConsumer(): Consumer<String, String> = KafkaConsumer<String, String>(map("kafka.consumer.config"))
+    abstract fun process(cr: ConsumerRecord<String, String>): ListenableFuture<Any>
+    open fun createConsumer(): Consumer<String, String> = KafkaConsumer<String, String>(map("kafka.consumer.config"))
 
-    override fun init() {
+    override fun run() {
+        val consumer = createConsumer()
         if (l.isInfoEnabled) {
             l.info("starting the kafka consumer for topic(s): $topics")
             if (!autoCommit)
                 l.info("offsets will be committed manually")
         }
-        consumer.subscribe(topics)
-        val task = AtomicReference<ListenableFuture<List<EventResponse>>?>()
-        val paused = mutableSetOf<TopicPartition>()
+        val owned = AtomicReference<Set<TopicPartition>?>()
+        consumer.subscribe(topics, object : ConsumerRebalanceListener {
+            override fun onPartitionsAssigned(partitions: MutableCollection<TopicPartition>) {
+                if (l.isDebugEnabled) l.debug("partitions assigned: ${partitions.groupBy { it.topic() }.mapValues { it.value.map { it.partition() }.toSortedSet() }.toSortedMap()}")
+                owned.set(partitions.toSet())
+            }
+
+            override fun onPartitionsRevoked(partitions: MutableCollection<TopicPartition>) {
+                if (l.isDebugEnabled) l.debug("partitions revoked: ${partitions.groupBy { it.topic() }.mapValues { it.value.map { it.partition() }.toSortedSet() }.toSortedMap()}")
+                owned.set(null)
+            }
+        })
+        val tasks = LinkedBlockingQueue<() -> Unit>()
         while (!closed.get()) {
             if (l.isDebugEnabled) l.debug("starting the poll for topic(s): $topics")
             try {
-                if (task.get() != null && task.get()!!.isDone) {
-                    if (l.isDebugEnabled) l.debug("message processed for topic(s): $topics, resuming the partitions")
-                    consumer.resume(paused)
-                    if (!autoCommit && offsets.get() != null) {
-                        if (l.isDebugEnabled) l.debug("committing offsets ${offsets.get()}")
-                        try {
-                            consumer.commitSync(offsets.get())
-                        } catch (e: CommitFailedException) {
-                            l.warn("commit failed for offsets: ${offsets.get()}")
-                        }
-                        offsets.set(null)
-                    }
-                    paused.clear()
-                    task.set(null)
-                }
+                mutableListOf<() -> Unit>().run { tasks.drainTo(this); this.forEach { it() } }
                 if (l.isDebugEnabled) l.debug("polling the consumer for topic(s): $topics")
                 val records = consumer.poll(long("kafka.consumer.poll.interval"))
                 if (l.isDebugEnabled) l.debug("fetched ${records.count()} messages from topic(s): $topics")
                 if (records.count() > 0) {
-                    if (!autoCommit)
-                        offsets.set(records.groupBy { TopicPartition(it.topic(), it.partition()) }.mapValues { OffsetAndMetadata(it.value.maxBy { it.offset() }!!.offset() + 1) })
-                    paused += topics.map {
-                        if (l.isDebugEnabled) l.debug("pausing the partitions for topic: $it")
-                        consumer.partitionsFor(it).map { TopicPartition(it.topic(), it.partition()) }.apply {
-                            consumer.pause(this)
-                            if (l.isDebugEnabled) l.debug("partitions paused for topic: $it")
-                        }
-                    }.flatten()
-                    if (l.isDebugEnabled) l.debug("submitting records for processing for topic(s): $topics")
-                    task.set(records.map { it ->
-                        {
+                    val (offsets, range) = records.groupBy { TopicPartition(it.topic(), it.partition()) }.run {
+                        mapValues { OffsetAndMetadata(it.value.maxBy { it.offset() }!!.offset() + 1) } to
+                                mapValues { "[${it.value.minBy { it.offset() }!!.offset()}-${it.value.maxBy { it.offset() }!!.offset()}]" }
+                                        .mapKeys { "${it.key.topic()}[${it.key.partition()}]" }.toSortedMap()
+                    }
+                    val partitions = records.partitions().apply {
+                        if (l.isDebugEnabled)
+                            l.debug("pausing the partitions ${groupBy { it.topic() }.mapValues { it.value.map { it.partition() }.toSortedSet() }.toSortedMap()}")
+                        consumer.pause(this)
+                    }; {
+                        if (l.isDebugEnabled)
+                            l.debug("resuming the partitions ${partitions.groupBy { it.topic() }.mapValues { it.value.map { it.partition() }.toSortedSet() }.toSortedMap()}")
+                        consumer.resume(partitions)
+                        val ownedSnapshot = owned.get()
+                        if (!autoCommit && ownedSnapshot != null) {
+                            val filtered = offsets.filterKeys { it in ownedSnapshot }
+                            if (l.isDebugEnabled) l.debug("committing offsets $filtered")
                             try {
-                                val eventRequest = EventRequest::class.java.fromJson(it.value())
-                                if (eventRequest.mode == UPSERT) eventReceiver.addEvent(eventRequest).transformAsync {
-                                    if (it!!.eventStatus == TRIGGERED) processorRegistry.invoke(it.event())
-                                    else if (it.eventStatus == ERROR || it.eventStatus == REJECTED) {
-                                        if (l.isDebugEnabled) l.debug("event request is rejected or had error, event response: $it")
-                                    }
-                                    immediateFuture(it)
+                                consumer.commitSync(filtered)
+                            } catch (e: CommitFailedException) {
+                                l.warn("bulk commit failed for offsets: $filtered, trying to each owned partition commit one by one")
+                                offsets.forEach {
+                                    // no snapshot here
+                                    if (owned.get() != null && it.key in owned.get()!!) {
+                                        try {
+                                            consumer.commitSync(mapOf(it.key to it.value))
+                                        } catch (e: Exception) {
+                                            l.warn("error in committing offset for ${it.key}, ignoring")
+                                        }
+                                    } else l.info("partition ${it.key} is no more owned by this consumer, ignoring the offset commit")
                                 }
-                                else eventReceiver.removeEvent(eventRequest.id!!, eventRequest.tenant!!)
-                            } catch (e: Exception) {
-                                val rc = e.rootCause()!!
-                                l.error("failed to process message: $it", rc)
-                                immediateFailedFuture<EventResponse>(rc)
                             }
-                        }.retriable("${it.topic()}/${it.partition()}/${it.offset()}/${it.key()}", maxRetries = int("kafka.consumer.message.retry.max.count"))
-                    }.reduce())
+                        }
+                    }.apply {
+                        if (l.isDebugEnabled) l.debug("submitting records for processing: $range")
+                        records.map { it ->
+                            { process(it) }.retriable("${it.topic()}/${it.partition()}/${it.offset()}/${it.key()}", maxRetries = int("kafka.consumer.message.retry.max.count"))
+                        }.reduce().transform { this }.done({
+                            l.error("error in processing messages: $range", it.rootCause())
+                            tasks.add(this); consumer.wakeup()
+                        }) {
+                            if (l.isDebugEnabled) l.debug("messages processed successfully: $range")
+                            tasks.add(this); consumer.wakeup()
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 val rc = e.rootCause()
                 if (rc is WakeupException) {
-                    if (!closed.get())
-                        l.warn("spurious consumer wakeup for topic(s): $topics", rc)
-                    else l.info("consumer has been closed for topic(s): $topics")
+                    if (!closed.get()) {
+                        if (tasks.isNotEmpty())
+                            l.warn("spurious consumer wakeup for topic(s): $topics", rc)
+                        // else ignore the wakeup as it was intentional
+                    } else l.info("consumer has been closed for topic(s): $topics")
                 } else {
-                    l.error("unknown exception, closing the consumer", rc)
+                    if (numUnknownExceptionRetries-- > 0) l.warn("unknown exception, ignoring", rc)
+                    else l.error("unknown exception, giving up after $numUnknownExceptionRetries retries, closing the consumer", rc)
                     closed.set(true)
                 }
             }

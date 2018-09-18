@@ -33,6 +33,7 @@ import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.response
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.ModuleLoader
 import org.slf4j.Logger
 import java.time.Duration
 import java.time.ZonedDateTime
@@ -112,8 +113,8 @@ class App : Application() {
 
     private fun initPhase(phase: String, lifecycle: Map<String, String?>, l: Logger?) {
         l?.info("phase:$phase started")
-        lifecycle["$phase-class"]?.run { (Class.forName(this).newInstance() as Module).init() }
-                ?: lifecycle["$phase-object"]?.run { (Class.forName(this).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null) as Module).init() }
+        lifecycle["$phase-class"]?.run { (Class.forName(this).newInstance() as Module).init(ModuleLoader()) }
+                ?: lifecycle["$phase-object"]?.run { (Class.forName(this).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null) as Module).init(ModuleLoader()) }
         l?.info("phase:$phase finished")
     }
 

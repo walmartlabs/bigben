@@ -1,16 +1,21 @@
 # top level modules
 modules:
+  - name: domain
+    class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraModule
+  - name: messaging-producer-factory
+    class: com.walmartlabs.bigben.kafka.KafkaMessageProducerFactory
+  - name: processors
+    object: com.walmartlabs.bigben.processors.ProcessorRegistry
   - name: hz
     class: com.walmartlabs.bigben.utils.hz.Hz
-  - name: domain
-    object: com.walmartlabs.bigben.providers.domain.cassandra.CassandraModule
-  - name: messaging
-    object: com.walmartlabs.bigben.kafka.KafkaProcessorModule
   - name: scheduler
-    object: SchedulerModule
+    object: com.walmartlabs.bigben.core.ScheduleScanner
+  - name: events
+    object: com.walmartlabs.bigben.EventModule
+  - name: messaging
+    object: com.walmartlabs.bigben.kafka.KafkaModule
   - name: cron
     object: com.walmartlabs.bigben.cron.CronRunner
-
 
 # domain related properties
 domain:

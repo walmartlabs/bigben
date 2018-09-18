@@ -23,6 +23,8 @@ import com.hazelcast.config.XmlConfigBuilder
 import com.hazelcast.core.Hazelcast.newHazelcastInstance
 import com.hazelcast.core.HazelcastInstance
 import com.walmartlabs.bigben.utils.Json
+import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.ModuleLoader
 import com.walmartlabs.bigben.utils.commons.Props.flattenedMap
 import com.walmartlabs.bigben.utils.commons.Props.map
 import com.walmartlabs.bigben.utils.commons.Props.string
@@ -37,7 +39,7 @@ import java.io.ByteArrayInputStream
  * Created by smalik3 on 2/23/18
  */
 
-class Hz {
+class Hz : Module {
 
     companion object {
         private val l = logger<Hz>()
@@ -47,7 +49,7 @@ class Hz {
 
     init {
         val config = typeRefJson<Json>(flattenedMap(map("hz")).json()).let { map ->
-            if(l.isDebugEnabled) l.debug("using the hazelcast config from: ${Hz::class.java.getResource(string("hz.template"))}")
+            if (l.isDebugEnabled) l.debug("using the hazelcast config from: ${Hz::class.java.getResource(string("hz.template"))}")
             val template = String(Hz::class.java.getResourceAsStream(string("hz.template")).run { readBytes().also { close() } })
             StrSubstitutor(object : StrLookup<Any>() {
                 override fun lookup(key: String): String? {
@@ -66,5 +68,8 @@ class Hz {
         }
         hz = newHazelcastInstance(XmlConfigBuilder(ByteArrayInputStream(config.toByteArray())).build())
         if (l.isDebugEnabled) l.debug("hazelcast config file: {}", config)
+    }
+
+    override fun init(loader: ModuleLoader) {
     }
 }
