@@ -37,6 +37,7 @@ open class PropsLoader(preloaded: Json? = null) {
 
     companion object {
         private val NULL: Any = Any()
+        private val NULL_PRESENT: Any = Any()
     }
 
     private val l = logger<PropsLoader>()
@@ -109,12 +110,13 @@ open class PropsLoader(preloaded: Json? = null) {
         return when {
             value == NULL && required -> throw IllegalArgumentException("no property with name: $name")
             value == NULL -> null
+            value == NULL_PRESENT && required -> throw IllegalArgumentException("property '$name' has a 'null' value")
             else -> value
         }
     }
 
     private fun resolver(name: String, p: Json = props.get()): Any {
-        if (p.containsKey(name)) return p[name]!!
+        if (p.containsKey(name)) return p[name]?.let { it } ?: NULL_PRESENT
         else if (name.contains(".")) {
             val parts = name.split(".", limit = 2)
             return if (p.containsKey(parts[0]) && p[parts[0]] is Map<*, *>) {

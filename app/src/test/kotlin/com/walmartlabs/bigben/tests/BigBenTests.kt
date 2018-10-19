@@ -22,9 +22,8 @@ package com.walmartlabs.bigben.tests
 import com.datastax.driver.core.Session
 import com.google.common.util.concurrent.ListeningScheduledExecutorService
 import com.sun.net.httpserver.HttpServer
-import com.walmartlabs.bigben.BigBen.entityProvider
-import com.walmartlabs.bigben.BigBen.eventService
-import com.walmartlabs.bigben.BigBen.hz
+import com.walmartlabs.bigben.BigBen
+import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.core.BucketManager
 import com.walmartlabs.bigben.core.BucketsLoader
@@ -76,6 +75,8 @@ class BigBenTests {
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
             EventService.DEBUG_FLAG.set(false)
         }
+
+        private val eventService = BigBen.module<EventService>()
     }
 
     @BeforeClass
@@ -89,7 +90,7 @@ class BigBenTests {
     @BeforeMethod
     private fun `clean up db`() {
         println("cleaning up the db")
-        (entityProvider.unwrap() as Session).apply {
+        (module<EntityProvider<Any>>().unwrap() as Session).apply {
             execute("truncate bigben.events;")
             execute("truncate bigben.lookups;")
             execute("truncate bigben.buckets;")
@@ -191,7 +192,7 @@ class BigBenTests {
                 e.printStackTrace()
             }
         }.run()
-        if (!latch.await(1, MINUTES)) throw IllegalStateException("buckets loader did not complete on time")
+        if (!latch.await(1, MINUTES)) throw IllegalStateException("buckets registry did not complete on time")
         assertTrue { System.currentTimeMillis() - now > 1 }
     }
 
@@ -205,7 +206,7 @@ class BigBenTests {
         val shards = range.toList()
         // test back ground load
         range.forEach { i -> save<Bucket> { it.bucketId = time.minusMinutes(i.toLong()); it.count = 100L; it.status = UN_PROCESSED }.get()!! }
-        val bm = BucketManager(10, 2 * 60, 60, hz)
+        val bm = BucketManager(10, 2 * 60, 60, module())
         bm.getProcessableShardsForOrBefore(time).get()!!
 
         sleep(2000)
@@ -329,9 +330,9 @@ class BigBenTests {
             server.start()
             eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
             eventService.schedule(listOf(eReq.apply { payload = "Payload2" })).apply { assertEquals(200, status) }
-            val bm = BucketManager(1, 2 * 60, 60, hz)
+            val bm = BucketManager(1, 2 * 60, 60, module())
             println("manually scheduling $time")
-            ScheduleScanner(hz).scan(time.withSecond(0).withNano(0), bm)
+            ScheduleScanner(module()).scan(time.withSecond(0).withNano(0), bm)
             if (!latch.await(2, MINUTES))
                 throw AssertionError("latch not down")
         } finally {
@@ -513,7 +514,7 @@ class BigBenTests {
     fun `test consumer`() {
         val consumer = KafkaConsumer<String, String>(map("kafka.consumer.config") + mapOf("group.id" to UUID.randomUUID().toString()))
         consumer.subscribe(setOf("outbound"))
-        while(true) {
+        while (true) {
             println("polling outbound")
             val records = consumer.poll(3000)
             println(records.count())

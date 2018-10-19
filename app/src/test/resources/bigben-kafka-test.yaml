@@ -6,10 +6,10 @@ modules:
     object: com.walmartlabs.bigben.processors.ProcessorRegistry
   - name: hz
     class: com.walmartlabs.bigben.utils.hz.Hz
-  - name: scheduler
-    object: com.walmartlabs.bigben.SchedulerModule
   - name: events
     object: com.walmartlabs.bigben.EventModule
+  - name: kafka
+    object: com.walmartlabs.bigben.kafka.KafkaModule
 
 # hazelcast properties
 hz:
@@ -54,7 +54,40 @@ task:
     max.retries: 3
     backoff.multiplier: 2
 
-messaging.producer.factory.class: com.walmartlabs.bigben.processors.NoOpMessageProducerFactory
+# kafka related properties
+kafka:
+  consumers:
+    - num.consumers: 1
+      processor.class: com.walmartlabs.bigben.tests.MockProcessorImpl
+      topics: topic1
+      max.poll.wait.time: 10000
+      message.retry.max.count: 10
+      unknown.exception.retries: 3
+      config:
+        key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+        value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+        bootstrap.servers: localhost:9092
+        #fetch.min.bytes: 1
+        group.id: bigben-kafka-test
+        #heartbeat.interval.ms: 3000
+        session.timeout.ms: 30000
+        auto.offset.reset: earliest
+        fetch.max.bytes: 324000
+        max.poll.interval.ms: 30000
+        max.poll.records: 100
+        receive.buffer.bytes: 65536
+        request.timeout.ms: 60000
+        #send.buffer.bytes: 131072
+        enable.auto.commit: false
+  producer:
+    config: # this is default kafka producer config, these values will be used if not supplied during the tenant registration
+      key.serializer: org.apache.kafka.common.serialization.StringSerializer
+      value.serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: "1"
+      buffer.memory: 32400
+      retries: 3
+
+messaging.producer.factory.class: com.walmartlabs.bigben.kafka.KafkaMessageProducerFactory
 generic.future.max.get.time: 60
 
 # scheduler / event related properties
@@ -84,20 +117,10 @@ events:
 
 # bucket manager / loader related properties
 buckets:
-  backlog.check.limit: 30
+  backlog.check.limit: 1
   background:
     load.fetch.size: 10
     load.wait.interval.seconds: 1
   checkpoint:
     interval: 60
     interval.units: SECONDS
-
-# kafka related properties
-kafka:
-  producer:
-    config: # this is default kafka producer config, these values will be used if not supplied during the tenant registration
-      key.serializer: org.apache.kafka.common.serialization.StringSerializer
-      value.serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: "1"
-      buffer.memory: 32400
-      retries: 3

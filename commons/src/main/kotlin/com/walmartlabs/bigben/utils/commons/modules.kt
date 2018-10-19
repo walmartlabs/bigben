@@ -27,17 +27,17 @@ import com.walmartlabs.bigben.utils.logger
  * Created by smalik3 on 9/17/18
  */
 interface Module {
-    fun init(loader: ModuleLoader)
+    fun init(registry: ModuleRegistry)
 }
 
 open class NoOpModule : Module {
-    override fun init(loader: ModuleLoader) {
+    override fun init(registry: ModuleRegistry) {
     }
 }
 
-class ModuleLoader {
+class ModuleRegistry {
 
-    private val l = logger<ModuleLoader>()
+    private val l = logger<ModuleRegistry>()
 
     val cache = CacheBuilder.newBuilder().build<Class<*>, Any>()!!
 
@@ -48,21 +48,23 @@ class ModuleLoader {
     } as T
 
     @Suppress("UNCHECKED_CAST")
-    inline fun <reified T : Any> register(t: T) {
-        println("class is ${t::class.java}")
-        cache.put(t::class.java, t as Any)
-    }
+    inline fun <reified T : Any> register(t: T) = cache.put(t::class.java, t as Any)
 
     fun loadModules(props: PropsLoader) {
         l.info("loading modules")
         props.list("modules").forEach {
             @Suppress("UNCHECKED_CAST")
             val p = Props.parse(it as Json)
-            l.info("initializing module: ${p.string("name")}")
-            createModule(it).also {
-                it.init(this)
-                l.info("registering module: ${p.string("name")}")
-                register(it)
+            val enabled = p.boolean("enabled", true)
+            if (!enabled) {
+                l.info("skipping disabled module ${p.string("name")}")
+            } else {
+                l.info("initializing module: ${p.string("name")}")
+                createModule(it).also {
+                    it.init(this)
+                    l.info("registering module: ${p.string("name")}")
+                    register(it)
+                }
             }
         }
     }

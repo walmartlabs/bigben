@@ -19,17 +19,14 @@
  */
 package com.walmartlabs.bigben
 
-import com.walmartlabs.bigben.api.EventReceiver
-import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.entities.EntityProvider
-import com.walmartlabs.bigben.entities.EventLoader
-import com.walmartlabs.bigben.processors.ProcessorRegistry
 import com.walmartlabs.bigben.utils.commons.Module
-import com.walmartlabs.bigben.utils.commons.ModuleLoader
+import com.walmartlabs.bigben.utils.commons.ModuleRegistry
 import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.commons.Props.load
-import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.logger
+import com.walmartlabs.bigben.utils.rootCause
+import kotlin.system.exitProcess
 
 /**
  * Created by smalik3 on 6/24/18
@@ -38,39 +35,32 @@ import com.walmartlabs.bigben.utils.logger
 object BigBen : Module {
     private val l = logger<BigBen>()
 
-    val loader = ModuleLoader()
+    val registry = ModuleRegistry()
 
-    private val modules = loader.cache.apply {
-        (if (System.getProperty("bigben.props") == null) {
+    init {
+        System.getProperty("bigben.props")?.run {
+            l.info("using props from location: $this")
+            load(System.getProperty("bigben.props"))
+        } ?: {
             l.warn("missing 'bigben.props' system property, using the default: file://bigben.yaml")
             load("file://bigben.yaml")
-        } else load(System.getProperty("bigben.props"))).let { loader.loadModules(Props) }
-    }
-
-    val eventService = loader.module<EventService>()
-    val eventReceiver = loader.module<EventReceiver>()
-    val entityProvider = loader.module<EntityProvider<Any>>()
-    val eventLoader = loader.module<EventLoader>()
-    val processorRegistry = loader.module<ProcessorRegistry>()
-    val hz = loader.module<Hz>()
-
-    @Suppress("UNCHECKED_CAST")
-    inline fun <reified T> entityProvider() = loader.module<EntityProvider<T>>()
-
-    override fun init(loader: ModuleLoader) {
+        }()
+        l.info("initiating module registration")
+        try {
+            registry.loadModules(Props)
+        } catch (e: Exception) {
+            l.error("error in loading modules, system will exit now", e.rootCause())
+            //exitProcess(1)
+            throw ExceptionInInitializerError(e.rootCause())
+        }
+        l.info("module registration is complete")
         l.info("BigBen initialized successfully")
     }
-}
 
-object EventModule : Module {
+    inline fun <reified T> module() = registry.module<T>()
+    inline fun <reified T> entityProvider() = registry.module<EntityProvider<T>>()
 
-    private val l = logger<EventModule>()
+    override fun init(registry: ModuleRegistry) {
 
-    override fun init(loader: ModuleLoader) {
-        val hz = loader.module<Hz>()
-        l.info("initializing event receiver")
-        loader.register(EventReceiver(hz))
-        l.info("initializing event service")
-        loader.register(EventService(hz, loader.module(), loader.module()))
     }
 }

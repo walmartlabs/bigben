@@ -20,11 +20,12 @@
 package com.walmartlabs.bigben.api
 
 import com.google.common.base.Throwables.getStackTraceAsString
-import com.walmartlabs.bigben.BigBen.processorRegistry
+import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.entities.EventStatus.*
 import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.processors.ProcessorConfig
+import com.walmartlabs.bigben.processors.ProcessorRegistry
 import com.walmartlabs.bigben.tasks.StatusTask
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.hz.Hz
@@ -63,7 +64,7 @@ class EventService(private val hz: Hz, private val service: Service,
     fun schedule(events: List<EventRequest>) = response {
         events.map { if (it.mode == Mode.UPSERT) receiver.addEvent(it) else receiver.removeEvent(it.id!!, it.tenant!!) }
                 .reduce().result { emptyList() }.run {
-                    filter { it.eventStatus == TRIGGERED }.map { processorRegistry(it.event()) }.done({ l.error("error in triggering lapsed events:", it.rootCause()) }) {
+                    filter { it.eventStatus == TRIGGERED }.map { module<ProcessorRegistry>()(it.event()) }.done({ l.error("error in triggering lapsed events:", it.rootCause()) }) {
                         it!!.forEach {
                             l.warn("event was triggered immediately (likely lapsed), event bucketId: {}, tenant: {}, " +
                                     "eventTime: {}, currentTime: {}", it.xrefId, it.tenant, it.eventTime, nowUTC())
@@ -87,12 +88,12 @@ class EventService(private val hz: Hz, private val service: Service,
         save<KV> { it.key = "tenants"; it.column = config.tenant; it.value = config.json() }
         if (l.isInfoEnabled) l.info("broadcasting the tenant config to all members: $config")
         hz.hz.getExecutorService("default").submitToAllMembers(ProcessRegisterTask(config)).mapValues { it.value.listenable() }.values.toList().reduce().result { throw RuntimeException("") }
-        processorRegistry.registeredConfigs()
+        module<ProcessorRegistry>().registeredConfigs()
     }
 
     @GET
     @Path("/tenants")
-    fun registeredTenants() = response { processorRegistry.registeredConfigs() }
+    fun registeredTenants() = response { module<ProcessorRegistry>().registeredConfigs() }
 
     @GET
     @Path("/find")
@@ -111,7 +112,7 @@ class EventService(private val hz: Hz, private val service: Service,
                         it.eventId = id; it.eventTime = eventTime?.toString(); it.payload = payload
                         it.eventStatus = status; if (status != UN_PROCESSED && status != null) it.triggeredAt = processedAt?.toString()
                         if (error != null) it.error = com.walmartlabs.bigben.entities.Error(500, error)
-                    }.also { if (fire) processorRegistry(this) }
+                    }.also { if (fire) module<ProcessorRegistry>()(this) }
                 }
             }
         } else {
@@ -120,6 +121,6 @@ class EventService(private val hz: Hz, private val service: Service,
     }
 
     class ProcessRegisterTask(private val config: ProcessorConfig) : Serializable, Callable<ProcessorConfig?> {
-        override fun call() = processorRegistry.register(config)
+        override fun call() = module<ProcessorRegistry>().register(config)
     }
 }

@@ -24,7 +24,7 @@ import com.hazelcast.core.Hazelcast.newHazelcastInstance
 import com.hazelcast.core.HazelcastInstance
 import com.walmartlabs.bigben.utils.Json
 import com.walmartlabs.bigben.utils.commons.Module
-import com.walmartlabs.bigben.utils.commons.ModuleLoader
+import com.walmartlabs.bigben.utils.commons.ModuleRegistry
 import com.walmartlabs.bigben.utils.commons.Props.flattenedMap
 import com.walmartlabs.bigben.utils.commons.Props.map
 import com.walmartlabs.bigben.utils.commons.Props.string
@@ -70,6 +70,6 @@ class Hz : Module {
         if (l.isDebugEnabled) l.debug("hazelcast config file: {}", config)
     }
 
-    override fun init(loader: ModuleLoader) {
+    override fun init(registry: ModuleRegistry) {
     }
 }

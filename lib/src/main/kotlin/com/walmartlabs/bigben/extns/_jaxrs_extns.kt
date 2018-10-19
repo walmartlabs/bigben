@@ -19,9 +19,9 @@
  */
 package com.walmartlabs.bigben.extns
 
-import com.walmartlabs.bigben.BigBen
-import com.walmartlabs.bigben.BigBen.hz
+import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventService
+import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.rootCause
@@ -55,7 +55,7 @@ fun response(f: () -> Any?): Response {
                         ?: "Unexpected error, $message")).apply {
                     if (status == 500) {
                         this["error"] = mapOf("stack" to t.stackTraceAsString()!!,
-                                "node" to hz.hz.cluster.localMember.address.host,
+                                "node" to module<Hz>().hz.cluster.localMember.address.host,
                                 "start_time" to begin,
                                 "duration" to (LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli() - begin.toInstant(ZoneOffset.UTC).toEpochMilli())
                         ).json().run { if (EventService.DEBUG_FLAG.get()) this else base64() }
@@ -66,6 +66,6 @@ fun response(f: () -> Any?): Response {
     val end = LocalDateTime.now()
     r.header("Start-Time", begin).header("End-Time", end)
             .header("Duration", "${end.toInstant(ZoneOffset.UTC).toEpochMilli() - begin.toInstant(ZoneOffset.UTC).toEpochMilli()} ms")
-            .header("Node", BigBen.hz.hz.cluster.localMember.address.host)
+            .header("Node", module<Hz>().hz.cluster.localMember.address.host)
     return r.build()
 }

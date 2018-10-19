@@ -40,7 +40,8 @@ import com.walmartlabs.bigben.extns.toResponse
 import com.walmartlabs.bigben.processors.ProcessorConfig.Type.*
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Module
-import com.walmartlabs.bigben.utils.commons.ModuleLoader
+import com.walmartlabs.bigben.utils.commons.ModuleRegistry
+import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.commons.Props.boolean
 import com.walmartlabs.bigben.utils.commons.Props.int
 import com.walmartlabs.bigben.utils.commons.Props.map
@@ -69,7 +70,7 @@ object ProcessorRegistry : EventProcessor<Event>, Module {
     private val configs: MutableMap<String, ProcessorConfig>
     private val processorCache = CacheBuilder.newBuilder().build<String, EventProcessor<Event>>()
 
-    private lateinit var messageProducerFactory: MessageProducerFactory
+    private val messageProducerFactory: MessageProducerFactory = Class.forName(Props.string("messaging.producer.factory.class")).newInstance() as MessageProducerFactory
 
     init {
         if (l.isInfoEnabled) l.info("loading configs")
@@ -78,8 +79,7 @@ object ProcessorRegistry : EventProcessor<Event>, Module {
         if (l.isInfoEnabled) l.info("configs parsed: {}", configs)
     }
 
-    override fun init(loader: ModuleLoader) {
-        messageProducerFactory = loader.module()
+    override fun init(registry: ModuleRegistry) {
         if (boolean("events.processor.eager.loading", false)) {
             if (l.isInfoEnabled) l.info("creating the processors right away")
             configs.forEach { getOrCreate(it.value) }

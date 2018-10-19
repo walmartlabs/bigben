@@ -23,7 +23,9 @@ package com.walmartlabs.bigben.app
  * Created by smalik3 on 2/28/18
  */
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider
-import com.walmartlabs.bigben.BigBen
+import com.walmartlabs.bigben.BigBen.module
+import com.walmartlabs.bigben.api.EventReceiver
+import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.api.EventService.Companion.DEBUG_FLAG
 import com.walmartlabs.bigben.cron.CronService
 import com.walmartlabs.bigben.entities.EventRequest
@@ -33,7 +35,7 @@ import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.response
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Module
-import com.walmartlabs.bigben.utils.commons.ModuleLoader
+import com.walmartlabs.bigben.utils.commons.ModuleRegistry
 import org.slf4j.Logger
 import java.time.Duration
 import java.time.ZonedDateTime
@@ -113,12 +115,12 @@ class App : Application() {
 
     private fun initPhase(phase: String, lifecycle: Map<String, String?>, l: Logger?) {
         l?.info("phase:$phase started")
-        lifecycle["$phase-class"]?.run { (Class.forName(this).newInstance() as Module).init(ModuleLoader()) }
-                ?: lifecycle["$phase-object"]?.run { (Class.forName(this).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null) as Module).init(ModuleLoader()) }
+        lifecycle["$phase-class"]?.run { (Class.forName(this).newInstance() as Module).init(ModuleRegistry()) }
+                ?: lifecycle["$phase-object"]?.run { (Class.forName(this).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null) as Module).init(ModuleRegistry()) }
         l?.info("phase:$phase finished")
     }
 
-    override fun getSingletons() = setOf(BigBen.eventService, EventGenerator, CronService)
+    override fun getSingletons() = setOf(module<EventService>(), EventGenerator, CronService)
     override fun getClasses() = setOf(JsonProvider::class.java, com.walmartlabs.bigben.app.ExceptionMapper::class.java, DebugFlagSetter::class.java)
 }
 
@@ -141,7 +143,7 @@ object EventGenerator {
         l.info("generating ${eg.numEvents} random events between $t1 and $t2")
         return (1..eg.numEvents).map {
             val t = t1.plus(random.nextLong(delta), ChronoUnit.MILLIS)
-            BigBen.eventReceiver.addEvent(EventRequest().also {
+            module<EventReceiver>().addEvent(EventRequest().also {
                 it.tenant = eg.tenant
                 it.eventTime = t.toString()
                 it.id = UUID.randomUUID().toString()

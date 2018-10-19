@@ -31,7 +31,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.utils.commons.Module
-import com.walmartlabs.bigben.utils.commons.ModuleLoader
+import com.walmartlabs.bigben.utils.commons.ModuleRegistry
 import com.walmartlabs.bigben.utils.commons.Props.map
 import com.walmartlabs.bigben.utils.commons.Props.string
 import com.walmartlabs.bigben.utils.fromJson
@@ -67,7 +67,7 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
         }
     }
 
-    override fun init(loader: ModuleLoader) {
+    override fun init(registry: ModuleRegistry) {
     }
 
     @Suppress("UNCHECKED_CAST")
