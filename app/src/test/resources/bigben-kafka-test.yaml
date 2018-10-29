@@ -6,6 +6,8 @@ modules:
     object: com.walmartlabs.bigben.processors.ProcessorRegistry
   - name: hz
     class: com.walmartlabs.bigben.utils.hz.Hz
+  - name: scheduler
+    object: com.walmartlabs.bigben.SchedulerModule
   - name: events
     object: com.walmartlabs.bigben.EventModule
   - name: kafka
@@ -92,7 +94,7 @@ generic.future.max.get.time: 60
 
 # scheduler / event related properties
 events:
-  scheduler.enabled: true
+  scheduler.enabled: false
   schedule.scan.interval.minutes: 1
   num.shard.submitters: 8
   receiver:

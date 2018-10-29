@@ -20,47 +20,47 @@
 package com.walmartlabs.bigben
 
 import com.walmartlabs.bigben.entities.EntityProvider
-import com.walmartlabs.bigben.utils.commons.Module
 import com.walmartlabs.bigben.utils.commons.ModuleRegistry
 import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.commons.Props.load
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.rootCause
-import kotlin.system.exitProcess
 
 /**
  * Created by smalik3 on 6/24/18
  */
 
-object BigBen : Module {
+object BigBen {
     private val l = logger<BigBen>()
 
     val registry = ModuleRegistry()
 
-    init {
-        System.getProperty("bigben.props")?.run {
-            l.info("using props from location: $this")
-            load(System.getProperty("bigben.props"))
-        } ?: {
-            l.warn("missing 'bigben.props' system property, using the default: file://bigben.yaml")
-            load("file://bigben.yaml")
-        }()
-        l.info("initiating module registration")
-        try {
-            registry.loadModules(Props)
-        } catch (e: Exception) {
-            l.error("error in loading modules, system will exit now", e.rootCause())
-            //exitProcess(1)
-            throw ExceptionInInitializerError(e.rootCause())
-        }
-        l.info("module registration is complete")
-        l.info("BigBen initialized successfully")
-    }
-
     inline fun <reified T> module() = registry.module<T>()
     inline fun <reified T> entityProvider() = registry.module<EntityProvider<T>>()
 
-    override fun init(registry: ModuleRegistry) {
+    fun init() {
+        Initializer
+    }
 
+    private object Initializer {
+        init {
+            System.getProperty("bigben.props")?.run {
+                l.info("using props from location: $this")
+                load(System.getProperty("bigben.props"))
+            } ?: {
+                l.warn("missing 'bigben.props' system property, using the default: file://bigben.yaml")
+                load("file://bigben.yaml")
+            }()
+            l.info("initiating module registration")
+            try {
+                BigBen.registry.loadModules(Props)
+            } catch (e: Throwable) {
+                l.error("error in loading modules, system will exit now", e.rootCause())
+                //exitProcess(1)
+                throw ExceptionInInitializerError(e.rootCause())
+            }
+            l.info("module registration is complete")
+            l.info("BigBen initialized successfully")
+        }
     }
 }

@@ -20,6 +20,7 @@
 package com.walmartlabs.bigben.cassandra.tests
 
 import com.datastax.driver.core.Session
+import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.entities.*
@@ -42,6 +43,7 @@ class IntegrationTests {
             System.setProperty("bigben.props", "file://bigben-test.yaml")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
             EventService.DEBUG_FLAG.set(false)
+            BigBen.init()
         }
     }
 

@@ -19,9 +19,9 @@
  */
 package com.walmartlabs.bigben.utils.commons
 
-import com.google.common.cache.CacheBuilder
 import com.walmartlabs.bigben.utils.Json
 import com.walmartlabs.bigben.utils.logger
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Created by smalik3 on 9/17/18
@@ -39,11 +39,11 @@ class ModuleRegistry {
 
     private val l = logger<ModuleRegistry>()
 
-    val cache = CacheBuilder.newBuilder().build<Class<*>, Any>()!!
+    val cache = ConcurrentHashMap<Class<*>, Any>()
 
     @Suppress("UNCHECKED_CAST")
-    inline fun <reified T> module() = cache.get(T::class.java) x@{
-        cache.asMap().entries.firstOrNull { T::class.java.isAssignableFrom(it.key) }?.value
+    inline fun <reified T> module() = cache.computeIfAbsent(T::class.java) {
+        cache.values.firstOrNull { T::class.java.isAssignableFrom(it::class.java) }
                 ?: throw IllegalArgumentException("no module found with type: ${T::class.java}")
     } as T
 
@@ -70,8 +70,13 @@ class ModuleRegistry {
     }
 
     private fun createModule(m: Json): Module {
-        return (if (m.containsKey("class")) {
-            (Class.forName(m["class"].toString()).newInstance() as Module)
-        } else Class.forName(m["object"].toString()).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null) as Module)
+        return try {
+            (if (m.containsKey("class")) {
+                (Class.forName(m["class"].toString()).newInstance() as Module)
+            } else Class.forName(m["object"].toString()).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null) as Module)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            throw ExceptionInInitializerError(e)
+        }
     }
 }

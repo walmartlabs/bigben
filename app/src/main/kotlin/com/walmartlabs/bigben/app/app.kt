@@ -23,6 +23,7 @@ package com.walmartlabs.bigben.app
  * Created by smalik3 on 2/28/18
  */
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider
+import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventReceiver
 import com.walmartlabs.bigben.api.EventService
@@ -100,7 +101,7 @@ class App : Application() {
                     " |____/|_|\\__, |____/ \\___|_| |_|\n" +
                     "           __/ |                 \n" +
                     "          |___/                  \n")
-            initPhase("init", lifecycle, l)
+            BigBen.init()
             initPhase("post-init", lifecycle, l)
             l.info("Bigben => successfully started")
         } catch (e: Exception) {
