@@ -56,7 +56,7 @@ for a full description of various design elements of `BigBen`
 ## Events Inflow
 `BigBen` can receive events in two modes:
 * **kafka** - inbound and outbound Kafka topics to consume event requests and publish event triggers
-* **http** - HTTP APIs to send event requests and and HTTP APIs to receive event triggers.
+* **http** - HTTP APIs to send event requests and HTTP APIs to receive event triggers.
 
 *It is strongly recommended to use `kafka` for better scalability*
 
