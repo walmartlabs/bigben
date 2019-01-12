@@ -32,11 +32,6 @@
         </layout>
     </appender>
 
-    <logger name="com.walmartlabs.bigben.cron" additivity="false">
-        <level value="DEBUG"/>
-        <appender-ref ref="console"/>
-    </logger>
-
     <logger name="com.walmartlabs.bigben" additivity="false">
         <level value="INFO"/>
         <appender-ref ref="console"/>
