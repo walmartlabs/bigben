@@ -1,8 +1,21 @@
-# domain related properties
-domain:
-  entity.provider.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
-  event.loader.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
-  cluster.factory.class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider
+# top level modules
+modules:
+- name: domain
+  class: com.walmartlabs.bigben.providers.domain.cassandra.CassandraModule
+- name: processors
+  object: com.walmartlabs.bigben.processors.ProcessorRegistry
+- name: hz
+  class: com.walmartlabs.bigben.utils.hz.Hz
+- name: scheduler
+  object: com.walmartlabs.bigben.SchedulerModule
+- name: events
+  object: com.walmartlabs.bigben.EventModule
+- name: messaging
+  object: com.walmartlabs.bigben.kafka.KafkaModule
+  enabled: false
+- name: cron
+  object: com.walmartlabs.bigben.cron.CronRunner
+  enabled: false
 
 # hazelcast properties
 hz:
@@ -17,11 +30,6 @@ hz:
   map:
     store:
       writeDelay: 30
-
-# message related properties
-messaging:
-  producer.factory.class: com.walmartlabs.bigben.kafka.MockMessageProducerFactory
-  processor.class: com.walmartlabs.bigben.kafka.KafkaMessageProcessor
 
 # cassandra related properties
 cassandra:
@@ -43,17 +51,19 @@ cassandra:
     writeConsistency: "LOCAL_QUORUM"
     readConsistency: "LOCAL_QUORUM"
 
-# kafka consumer properties
+# kafka related properties
 kafka:
-  num.consumers: 1
-  consumer:
-    topics: inbound
-    poll.interval: 10000
-    message.retry.max.count: 1
+  consumers:
+  - num.consumers: 8
+    processor.class: com.walmartlabs.bigben.kafka.ProcessorImpl
+    topics: null
+    max.poll.wait.time: 10000
+    message.retry.max.count: 10
+    unknown.exception.retries: 3
     config:
       key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      bootstrap.servers: localhost:9092
+      bootstrap.servers: null
       #fetch.min.bytes: 1
       group.id: bigben-inbound
       #heartbeat.interval.ms: 3000
@@ -67,13 +77,12 @@ kafka:
       #send.buffer.bytes: 131072
       enable.auto.commit: false
   producer:
-    config:
-        key.serializer: org.apache.kafka.common.serialization.StringSerializer
-        value.serializer: org.apache.kafka.common.serialization.StringSerializer
-        acks: "1"
-        bootstrap.servers: localhost:9091
-        buffer.memory: 32400
-        retries: 3
+    config: # this is default kafka producer config, these values will be used if not supplied during the tenant registration
+      key.serializer: org.apache.kafka.common.serialization.StringSerializer
+      value.serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: "1"
+      buffer.memory: 32400
+      retries: 3
 
 # system properties
 task:
@@ -84,10 +93,9 @@ task:
     max.retries: 3
     backoff.multiplier: 2
 
-generic.future.max.get.time: 60
-
+# scheduler / event related properties
 events:
-  disable.scheduler: true
+  scheduler.enabled: true
   schedule.scan.interval.minutes: 1
   num.shard.submitters: 8
   receiver:
@@ -110,11 +118,22 @@ events:
     max.events.in.memory: 100000
     scheduler.worker.threads: 8
 
+# bucket manager / loader related properties
 buckets:
-  backlog.check.limit: 30
+  backlog.check.limit: 300
   background:
-    load.fetch.size: 10
-    load.wait.interval.seconds: 1
-  checkpoint:
-    interval: 60
-    interval.units: SECONDS
+    load.fetch.size: 100
+    load.wait.interval.seconds: 15
+
+# cron related properties
+cron:
+  runner:
+    core.pool.size: 8
+  load:
+    max.retries: 10
+    delay: 1
+    backoff.multiplier: 1
+    time.units: "SECONDS"
+
+messaging.producer.factory.class: com.walmartlabs.bigben.kafka.MockMessageProducerFactory
+generic.future.max.get.time: 60

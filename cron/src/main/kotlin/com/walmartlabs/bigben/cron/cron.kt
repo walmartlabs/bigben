@@ -27,17 +27,19 @@ import com.cronutils.parser.CronParser
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY
 import com.google.common.util.concurrent.ListenableFuture
-import com.walmartlabs.bigben.BigBen.hz
-import com.walmartlabs.bigben.BigBen.processorRegistry
+import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.cron.CronRunner.crons
 import com.walmartlabs.bigben.entities.Event
 import com.walmartlabs.bigben.entities.EventResponse
 import com.walmartlabs.bigben.entities.EventStatus
 import com.walmartlabs.bigben.entities.KV
 import com.walmartlabs.bigben.extns.*
+import com.walmartlabs.bigben.processors.ProcessorRegistry
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.ModuleRegistry
 import com.walmartlabs.bigben.utils.commons.Props.int
+import com.walmartlabs.bigben.utils.hz.Hz
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.time.temporal.ChronoUnit.*
@@ -94,9 +96,9 @@ data class Cron(val id: String, val expression: String, val type: CronType, val 
 object CronRunner : Module {
 
     private val l = logger<CronRunner>()
-    internal val crons = hz.hz.getMap<Int, Crons>("crons")
+    internal val crons = module<Hz>().hz.getMap<Int, Crons>("crons")
 
-    override fun init() {
+    override fun init(registry: ModuleRegistry) {
         l.info("initializing the cron module: starting the cron runner(s)")
         val lastRun = AtomicReference<ZonedDateTime?>()
         workers.scheduleAtFixedRate({
@@ -113,7 +115,7 @@ object CronRunner : Module {
                             val e = EventResponse(c.id, nowString, c.tenant, eventId = "${c.type}/$nowString",
                                     triggeredAt = nowString, eventStatus = EventStatus.TRIGGERED, payload = c.expression).event()
                             if (l.isDebugEnabled) l.debug("triggering event for cron: ${c.cronId()} at $nowString")
-                            processorRegistry(e).transformAsync { updateCronExecutionTime(c, now, it!!) }
+                            module<ProcessorRegistry>()(e).transformAsync { updateCronExecutionTime(c, now, it!!) }
                         }.reduce().done({ l.error("cron-failed: time: $nowString, crons: ${matches.map { it.cronId() }}") })
                         { if (l.isDebugEnabled) l.debug("cron-successful: time: $nowString, crons: ${matches.map { it.cronId() }}") }
                     }
@@ -143,8 +145,8 @@ object CronRunner : Module {
     }
 }
 
-private fun Cron.partition() = hz.hz.partitionService.getPartition(cronId()).partitionId
-private fun String.partition() = hz.hz.partitionService.getPartition(this).partitionId
+private fun Cron.partition() = module<Hz>().hz.partitionService.getPartition(cronId()).partitionId
+private fun String.partition() = module<Hz>().hz.partitionService.getPartition(this).partitionId
 
 @Path("/cron")
 @Consumes(APPLICATION_JSON)

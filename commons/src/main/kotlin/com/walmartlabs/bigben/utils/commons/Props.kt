@@ -20,7 +20,6 @@
 package com.walmartlabs.bigben.utils.commons
 
 import com.fasterxml.jackson.core.type.TypeReference
-import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
 import com.walmartlabs.bigben.utils.*
 import java.util.*
@@ -30,12 +29,20 @@ import java.util.function.Supplier
 /**
  * Created by smalik3 on 2/21/18
  */
-object Props {
+object Props : PropsLoader() {
+    fun parse(props: Json) = PropsLoader(props)
+}
 
-    private val l = logger<Props>()
-    private val props = AtomicReference<Json>()
+open class PropsLoader(preloaded: Json? = null) {
 
-    private val cache: Cache<String, Any> = CacheBuilder.newBuilder().build<String, Any>()
+    companion object {
+        private val NULL: Any = Any()
+        private val NULL_PRESENT: Any = Any()
+    }
+
+    private val l = logger<PropsLoader>()
+    private val props = AtomicReference<Json>().apply { preloaded?.let { set(it) } }
+    private val cache = CacheBuilder.newBuilder().build<String, Any>()
 
     fun load(supplier: Supplier<String>) = load(supplier.get())
 
@@ -103,14 +110,13 @@ object Props {
         return when {
             value == NULL && required -> throw IllegalArgumentException("no property with name: $name")
             value == NULL -> null
+            value == NULL_PRESENT && required -> throw IllegalArgumentException("property '$name' has a 'null' value")
             else -> value
         }
     }
 
-    private val NULL: Any = Any()
-
     private fun resolver(name: String, p: Json = props.get()): Any {
-        if (p.containsKey(name)) return p[name]!!
+        if (p.containsKey(name)) return p[name]?.let { it } ?: NULL_PRESENT
         else if (name.contains(".")) {
             val parts = name.split(".", limit = 2)
             return if (p.containsKey(parts[0]) && p[parts[0]] is Map<*, *>) {

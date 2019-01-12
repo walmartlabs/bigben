@@ -86,11 +86,10 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
                     l.warn("bucket with bucketId {} already existed in the cache, this is highly unusual", bucketId)
                 }
                 buckets.entries.filter { e -> e.value.awaiting.cardinality() > 0 }.forEach { e -> e.value.awaiting.stream().forEach { s -> shards.put(e.key, s) } }
-                if (l.isDebugEnabled) l.debug("processable shards at bucket: {}, are => {}", bucketId, shards)
+                if (l.isInfoEnabled) l.info("processable shards at bucket: {}, are => {}", bucketId, shards)
                 if (!shards.containsKey(bucketId)) {
-                    if (l.isDebugEnabled) l.debug("no events in the bucket: {}", bucketId)
-                }
-                shards
+                    if (l.isInfoEnabled) l.info("no events in the bucket: {}", bucketId)
+                }; shards
             }.catching { e -> shards.also { l.warn("error in loading bucket: {}, will be retried again during next scan", bucketId, e.rootCause()) } }
         }
     }

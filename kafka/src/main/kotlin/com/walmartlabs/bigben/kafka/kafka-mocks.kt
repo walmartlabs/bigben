@@ -19,12 +19,15 @@
  */
 package com.walmartlabs.bigben.kafka
 
+import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.Futures.immediateFailedFuture
 import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.bigben.entities.EventResponse
 import com.walmartlabs.bigben.processors.MessageProducerFactory
 import com.walmartlabs.bigben.utils.Json
+import com.walmartlabs.bigben.utils.commons.PropsLoader
 import org.apache.kafka.clients.consumer.Consumer
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.MockConsumer
 import org.apache.kafka.clients.consumer.OffsetResetStrategy.EARLIEST
 import org.apache.kafka.clients.producer.MockProducer
@@ -44,7 +47,8 @@ class MockMessageProducerFactory : MessageProducerFactory {
     }
 }
 
-class MockKafkaProcessor : KafkaMessageProcessor() {
+class MockKafkaProcessor(props: PropsLoader) : KafkaMessageProcessor(props) {
     lateinit var consumer: MockConsumer<String, String>
     override fun createConsumer(): Consumer<String, String> = MockConsumer<String, String>(EARLIEST).apply { consumer = this }
+    override fun process(cr: ConsumerRecord<String, String>) = Futures.immediateFuture("" as Any)!!
 }

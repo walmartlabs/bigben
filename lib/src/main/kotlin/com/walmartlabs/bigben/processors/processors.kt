@@ -31,7 +31,6 @@ import com.google.common.util.concurrent.SettableFuture
 import com.ning.http.client.AsyncCompletionHandler
 import com.ning.http.client.AsyncHttpClient
 import com.ning.http.client.Response
-import com.walmartlabs.bigben.BigBen.messageProducerFactory
 import com.walmartlabs.bigben.entities.Event
 import com.walmartlabs.bigben.entities.EventResponse
 import com.walmartlabs.bigben.entities.EventStatus.*
@@ -40,6 +39,9 @@ import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.toResponse
 import com.walmartlabs.bigben.processors.ProcessorConfig.Type.*
 import com.walmartlabs.bigben.utils.*
+import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.ModuleRegistry
+import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.commons.Props.boolean
 import com.walmartlabs.bigben.utils.commons.Props.int
 import com.walmartlabs.bigben.utils.commons.Props.map
@@ -60,26 +62,31 @@ data class ProcessorConfig(var tenant: String? = null, var type: Type? = null, v
     }
 }
 
-class ProcessorRegistry : EventProcessor<Event> {
-    companion object {
-        private val l = logger<ProcessorRegistry>()
-        private val ASYNC_HTTP_CLIENT = AsyncHttpClient()
-    }
+object ProcessorRegistry : EventProcessor<Event>, Module {
+
+    private val l = logger<ProcessorRegistry>()
+    private val ASYNC_HTTP_CLIENT = AsyncHttpClient()
 
     private val configs: MutableMap<String, ProcessorConfig>
     private val processorCache = CacheBuilder.newBuilder().build<String, EventProcessor<Event>>()
+
+    private val messageProducerFactory: MessageProducerFactory = Class.forName(Props.string("messaging.producer.factory.class")).newInstance() as MessageProducerFactory
 
     init {
         if (l.isInfoEnabled) l.info("loading configs")
         configs = ConcurrentHashMap(kvs { it.key = "tenants" }.result { l.error("error in loading tenant configs", it); throw it.rootCause()!! }
                 .map { ProcessorConfig::class.java.fromJson(it.value!!) }.associate { it.tenant!! to it })
         if (l.isInfoEnabled) l.info("configs parsed: {}", configs)
+    }
+
+    override fun init(registry: ModuleRegistry) {
         if (boolean("events.processor.eager.loading", false)) {
             if (l.isInfoEnabled) l.info("creating the processors right away")
             configs.forEach { getOrCreate(it.value) }
             if (l.isInfoEnabled) l.info("all processors created")
         } else
             if (l.isInfoEnabled) l.info("processors will be created when required")
+        l.info("ProcessorRegistry module loaded successfully")
     }
 
     override fun invoke(e: Event): ListenableFuture<Event> {

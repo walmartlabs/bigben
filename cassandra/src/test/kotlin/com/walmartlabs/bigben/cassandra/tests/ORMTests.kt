@@ -19,12 +19,13 @@
  */
 package com.walmartlabs.bigben.cassandra.tests
 
+import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.entities.EventStatus.PROCESSED
 import com.walmartlabs.bigben.entities.KV
 import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.providers.domain.cassandra.BucketC
-import com.walmartlabs.bigben.providers.domain.cassandra.CassandraProvider.Companion.mappingManager
+import com.walmartlabs.bigben.providers.domain.cassandra.CassandraModule.Companion.mappingManager
 import com.walmartlabs.bigben.providers.domain.cassandra.EventC
 import com.walmartlabs.bigben.providers.domain.cassandra.EventLookupC
 import com.walmartlabs.bigben.utils.commons.Props
@@ -44,6 +45,7 @@ class ORMTests {
             Props.load("file://bigben-test.yaml")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
             EventService.DEBUG_FLAG.set(false)
+            BigBen.init()
         }
     }
 

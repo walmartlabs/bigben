@@ -21,11 +21,9 @@ package com.walmartlabs.bigben.cassandra.tests
 
 import com.datastax.driver.core.Session
 import com.walmartlabs.bigben.BigBen
-import com.walmartlabs.bigben.BigBen.eventLoader
+import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventService
-import com.walmartlabs.bigben.entities.Bucket
-import com.walmartlabs.bigben.entities.Event
-import com.walmartlabs.bigben.entities.EventStatus
+import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.fetch
 import com.walmartlabs.bigben.extns.nowUTC
@@ -45,6 +43,7 @@ class IntegrationTests {
             System.setProperty("bigben.props", "file://bigben-test.yaml")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
             EventService.DEBUG_FLAG.set(false)
+            BigBen.init()
         }
     }
 
@@ -52,7 +51,7 @@ class IntegrationTests {
     private fun `clean up db`() {
         println("cleaning up the db")
         try {
-            (BigBen.entityProvider.unwrap() as Session).apply {
+            (module<EntityProvider<Any>>().unwrap() as Session).apply {
                 execute("truncate bigben.events;")
                 execute("truncate bigben.lookups;")
                 execute("truncate bigben.buckets;")
@@ -83,13 +82,13 @@ class IntegrationTests {
         }.associate { "${it.eventTime}-${it.id}" to it }.toMutableMap()
         val fetchSize = 20
         (0..10).forEach {
-            var l = eventLoader.load(bucket, it, fetchSize).get()
+            var l = module<EventLoader>().load(bucket, it, fetchSize).get()
             while (l.second.isNotEmpty()) {
                 l.second.forEach {
                     assertEquals(events["${it.eventTime}-${it.id}"], it)
                     events.remove("${it.eventTime}-${it.id}")
                 }
-                l = eventLoader.load(bucket, it, fetchSize, l.second.last().eventTime!!, l.second.last().id!!, l.first).get()
+                l = module<EventLoader>().load(bucket, it, fetchSize, l.second.last().eventTime!!, l.second.last().id!!, l.first).get()
             }
         }
         assertTrue { events.isEmpty() }

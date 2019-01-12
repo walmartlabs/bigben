@@ -30,21 +30,23 @@ import com.datastax.driver.mapping.MappingManager
 import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.extns.nowUTC
+import com.walmartlabs.bigben.utils.commons.Module
+import com.walmartlabs.bigben.utils.commons.ModuleRegistry
+import com.walmartlabs.bigben.utils.commons.Props.map
+import com.walmartlabs.bigben.utils.commons.Props.string
 import com.walmartlabs.bigben.utils.fromJson
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.transform
-import com.walmartlabs.bigben.utils.commons.Props.map
-import com.walmartlabs.bigben.utils.commons.Props.string
 import java.time.ZonedDateTime
 
 /**
  * Created by smalik3 on 3/2/18
  */
-open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, EventLoader {
+open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLoader, Module {
 
     companion object {
-        private val l = logger<CassandraProvider<*>>()
+        private val l = logger<CassandraModule<*>>()
         private val cluster: Cluster
         val mappingManager: MappingManager
         private val loaderQuery: PreparedStatement
@@ -56,13 +58,16 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
         private val readConsistency = consistencyLevel(clusterConfig.readConsistency)
 
         init {
-            if (l.isInfoEnabled) l.info("initialing the Cassandra domain provider")
-            cluster = (Class.forName(string("domain.cluster.factory.class", CassandraProvider::class.java.name)).newInstance() as ClusterFactory).create()
+            l.info("initialing the Cassandra module")
+            cluster = (Class.forName(string("domain.cluster.factory.class", CassandraModule::class.java.name)).newInstance() as ClusterFactory).create()
             session = cluster.connect(string("cassandra.keyspace"))
             mappingManager = MappingManager(session)
             loaderQuery = mappingManager.session.prepare("SELECT * FROM ${session.loggedKeyspace}.events WHERE bucket_id = ? AND shard = ? AND (event_time, id) > (?,?) LIMIT ?;")
             kvAllQuery = mappingManager.session.prepare("SELECT * FROM ${session.loggedKeyspace}.kv_table WHERE key = ?;")
         }
+    }
+
+    override fun init(registry: ModuleRegistry) {
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -197,7 +202,6 @@ open class CassandraProvider<T : Any> : EntityProvider<T>, ClusterFactory, Event
     }
 
     protected open fun decorate(builder: Cluster.Builder) {
-
     }
 
     override fun unwrap() = session

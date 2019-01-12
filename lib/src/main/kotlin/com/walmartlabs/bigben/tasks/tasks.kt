@@ -30,8 +30,7 @@ import com.hazelcast.nio.ObjectDataInput
 import com.hazelcast.nio.ObjectDataOutput
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable
 import com.walmartlabs.bigben.BigBen.entityProvider
-import com.walmartlabs.bigben.BigBen.eventLoader
-import com.walmartlabs.bigben.BigBen.processorRegistry
+import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.entities.EventStatus.ERROR
 import com.walmartlabs.bigben.entities.EventStatus.PROCESSED
@@ -85,7 +84,7 @@ class BulkShardTask(private var shards: Collection<Pair<ZonedDateTime, Int>>? = 
         if (l.isInfoEnabled) l.info("starting processing of ${shards.sortedBy { it.first }}")
         return shards.map { s ->
             try {
-                ShardTask(s, fetchSizeHint, processorRegistry, eventLoader).call().done(
+                ShardTask(s, fetchSizeHint, module(), module()).call().done(
                         { l.error("error in executing shard: bucket: {}, shard: {}", s.first, s.second, it.rootCause()) }) {
                     if (l.isInfoEnabled) l.info("shard processed, bucket: {}, shard: {}", s.first, s.second)
                 }.catching {

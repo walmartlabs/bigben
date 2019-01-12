@@ -26,15 +26,16 @@ import com.hazelcast.map.EntryProcessor
 import com.hazelcast.nio.ObjectDataInput
 import com.hazelcast.nio.ObjectDataOutput
 import com.walmartlabs.bigben.BigBen.entityProvider
-import com.walmartlabs.bigben.BigBen.processorRegistry
+import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.core.ScheduleScanner.Companion.BUCKET_CACHE
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.entities.EventStatus.*
 import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.EVENT_RECEIVER_ADD_EVENT
+import com.walmartlabs.bigben.processors.ProcessorRegistry
 import com.walmartlabs.bigben.utils.*
-import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.commons.Props
+import com.walmartlabs.bigben.utils.hz.Hz
 import java.time.ZonedDateTime
 import java.util.*
 import kotlin.collections.MutableMap.MutableEntry
@@ -65,7 +66,7 @@ class EventReceiver(val hz: Hz) {
                         if (it != null) {
                             if (it.eventTime == eventTime) {
                                 if (l.isDebugEnabled) l.debug("{}, event update received, no change in event time", eventRequest.id)
-                                save<Event> { e -> e.bucketId = it.bucketId; e.shard = it.shard; e.eventTime = it.eventTime; e.id = it.eventId; e.payload = eventRequest.payload}.transform {
+                                save<Event> { e -> e.bucketId = it.bucketId; e.shard = it.shard; e.eventTime = it.eventTime; e.id = it.eventId; e.payload = eventRequest.payload }.transform {
                                     if (l.isDebugEnabled) l.debug("{}, event updated successfully", eventRequest.id)
                                     eventRequest.toResponse().apply { eventId = it!!.id; eventStatus = UPDATED }
                                 }
@@ -168,7 +169,7 @@ class EventReceiver(val hz: Hz) {
             l.error("event rejected, event time not present, {} ", eventRequest.json())
             return immediateFuture<EventResponse>(eventResponse)
         }
-        if (eventRequest.tenant!! !in processorRegistry.registeredTenants()) {
+        if (eventRequest.tenant!! !in module<ProcessorRegistry>().registeredTenants()) {
             val eventResponse = eventRequest.toResponse()
             eventResponse.eventStatus = REJECTED
             eventResponse.error = Error(400, "tenant not registered / unknown tenant")

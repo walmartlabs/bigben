@@ -19,6 +19,10 @@
  */
 package com.walmartlabs.bigben.cron
 
+import com.cronutils.model.CronType
+import com.cronutils.model.definition.CronDefinitionBuilder
+import com.cronutils.model.time.ExecutionTime
+import com.cronutils.parser.CronParser
 import com.hazelcast.map.AbstractEntryProcessor
 import com.hazelcast.nio.ObjectDataInput
 import com.hazelcast.nio.ObjectDataOutput
@@ -28,6 +32,7 @@ import com.walmartlabs.bigben.utils.fromJson
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.typeRefJson
 import java.io.Serializable
+import java.time.ZoneId
 import java.time.ZonedDateTime
 
 /**
@@ -62,5 +67,19 @@ class CronUpdateExecutionTimeEntryProcessor(cronId: String? = null, lastExecutio
     override fun process(entry: MutableMap.MutableEntry<Int, Crons?>): Any? {
         val (cronId, lastExecution) = typeRefJson<Pair<String, String>>(value!!)
         return entry.setValue(entry.value.apply { this!!.crons[cronId]?.let { it.lastExecutionTime = ZonedDateTime.parse(lastExecution) } }).let { null }
+    }
+}
+
+fun main(args: Array<String>) {
+    val c = CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX)).parse("* * * * *")
+    val et = ExecutionTime.forCron(c)
+    var zdt = ZonedDateTime.now(ZoneId.of("UTC"))
+    var z = zdt
+    println(zdt)
+    (1..10).forEach {
+        val match = et.isMatch(z)
+        z = z.plusSeconds(1)
+        zdt = et.nextExecution(zdt).get()
+        println("match = $match, zdt = $zdt, z = $z")
     }
 }
