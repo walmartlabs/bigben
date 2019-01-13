@@ -32,6 +32,11 @@
         </layout>
     </appender>
 
+    <root>
+        <level value="INFO"/>
+        <appender-ref ref="console"/>
+    </root>
+
     <logger name="com.walmartlabs.bigben" additivity="false">
         <level value="INFO"/>
         <appender-ref ref="console"/>
