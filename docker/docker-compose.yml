@@ -6,8 +6,6 @@ services:
     container_name: cassandra
     hostname: cassandra
     restart: on-failure
-    ports:
-      - 9042:9042
     volumes:
       - ../cassandra/src/main/resources/bigben-schema.cql:/tmp/bigben-schema.cql
 
