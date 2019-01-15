@@ -50,13 +50,6 @@ open class PropsLoader(preloaded: Json? = null) {
     fun load(props: String) {
         l.info("loading props")
         this.props.set(when {
-            props.startsWith("file://") -> {
-                val f = props.substring("file://".length)
-                l.info("reading properties from the file: $f")
-                val url = Props::class.java.classLoader.getResource(f)
-                require(url != null) { "could not resolve $f to a url" }
-                val x: Json = omYaml.readValue(url, object : TypeReference<Json>() {}); x
-            }
             props.startsWith("base64://") -> {
                 l.info("loading properties from encoded string")
                 val x: Json =
@@ -76,6 +69,13 @@ open class PropsLoader(preloaded: Json? = null) {
                 l.info("reading properties from the location: $f")
                 require(f.exists()) { "could not resolve $f to a location" }
                 val x: Json = omYaml.readValue(f, object : TypeReference<Json>() {}); x
+            }
+            props.startsWith("file://") -> {
+                val f = props.substring("file://".length)
+                l.info("reading properties from the file: $f")
+                val url = Props::class.java.classLoader.getResource(f)
+                require(url != null) { "could not resolve $f to a url" }
+                val x: Json = omYaml.readValue(url, object : TypeReference<Json>() {}); x
             }
             else -> throw IllegalArgumentException("unknown properties format: $props")
         }

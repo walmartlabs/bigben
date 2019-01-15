@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT
 import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.cron.CronService
+import com.walmartlabs.bigben.extns.APIResponse
 import com.walmartlabs.bigben.utils.typeRefJson
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
@@ -18,7 +19,6 @@ import io.ktor.response.respond
 import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import javax.ws.rs.core.Response
 
 fun main(args: Array<String>) {
     embeddedServer(Netty, 8080) {
@@ -28,19 +28,19 @@ fun main(args: Array<String>) {
             get("/ping") { call.respond(mapOf("status" to "OK")) }
             route("/events") {
                 val es = module<EventService>()
-                get("/cluster") { call.respondFromJaxrs(es.clusterStats()) }
-                post("/schedule") { call.respondFromJaxrs(es.schedule(typeRefJson(call.receive()))) }
-                post("/tenant/register") { call.respondFromJaxrs(es.registerProcessor(call.receive())) }
-                get("/tenants") { call.respondFromJaxrs(es.registeredTenants()) }
-                get("/find") { call.respondFromJaxrs(es.find(call.request.queryParameters["id"]!!, call.request.queryParameters["tenant"]!!)) }
-                post("/dryrun") { call.respondFromJaxrs(es.dryrun(call.request.queryParameters["id"]!!, call.request.queryParameters["tenant"]!!)) }
+                get("/cluster") { call.fromAPIResponse(es.clusterStats()) }
+                post("/schedule") { call.fromAPIResponse(es.schedule(typeRefJson(call.receive()))) }
+                post("/tenant/register") { call.fromAPIResponse(es.registerProcessor(call.receive())) }
+                get("/tenants") { call.fromAPIResponse(es.registeredTenants()) }
+                get("/find") { call.fromAPIResponse(es.find(call.request.queryParameters["id"]!!, call.request.queryParameters["tenant"]!!)) }
+                post("/dryrun") { call.fromAPIResponse(es.dryrun(call.request.queryParameters["id"]!!, call.request.queryParameters["tenant"]!!)) }
             }
             post("/generation/random") { call.respond(EventGenerator.generateEvents(call.receive())) }
             route("/cron") {
-                post { call.respondFromJaxrs(CronService.upsert(call.receive())) }
-                get("/describe") { call.respondFromJaxrs(CronService.describe(call.receive())) }
+                post { call.fromAPIResponse(CronService.upsert(call.receive())) }
+                get("/describe") { call.fromAPIResponse(CronService.describe(call.receive())) }
                 get("/{tenant}/{id}") {
-                    call.respondFromJaxrs(
+                    call.fromAPIResponse(
                         CronService.get(
                             call.parameters["tenant"]!!, call.parameters["id"]!!,
                             call.request.queryParameters["describe"]?.toBoolean()
@@ -48,15 +48,15 @@ fun main(args: Array<String>) {
                     )
                 }
                 delete("/{tenant}/{id}/{type}") {
-                    call.respondFromJaxrs(CronService.delete(call.parameters["tenant"]!!, call.parameters["id"]!!, call.parameters["type"]!!))
+                    call.fromAPIResponse(CronService.delete(call.parameters["tenant"]!!, call.parameters["id"]!!, call.parameters["type"]!!))
                 }
             }
         }
     }.start(wait = true)
 }
 
-private suspend fun ApplicationCall.respondFromJaxrs(r: Response) {
-    r.headers.forEach { h -> h.value.forEach { response.header(h.key, it.toString()) } }
+private suspend fun ApplicationCall.fromAPIResponse(r: APIResponse) {
+    r.headers.forEach { h -> h.value.forEach { response.header(h.key, it) } }
     response.status(HttpStatusCode.fromValue(r.status))
     respond(r.entity)
 }

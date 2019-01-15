@@ -49,16 +49,16 @@ import java.util.concurrent.Executors.newScheduledThreadPool
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
-import javax.ws.rs.*
-import javax.ws.rs.core.MediaType.APPLICATION_JSON
 
 /**
  * Created by smalik3 on 6/29/18
  */
 @JsonInclude(NON_EMPTY)
-data class Cron(val id: String, val expression: String, val type: CronType, val tenant: String,
-                var lastExecutionTime: ZonedDateTime?, val lastUpdated: ZonedDateTime?,
-                val tracingEnabled: Boolean = false, val tracingGranularity: ChronoUnit = DAYS) {
+data class Cron(
+    val id: String, val expression: String, val type: CronType, val tenant: String,
+    var lastExecutionTime: ZonedDateTime?, val lastUpdated: ZonedDateTime?,
+    val tracingEnabled: Boolean = false, val tracingGranularity: ChronoUnit = DAYS
+) {
 
     private val computed = ConcurrentHashMap<Int, Any>()
 
@@ -102,38 +102,52 @@ object CronRunner : Module {
         l.info("initializing the cron module: starting the cron runner(s)")
         val lastRun = AtomicReference<ZonedDateTime?>()
         workers.scheduleAtFixedRate({
-            try {
-                val now = nowUTC().withNano(0)
-                if (lastRun.get() == null || now > lastRun.get()) {
-                    lastRun.set(now)
-                    val nowString = now.toString()
-                    @Suppress("UNCHECKED_CAST")
-                    val matches = (crons.executeOnKeys(crons.localKeySet(), CronMatchExecutionTimeProcessor(
-                            now.toInstant().toEpochMilli())) as MutableMap<Int, List<String>>).values.flatten().map { Cron::class.java.fromJson(it) }
-                    if (matches.isNotEmpty()) {
-                        matches.map { c ->
-                            val e = EventResponse(c.id, nowString, c.tenant, eventId = "${c.type}/$nowString",
-                                    triggeredAt = nowString, eventStatus = EventStatus.TRIGGERED, payload = c.expression).event()
-                            if (l.isDebugEnabled) l.debug("triggering event for cron: ${c.cronId()} at $nowString")
-                            module<ProcessorRegistry>()(e).transformAsync { updateCronExecutionTime(c, now, it!!) }
-                        }.reduce().done({ l.error("cron-failed: time: $nowString, crons: ${matches.map { it.cronId() }}") })
-                        { if (l.isDebugEnabled) l.debug("cron-successful: time: $nowString, crons: ${matches.map { it.cronId() }}") }
-                    }
-                }
-            } catch (e: Exception) {
-                l.error("error in running cron", e.rootCause()!!)
-            }
-        }, 0, 1, SECONDS)
+                                        try {
+                                            val now = nowUTC().withNano(0)
+                                            if (lastRun.get() == null || now > lastRun.get()) {
+                                                lastRun.set(now)
+                                                val nowString = now.toString()
+                                                @Suppress("UNCHECKED_CAST")
+                                                val matches = (crons.executeOnKeys(
+                                                    crons.localKeySet(), CronMatchExecutionTimeProcessor(
+                                                        now.toInstant().toEpochMilli()
+                                                    )
+                                                ) as MutableMap<Int, List<String>>).values.flatten()
+                                                    .map { Cron::class.java.fromJson(it) }
+                                                if (matches.isNotEmpty()) {
+                                                    matches.map { c ->
+                                                        val e = EventResponse(
+                                                            c.id, nowString, c.tenant, eventId = "${c.type}/$nowString",
+                                                            triggeredAt = nowString, eventStatus = EventStatus.TRIGGERED, payload = c.expression
+                                                        ).event()
+                                                        if (l.isDebugEnabled) l.debug("triggering event for cron: ${c.cronId()} at $nowString")
+                                                        module<ProcessorRegistry>()(e).transformAsync { updateCronExecutionTime(c, now, it!!) }
+                                                    }.reduce()
+                                                        .done({ l.error("cron-failed: time: $nowString, crons: ${matches.map { it.cronId() }}") })
+                                                        { if (l.isDebugEnabled) l.debug("cron-successful: time: $nowString, crons: ${matches.map { it.cronId() }}") }
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            l.error("error in running cron", e.rootCause()!!)
+                                        }
+                                    }, 0, 1, SECONDS)
     }
 
     private val parsers = ConcurrentHashMap<CronType, CronParser>()
     internal fun parser(type: CronType) = parsers.computeIfAbsent(type) { CronParser(CronDefinitionBuilder.instanceDefinitionFor(type)) }
 
     private val index = AtomicInteger()
-    private val workers = newScheduledThreadPool(int("cron.runner.core.pool.size")) { Thread(it, "cron-runner#${index.incrementAndGet()}") }
+    private val workers =
+        newScheduledThreadPool(int("cron.runner.core.pool.size")) { Thread(it, "cron-runner#${index.incrementAndGet()}") }
 
-    private fun updateCronExecutionTime(cron: Cron, executionTime: ZonedDateTime, event: Event): ListenableFuture<Cron> {
-        val f = crons.submitToKey(cron.partition(), CronUpdateExecutionTimeEntryProcessor(cron.cronId(), executionTime.toString())).listenable().transform { cron }
+    private fun updateCronExecutionTime(
+        cron: Cron,
+        executionTime: ZonedDateTime,
+        event: Event
+    ): ListenableFuture<Cron> {
+        val f =
+            crons.submitToKey(cron.partition(), CronUpdateExecutionTimeEntryProcessor(cron.cronId(), executionTime.toString()))
+                .listenable().transform { cron }
         return if (cron.tracingEnabled) {
             f.transformAsync {
                 save<KV> {
@@ -148,14 +162,10 @@ object CronRunner : Module {
 private fun Cron.partition() = module<Hz>().hz.partitionService.getPartition(cronId()).partitionId
 private fun String.partition() = module<Hz>().hz.partitionService.getPartition(this).partitionId
 
-@Path("/cron")
-@Consumes(APPLICATION_JSON)
-@Produces(APPLICATION_JSON)
 object CronService {
 
     private val l = logger<CronService>()
 
-    @POST
     fun upsert(cron: Cron) = response {
         if (l.isInfoEnabled) l.info("creating/updating cron: $cron")
         val cronId = cron.cronId()
@@ -166,9 +176,7 @@ object CronService {
         mapOf("status" to "OK")
     }
 
-    @DELETE
-    @Path("/{tenant}/{id}/{type}")
-    fun delete(@PathParam("tenant") tenant: String, @PathParam("id") id: String, @PathParam("type") type: String) = response {
+    fun delete(tenant: String, id: String, type: String) = response {
         val types = if (type == "*") CronType.values().toSet() else setOf(CronType.valueOf(type))
         if (l.isInfoEnabled) l.info("deleting cron: $tenant/$id, types: $types")
         types.forEach {
@@ -184,14 +192,11 @@ object CronService {
     @JsonInclude(NON_EMPTY)
     data class CronDescription(val cron: Cron, val description: String?)
 
-    @GET
-    @Path("/{tenant}/{id}")
-    fun get(@PathParam("tenant") tenant: String, @PathParam("id") id: String, @QueryParam("describe") describe: Boolean?) = response {
-        crons.values.flatMap { it.crons.values.filter { it.tenant == tenant && it.id == id } }.map { CronDescription(it, describe?.run { it.describe() }) }
+    fun get(tenant: String, id: String, describe: Boolean?) = response {
+        crons.values.flatMap { it.crons.values.filter { it.tenant == tenant && it.id == id } }
+            .map { CronDescription(it, describe?.run { it.describe() }) }
     }
 
-    @GET
-    @Path("/describe")
     fun describe(cron: Cron) = response {
         CronDescription(cron, cron.describe())
     }

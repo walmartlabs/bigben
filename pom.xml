@@ -30,7 +30,6 @@
         <jackson.version>2.9.4</jackson.version>
         <hazelcast.version>3.8.6</hazelcast.version>
         <async-http-client.version>1.9.31</async-http-client.version>
-        <javax.ws.rs-api.version>2.1</javax.ws.rs-api.version>
         <maven-compiler-plugin.version>3.5.1</maven-compiler-plugin.version>
         <jackson-module-kotlin.version>2.9.4.1</jackson-module-kotlin.version>
         <commons-lang3.version>3.7</commons-lang3.version>
@@ -131,11 +130,6 @@
                 <groupId>com.ning</groupId>
                 <artifactId>async-http-client</artifactId>
                 <version>${async-http-client.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>javax.ws.rs</groupId>
-                <artifactId>javax.ws.rs-api</artifactId>
-                <version>${javax.ws.rs-api.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>

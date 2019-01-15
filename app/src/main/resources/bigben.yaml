@@ -38,7 +38,7 @@ messaging.producer.factory.class: com.walmartlabs.bigben.kafka.KafkaMessageProdu
 cassandra:
   keyspace: bigben
   cluster:
-    contactPoints: cassandra
+    contactPoints: 127.0.0.1
     clusterName: bigben-cluster
     port: 9042
     localDataCenter: null

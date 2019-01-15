@@ -25,9 +25,6 @@ package com.walmartlabs.bigben.app
 import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventReceiver
-import com.walmartlabs.bigben.api.EventService
-import com.walmartlabs.bigben.api.EventService.Companion.DEBUG_FLAG
-import com.walmartlabs.bigben.cron.CronService
 import com.walmartlabs.bigben.entities.EventRequest
 import com.walmartlabs.bigben.entities.EventStatus.REJECTED
 import com.walmartlabs.bigben.extns.bucket
@@ -42,27 +39,9 @@ import java.time.temporal.ChronoUnit
 import java.util.*
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
-import javax.ws.rs.Consumes
-import javax.ws.rs.POST
-import javax.ws.rs.Path
-import javax.ws.rs.Produces
-import javax.ws.rs.container.ContainerRequestContext
-import javax.ws.rs.container.ContainerRequestFilter
-import javax.ws.rs.container.PreMatching
-import javax.ws.rs.core.Application
-import javax.ws.rs.core.MediaType.APPLICATION_JSON
-import javax.ws.rs.ext.Provider
 import kotlin.system.exitProcess
 
-@Provider
-@PreMatching
-class DebugFlagSetter : ContainerRequestFilter {
-    override fun filter(ctx: ContainerRequestContext) {
-        if (ctx.uriInfo.queryParameters.containsKey("debug")) DEBUG_FLAG.set(true) else DEBUG_FLAG.set(false)
-    }
-}
-
-class App : Application() {
+class App {
 
     init {
         try {
@@ -105,22 +84,14 @@ class App : Application() {
             }
         l?.info("phase:$phase finished")
     }
-
-    override fun getSingletons() = setOf(module<EventService>(), EventGenerator, CronService)
-    override fun getClasses() = setOf(DebugFlagSetter::class.java)
 }
 
-@Path("/generation")
-@Produces(APPLICATION_JSON)
-@Consumes(APPLICATION_JSON)
 object EventGenerator {
 
     data class EventGeneration(val offset: String, val period: String, val numEvents: Int, val tenant: String)
 
     private val l = logger<EventGenerator>()
 
-    @POST
-    @Path("/random")
     fun generateEvents(eg: EventGeneration): Map<ZonedDateTime, Int> {
         val random = ThreadLocalRandom.current()
         val t1 = nowUTC().bucket() + Duration.parse(eg.offset)

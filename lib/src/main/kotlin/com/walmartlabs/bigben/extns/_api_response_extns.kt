@@ -30,7 +30,6 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeParseException
 import java.util.*
-import javax.ws.rs.core.Response
 
 /**
  * Created by smalik3 on 6/29/18
@@ -39,33 +38,41 @@ private fun String.base64() = Base64.getEncoder().encodeToString(this.json().toB
 
 private val l = logger("API")
 
-fun response(f: () -> Any?): Response {
+data class APIResponse(
+    val entity: Any, val status: Int = 200,
+    val headers: Map<String, MutableList<String>> = mutableMapOf()
+) {
+    fun header(name: String, value: String) = apply { (headers[name] ?: mutableListOf()).add(value) }
+}
+
+fun response(f: () -> Any?): APIResponse {
     val begin = LocalDateTime.now()
     val r = try {
-        f()?.run { this as? Response.ResponseBuilder ?: Response.ok(this) }
-                ?: Response.status(404).entity(mapOf("status" to "not found"))
+        f()?.run { this as? APIResponse ?: APIResponse(this, 200) }
+            ?: APIResponse(mapOf("status" to "not found"), 404)
     } catch (e: Exception) {
         val t = e.rootCause()!!
         l.error("error in processing request", t)
         val status = if (t is IllegalArgumentException || t is DateTimeParseException) 400 else 500
         val message = "please contact engineering team with the below error signature"
-        Response.status(status).entity(
-                mutableMapOf("message"
-                        to (t.message?.let { """${t.message}${if (status == 500) " ($message)" else ""}""" }
-                        ?: "Unexpected error, $message")).apply {
-                    if (status == 500) {
-                        this["error"] = mapOf("stack" to t.stackTraceAsString()!!,
-                                "node" to module<Hz>().hz.cluster.localMember.address.host,
-                                "start_time" to begin,
-                                "duration" to (LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli() - begin.toInstant(ZoneOffset.UTC).toEpochMilli())
-                        ).json().run { if (EventService.DEBUG_FLAG.get()) this else base64() }
-                    }
+        APIResponse(
+            mutableMapOf("message"
+                    to (t.message?.let { """${t.message}${if (status == 500) " ($message)" else ""}""" }
+                ?: "Unexpected error, $message")).apply {
+                if (status == 500) {
+                    this["error"] = mapOf(
+                        "stack" to t.stackTraceAsString()!!,
+                        "node" to module<Hz>().hz.cluster.localMember.address.host,
+                        "start_time" to begin,
+                        "duration" to (LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli() - begin.toInstant(ZoneOffset.UTC).toEpochMilli())
+                    ).json().run { if (EventService.DEBUG_FLAG.get()) this else base64() }
                 }
+            }, status
         )
     }
     val end = LocalDateTime.now()
-    r.header("Start-Time", begin).header("End-Time", end)
-            .header("Duration", "${end.toInstant(ZoneOffset.UTC).toEpochMilli() - begin.toInstant(ZoneOffset.UTC).toEpochMilli()} ms")
-            .header("Node", module<Hz>().hz.cluster.localMember.address.host)
-    return r.build()
+    r.header("Start-Time", begin.toString()).header("End-Time", end.toString())
+        .header("Duration", "${end.toInstant(ZoneOffset.UTC).toEpochMilli() - begin.toInstant(ZoneOffset.UTC).toEpochMilli()} ms")
+        .header("Node", module<Hz>().hz.cluster.localMember.address.host)
+    return r
 }
