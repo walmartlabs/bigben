@@ -60,7 +60,7 @@ task:
 kafka:
   consumers:
     - num.consumers: 1
-      processor.class: com.walmartlabs.bigben.tests.MockProcessorImpl
+      processor.impl.class: com.walmartlabs.bigben.tests.MockProcessorImpl
       topics: topic1
       max.poll.wait.time: 10000
       message.retry.max.count: 10

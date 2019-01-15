@@ -1,3 +1,6 @@
+DROP KEYSPACE IF EXISTS bigben;
+CREATE KEYSPACE IF NOT EXISTS bigben WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
+
 DROP TABLE IF EXISTS bigben.buckets;
 
 CREATE TABLE IF NOT EXISTS bigben.buckets (

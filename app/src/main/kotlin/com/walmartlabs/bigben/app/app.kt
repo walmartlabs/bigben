@@ -22,18 +22,13 @@ package com.walmartlabs.bigben.app
 /**
  * Created by smalik3 on 2/28/18
  */
-import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider
 import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventReceiver
-import com.walmartlabs.bigben.api.EventService
-import com.walmartlabs.bigben.api.EventService.Companion.DEBUG_FLAG
-import com.walmartlabs.bigben.cron.CronService
 import com.walmartlabs.bigben.entities.EventRequest
 import com.walmartlabs.bigben.entities.EventStatus.REJECTED
 import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.nowUTC
-import com.walmartlabs.bigben.extns.response
 import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Module
 import com.walmartlabs.bigben.utils.commons.ModuleRegistry
@@ -44,63 +39,28 @@ import java.time.temporal.ChronoUnit
 import java.util.*
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
-import javax.ws.rs.Consumes
-import javax.ws.rs.POST
-import javax.ws.rs.Path
-import javax.ws.rs.Produces
-import javax.ws.rs.container.ContainerRequestContext
-import javax.ws.rs.container.ContainerRequestFilter
-import javax.ws.rs.container.PreMatching
-import javax.ws.rs.core.Application
-import javax.ws.rs.core.MediaType.APPLICATION_JSON
-import javax.ws.rs.core.Response
-import javax.ws.rs.ext.ExceptionMapper
-import javax.ws.rs.ext.Provider
 import kotlin.system.exitProcess
 
-@Provider
-@Consumes("*/*")
-@Produces("*/*")
-class JsonProvider : JacksonJsonProvider(om)
-
-@Provider
-@Consumes("*/*")
-@Produces(APPLICATION_JSON)
-class ExceptionMapper : ExceptionMapper<Throwable> {
-    override fun toResponse(t: Throwable): Response {
-        val r = response { throw t }
-        return Response.status(r.status)
-                .entity(r.entity.json()).apply { r.headers.forEach { t, u -> u.forEach { header(t, it) } } }
-                .header("Content-Type", "application/json")
-                .build()
-    }
-}
-
-@Provider
-@PreMatching
-class DebugFlagSetter : ContainerRequestFilter {
-    override fun filter(ctx: ContainerRequestContext) {
-        if (ctx.uriInfo.queryParameters.containsKey("debug")) DEBUG_FLAG.set(true) else DEBUG_FLAG.set(false)
-    }
-}
-
-class App : Application() {
+class App {
 
     init {
         try {
-            val lifecycle = typeRefYaml<Map<String, String?>>(App::class.java.classLoader.getResource("/bigben-lifecycle.yaml").readText())
+            val lifecycle =
+                typeRefYaml<Map<String, String?>>(App::class.java.classLoader.getResource("bigben-lifecycle.yaml").readText())
             initPhase("pre-init", lifecycle, null)
             val l = logger<App>()
             l.info("phase:pre-init finished")
-            println("\n" +
-                    "  ____  _       ____             \n" +
-                    " |  _ \\(_)     |  _ \\            \n" +
-                    " | |_) |_  __ _| |_) | ___ _ __  \n" +
-                    " |  _ <| |/ _` |  _ < / _ \\ '_ \\ \n" +
-                    " | |_) | | (_| | |_) |  __/ | | |\n" +
-                    " |____/|_|\\__, |____/ \\___|_| |_|\n" +
-                    "           __/ |                 \n" +
-                    "          |___/                  \n")
+            println(
+                "\n" +
+                        "  ____  _       ____             \n" +
+                        " |  _ \\(_)     |  _ \\            \n" +
+                        " | |_) |_  __ _| |_) | ___ _ __  \n" +
+                        " |  _ <| |/ _` |  _ < / _ \\ '_ \\ \n" +
+                        " | |_) | | (_| | |_) |  __/ | | |\n" +
+                        " |____/|_|\\__, |____/ \\___|_| |_|\n" +
+                        "           __/ |                 \n" +
+                        "          |___/                  \n"
+            )
             BigBen.init()
             initPhase("post-init", lifecycle, l)
             l.info("Bigben => successfully started")
@@ -117,25 +77,21 @@ class App : Application() {
     private fun initPhase(phase: String, lifecycle: Map<String, String?>, l: Logger?) {
         l?.info("phase:$phase started")
         lifecycle["$phase-class"]?.run { (Class.forName(this).newInstance() as Module).init(ModuleRegistry()) }
-                ?: lifecycle["$phase-object"]?.run { (Class.forName(this).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null) as Module).init(ModuleRegistry()) }
+            ?: lifecycle["$phase-object"]?.run {
+                (Class.forName(this).getDeclaredField("INSTANCE").apply {
+                    isAccessible = true
+                }.get(null) as Module).init(ModuleRegistry())
+            }
         l?.info("phase:$phase finished")
     }
-
-    override fun getSingletons() = setOf(module<EventService>(), EventGenerator, CronService)
-    override fun getClasses() = setOf(JsonProvider::class.java, com.walmartlabs.bigben.app.ExceptionMapper::class.java, DebugFlagSetter::class.java)
 }
 
-@Path("/generation")
-@Produces(APPLICATION_JSON)
-@Consumes(APPLICATION_JSON)
 object EventGenerator {
 
     data class EventGeneration(val offset: String, val period: String, val numEvents: Int, val tenant: String)
 
     private val l = logger<EventGenerator>()
 
-    @POST
-    @Path("/random")
     fun generateEvents(eg: EventGeneration): Map<ZonedDateTime, Int> {
         val random = ThreadLocalRandom.current()
         val t1 = nowUTC().bucket() + Duration.parse(eg.offset)

@@ -22,6 +22,7 @@ package com.walmartlabs.bigben.utils.commons
 import com.fasterxml.jackson.core.type.TypeReference
 import com.google.common.cache.CacheBuilder
 import com.walmartlabs.bigben.utils.*
+import java.io.File
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
 import java.util.function.Supplier
@@ -49,16 +50,11 @@ open class PropsLoader(preloaded: Json? = null) {
     fun load(props: String) {
         l.info("loading props")
         this.props.set(when {
-            props.startsWith("file://") -> {
-                val f = props.substring("file://".length)
-                l.info("reading properties from the file: $f")
-                val url = Props::class.java.classLoader.getResource(f)
-                require(url != null) { "could not resolve $f to a url" }
-                val x: Json = omYaml.readValue(url, object : TypeReference<Json>() {}); x
-            }
             props.startsWith("base64://") -> {
                 l.info("loading properties from encoded string")
-                val x: Json = omYaml.readValue(String(Base64.getDecoder().decode(props.substring("base64://".length))), object : TypeReference<Json>() {}); x
+                val x: Json =
+                    omYaml.readValue(String(Base64.getDecoder().decode(props.substring("base64://".length))), object :
+                        TypeReference<Json>() {}); x
             }
             props.startsWith("yaml://") -> {
                 l.info("loading properties from yaml configuration")
@@ -68,8 +64,22 @@ open class PropsLoader(preloaded: Json? = null) {
                 l.info("loading properties from json configuration")
                 val x: Json = om.readValue(props.substring("json://".length), object : TypeReference<Json>() {}); x
             }
+            props.startsWith("uri://") -> {
+                val f = File(props.substring("uri://".length))
+                l.info("reading properties from the location: $f")
+                require(f.exists()) { "could not resolve $f to a location" }
+                val x: Json = omYaml.readValue(f, object : TypeReference<Json>() {}); x
+            }
+            props.startsWith("file://") -> {
+                val f = props.substring("file://".length)
+                l.info("reading properties from the file: $f")
+                val url = Props::class.java.classLoader.getResource(f)
+                require(url != null) { "could not resolve $f to a url" }
+                val x: Json = omYaml.readValue(url, object : TypeReference<Json>() {}); x
+            }
             else -> throw IllegalArgumentException("unknown properties format: $props")
-        }).apply { cache.invalidateAll() }
+        }
+        ).apply { cache.invalidateAll() }
         if (l.isDebugEnabled) l.debug("loaded props: \n${this.props.get().yaml()}")
     }
 
@@ -78,13 +88,13 @@ open class PropsLoader(preloaded: Json? = null) {
     fun int(name: String, defaultValue: Int = 0) = get(name) as? Int ?: defaultValue
 
     fun long(name: String, defaultValue: Long = 0) = get(name)?.toString()?.toLong()
-            ?: defaultValue
+        ?: defaultValue
 
     fun string(name: String, defaultValue: String = "") = get(name)?.toString()
-            ?: defaultValue
+        ?: defaultValue
 
     fun boolean(name: String, defaultValue: Boolean = false) = get(name)?.toString()?.toBoolean()
-            ?: defaultValue
+        ?: defaultValue
 
     fun int(name: String) = get(name, true)!! as Int
     fun long(name: String) = get(name, true)!!.toString().toLong()

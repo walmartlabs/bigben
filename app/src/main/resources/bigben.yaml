@@ -12,7 +12,7 @@ modules:
     object: com.walmartlabs.bigben.EventModule
   - name: messaging
     object: com.walmartlabs.bigben.kafka.KafkaModule
-    enabled: true
+    enabled: false
   - name: cron
     object: com.walmartlabs.bigben.cron.CronRunner
     enabled: false

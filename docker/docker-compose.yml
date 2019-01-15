@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+  cassandra:
+    image: cassandra:3
+    container_name: cassandra
+    hostname: cassandra
+    restart: on-failure
+    volumes:
+      - ../cassandra/src/main/resources/bigben-schema.cql:/tmp/bigben-schema.cql
+
+  bigben:
+    image: sandeepmalik/bigben:1
+    hostname: bigben
+    container_name: bigben
+    volumes:
+      - ../app/src/main/resources/bigben.yaml:/dist/bigben-config.yaml
+
+  setup_cassandra:
+    image: dadarek/wait-for-dependencies
+    container_name: setup_cassandra
+    depends_on:
+      - cassandra
+    command: cassandra:9042
