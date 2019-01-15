@@ -125,27 +125,39 @@ Multiple tenants can use `BigBen` in parallel. Each one can configure how the ev
 Tenant 1 can configure the events to be delivered in `kafka` topic `t1`, where as tenant 2 can have them delivered
 via a specific `http` url. The usage of tenants will become more clearer with the below explanation of `BigBen` APIs
 
-## How to deploy `BigBen`?
-Following are the steps to set up `BigBen`:
-1. git clone the `master` branch
-2. Set up a Cassandra cluster
-3. create a keyspace `bigben` in Cassandra
-4. Open the file `bigben-schema.cql` and execute the commands on the `cql` prompt
-5. Open the file `bigben.yaml`
+## Docker support
+BigBen is dockerized and image (`bigben`) is available on docker hub. The code also contains a 
+docker compose file, which starts `cassandra`, `hazelcast` and `app`.
+To quickly set up the application for local dev testing, do the following steps:
+1. `git clone $repo`
+2. `cd bigben/docker`
+3. `./run_dockerized_bigben.sh`
+4. wait for application to start on port `8080`
+5. verify that `curl http://localhost:8080/ping` returns `200` 
+
+## How to deploy BigBen in container environment?
+Assuming `Cassandra` is already set up, following are the steps to set up `BigBen` app:
+1. `git clone $repo`
+2. Open to `app/src/main/resources/bigben.yaml`
     * Modify the `cassandra` related properties
     * Modify the `hazelcast` related properties
-        - add the comma separated IPs of nodes participating in the cluster
-        - modify any other property if needed
-    * Uncomment the `processor.class` property if you plan to use kafka for receiving events
-        - Go to `kafka` section and add the appropriate topic name
+      - add the comma separated IPs of nodes participating in the cluster
+      - modify any other property if needed
+    * Uncomment the `processor.impl.class` property if you plan to use kafka for receiving events
+        - Go to `kafka` section and add the appropriate topic name, and bootsrap.servers
         - Add / Modify any other properties as needed
     * Check the `buckets` section and set the `backlog.check.limit` to some value (e.g. set 1440 for one day backlog check limit)
     * If you don't want to use `cron` module, remove it from under the `modules` section  
-6. run `mvn clean install -DskipTests` 
-7. copy the `app/target/bigben.war` to the server location in all the nodes
-8. start the server
-9. wait for sometime, then call `GET /events/cluster` API and see that a master is chosen  
- 
+2. run `docker run -p 8080:8080 bigben`
+4. wait for application to start on port `8080`
+5. verify that `curl http://localhost:8080/ping` returns `200` 
+
+## How to setup `Cassandra` for `BigBen`?
+Following are the steps to set up `BigBen`:
+1. git clone the `master` branch
+2. Set up a Cassandra cluster
+3. create a keyspace `bigben` in `Cassandra` cluster with desired replication
+4. Open the file `bigben-schema.cql` and execute `cqlsh -f bigben-schema.cql`
 
 ## APIs
 
