@@ -1,7 +1,8 @@
-DROP KEYSPACE IF EXISTS bigben;
+-- DROP KEYSPACE IF EXISTS bigben;
+
 CREATE KEYSPACE IF NOT EXISTS bigben WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
 
-DROP TABLE IF EXISTS bigben.buckets;
+-- DROP TABLE IF EXISTS bigben.buckets;
 
 CREATE TABLE IF NOT EXISTS bigben.buckets (
 	id timestamp PRIMARY KEY,
@@ -12,7 +13,7 @@ CREATE TABLE IF NOT EXISTS bigben.buckets (
 	status text
 );
 
-DROP TABLE IF EXISTS bigben.lookups;
+-- DROP TABLE IF EXISTS bigben.lookups;
 
 CREATE TABLE IF NOT EXISTS bigben.lookups (
 	tenant text,
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS bigben.lookups (
 	PRIMARY KEY ((tenant, xref_id))
 );
 
-DROP TABLE IF EXISTS bigben.events;
+-- DROP TABLE IF EXISTS bigben.events;
 
 CREATE TABLE IF NOT EXISTS bigben.events (
 	bucket_id timestamp,
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS bigben.events (
 	PRIMARY KEY ((bucket_id, shard), event_time, id)
 ) WITH CLUSTERING ORDER BY (event_time ASC, id ASC);
 
-DROP TABLE IF EXISTS bigben.kv_table;
+-- DROP TABLE IF EXISTS bigben.kv_table;
 
 CREATE TABLE IF NOT EXISTS bigben.kv_table (
 	key text,
