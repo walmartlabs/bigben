@@ -19,41 +19,50 @@ import io.ktor.response.respond
 import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import java.util.concurrent.CountDownLatch
 
-fun main(args: Array<String>) {
-    embeddedServer(Netty, 8080) {
-        configure()
-        App()
-        routing {
-            get("/ping") { call.respond(mapOf("status" to "OK")) }
-            route("/events") {
-                val es = module<EventService>()
-                get("/cluster") { call.fromAPIResponse(es.clusterStats()) }
-                post("/schedule") { call.fromAPIResponse(es.schedule(typeRefJson(call.receive()))) }
-                post("/tenant/register") { call.fromAPIResponse(es.registerProcessor(call.receive())) }
-                get("/tenants") { call.fromAPIResponse(es.registeredTenants()) }
-                get("/find") { call.fromAPIResponse(es.find(call.request.queryParameters["id"]!!, call.request.queryParameters["tenant"]!!)) }
-                post("/dryrun") { call.fromAPIResponse(es.dryrun(call.request.queryParameters["id"]!!, call.request.queryParameters["tenant"]!!)) }
-            }
-            post("/generation/random") { call.respond(EventGenerator.generateEvents(call.receive())) }
-            route("/cron") {
-                post { call.fromAPIResponse(CronService.upsert(call.receive())) }
-                get("/describe") { call.fromAPIResponse(CronService.describe(call.receive())) }
-                get("/{tenant}/{id}") {
-                    call.fromAPIResponse(
-                        CronService.get(
-                            call.parameters["tenant"]!!, call.parameters["id"]!!,
-                            call.request.queryParameters["describe"]?.toBoolean()
+object AppRun {
+
+    val latch = CountDownLatch(1)
+
+    @JvmStatic
+    fun main(args: Array<String>) {
+        embeddedServer(Netty, 8080) {
+            configure()
+            App()
+            routing {
+                get("/ping") { call.respond(mapOf("status" to "OK")) }
+                route("/events") {
+                    val es = module<EventService>()
+                    get("/cluster") { call.fromAPIResponse(es.clusterStats()) }
+                    post("/schedule") { call.fromAPIResponse(es.schedule(typeRefJson(call.receive()))) }
+                    post("/tenant/register") { call.fromAPIResponse(es.registerProcessor(call.receive())) }
+                    get("/tenants") { call.fromAPIResponse(es.registeredTenants()) }
+                    get("/find") { call.fromAPIResponse(es.find(call.request.queryParameters["id"]!!, call.request.queryParameters["tenant"]!!)) }
+                    post("/dryrun") { call.fromAPIResponse(es.dryrun(call.request.queryParameters["id"]!!, call.request.queryParameters["tenant"]!!)) }
+                }
+                post("/generation/random") { call.respond(EventGenerator.generateEvents(call.receive())) }
+                route("/cron") {
+                    post { call.fromAPIResponse(CronService.upsert(call.receive())) }
+                    get("/describe") { call.fromAPIResponse(CronService.describe(call.receive())) }
+                    get("/{tenant}/{id}") {
+                        call.fromAPIResponse(
+                            CronService.get(
+                                call.parameters["tenant"]!!, call.parameters["id"]!!,
+                                call.request.queryParameters["describe"]?.toBoolean()
+                            )
                         )
-                    )
-                }
-                delete("/{tenant}/{id}/{type}") {
-                    call.fromAPIResponse(CronService.delete(call.parameters["tenant"]!!, call.parameters["id"]!!, call.parameters["type"]!!))
+                    }
+                    delete("/{tenant}/{id}/{type}") {
+                        call.fromAPIResponse(CronService.delete(call.parameters["tenant"]!!, call.parameters["id"]!!, call.parameters["type"]!!))
+                    }
                 }
             }
-        }
-    }.start(wait = true)
+            latch.countDown()
+        }.start(wait = true)
+    }
 }
+
 
 private suspend fun ApplicationCall.fromAPIResponse(r: APIResponse) {
     r.headers.forEach { h -> h.value.forEach { response.header(h.key, it) } }
