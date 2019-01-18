@@ -99,7 +99,7 @@ object EventGenerator {
         val delta = ChronoUnit.MILLIS.between(t1, t2)
         l.info("generating ${eg.numEvents} random events between $t1 and $t2")
         return (1..eg.numEvents).map {
-            val t = t1.plus(random.nextLong(delta), ChronoUnit.MILLIS)
+            val t = if(delta > 0) t1.plus(random.nextLong(delta), ChronoUnit.MILLIS) else t1
             module<EventReceiver>().addEvent(EventRequest().also {
                 it.tenant = eg.tenant
                 it.eventTime = t.toString()

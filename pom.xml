@@ -172,6 +172,18 @@
                 <artifactId>ktor-jackson</artifactId>
                 <version>${ktor.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.ktor</groupId>
+                <artifactId>ktor-client-core</artifactId>
+                <version>${ktor.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.ktor</groupId>
+                <artifactId>ktor-client-apache</artifactId>
+                <version>${ktor.version}</version>
+                <scope>test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

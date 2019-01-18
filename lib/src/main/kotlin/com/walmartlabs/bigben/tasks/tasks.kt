@@ -34,6 +34,7 @@ import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.entities.EventStatus.ERROR
 import com.walmartlabs.bigben.entities.EventStatus.PROCESSED
+import com.walmartlabs.bigben.extns.epoch
 import com.walmartlabs.bigben.hz.HzObjectFactory
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.BULK_EVENT_TASK
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.SHUTDOWN_TASK
@@ -131,25 +132,29 @@ class ShardTask(private val p: Pair<ZonedDateTime, Int>, fetchSizeHint: Int,
 
     override fun call(): ListenableFuture<ShardStatus> {
         if (l.isDebugEnabled) l.debug("{}, processing shard with fetch size: {}", executionKey, fetchSize)
-        return loader.load(p.first, p.second, fetchSize).transformAsync { rp ->
-            val events = rp!!.second
-            if (events.isEmpty()) immediateFuture(rp.first to events)
-            else events.filter { it.status != PROCESSED }.map { e ->
-                schedule(e).done({
-                    l.error("{}/{}/{} event has error in processing", executionKey, e.eventTime, e.id, it.rootCause())
-                }) { if (l.isDebugEnabled) l.debug("{}/{}/{} event is processed successfully", executionKey, e.eventTime, e.id) }
-            }.reduce().transformAsync {
-                if (events.size >= fetchSize)
-                    loader.load(p.first, p.second, fetchSize, events.last().eventTime!!, events.last().id!!, rp.first)
-                else immediateFuture(rp.first to events)
-            }
-        }.transform {
+        return loadAndProcess(epoch(), "", null).transform {
             it!!.second.fold(false) { b, e -> b || e.status == ERROR }.run {
                 if (l.isDebugEnabled) {
                     if (this) l.debug("{}, errors in processing shard", executionKey)
                     else l.debug("{}, shard processed successfully", executionKey)
                 }
                 ShardStatus(p.first, p.second, if (this) ERROR else PROCESSED)
+            }
+        }
+    }
+
+    private fun loadAndProcess(eventTime: ZonedDateTime, eventId: String, context: Any?): ListenableFuture<Pair<Any?, List<Event>>> {
+        return loader.load(p.first, p.second, fetchSize, eventTime, eventId, context).transformAsync { rp ->
+            val events = rp!!.second
+            if (events.isEmpty()) immediateFuture(rp.first to events)
+            else events.filter { it.status != PROCESSED }.map { e ->
+                schedule(e).done(
+                    { l.error("{}/{}/{} event has error in processing", executionKey, e.eventTime, e.id, it.rootCause()) }
+                ) { if (l.isDebugEnabled) l.debug("{}/{}/{} event is processed successfully", executionKey, e.eventTime, e.id) }
+            }.reduce().transformAsync {
+                if (events.size >= fetchSize)
+                    loadAndProcess(events.last().eventTime!!, events.last().id!!, rp.first)
+                else immediateFuture(rp.first to events)
             }
         }
     }
