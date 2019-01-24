@@ -1,0 +1,6 @@
+app.server.port: ${SERVER_PORT}
+cassandra.cluster.contactPoints: cassandra
+bigben.inbound.topic:
+  name: some_topic
+  bootstrap.servers: some_servers
+#events.scheduler.enabled: false

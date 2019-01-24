@@ -12,6 +12,6 @@ COPY ./docker/start-bigben.sh $APP_ROOT/start.sh
 USER root
 RUN chmod +x $APP_ROOT/start.sh
 WORKDIR $APP_ROOT
-EXPOSE 8080 5701
+#EXPOSE 8080 5701
 
 CMD ["sh", "-c", "$APP_ROOT/start.sh"]

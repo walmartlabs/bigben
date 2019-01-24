@@ -44,11 +44,12 @@ object BigBen {
 
     private object Initializer {
         init {
-            System.getProperty("bigben.props")?.run {
-                l.info("using props from location: $this")
-                load(System.getProperty("bigben.props"))
+            System.getenv("CONFIGS")?.run {
+                val configs = this.split(",").map { "uri://${System.getenv("APP_ROOT")}/$it.yaml" }
+                l.info("using configs: $configs")
+                load(*configs.toTypedArray())
             } ?: {
-                l.warn("missing 'bigben.props' system property, using the default: file://bigben.yaml")
+                l.warn("no CONFIGS env variable provided, using the default file: file://bigben.yaml")
                 load("file://bigben.yaml")
             }()
             l.info("initiating module registration")

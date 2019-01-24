@@ -5,6 +5,7 @@ import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.cron.CronService
 import com.walmartlabs.bigben.extns.APIResponse
+import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.typeRefJson
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
@@ -19,6 +20,8 @@ import io.ktor.response.respond
 import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import org.apache.log4j.xml.DOMConfigurator
+import java.io.File
 import java.util.concurrent.CountDownLatch
 
 object AppRun {
@@ -27,9 +30,15 @@ object AppRun {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        embeddedServer(Netty, 8080) {
+        System.getenv("APP_ROOT")?.run {
+            if (File(this, "log4j-overrides.xml").exists()) {
+                println("configuring logger")
+                DOMConfigurator.configure("log4j-overrides.xml")
+            }
+        }
+        App()
+        embeddedServer(Netty, Props.int("app.server.port")) {
             configure()
-            App()
             routing {
                 get("/ping") { call.respond(mapOf("status" to "OK")) }
                 route("/events") {

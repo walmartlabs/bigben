@@ -1,0 +1,10 @@
+---
+a:
+  c.d: y1
+  g:
+    - 1
+    - 3
+  h:
+    h1: ${user.homE:-abc}
+    h3: ${user.home:-abc}
+  j: 1

@@ -25,9 +25,9 @@ import com.hazelcast.core.HazelcastInstance
 import com.walmartlabs.bigben.utils.Json
 import com.walmartlabs.bigben.utils.commons.Module
 import com.walmartlabs.bigben.utils.commons.ModuleRegistry
-import com.walmartlabs.bigben.utils.commons.Props.flattenedMap
 import com.walmartlabs.bigben.utils.commons.Props.map
 import com.walmartlabs.bigben.utils.commons.Props.string
+import com.walmartlabs.bigben.utils.commons.PropsLoader
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.typeRefJson
@@ -48,7 +48,7 @@ class Hz : Module {
     val hz: HazelcastInstance
 
     init {
-        val config = typeRefJson<Json>(flattenedMap(map("hz")).json()).let { map ->
+        val config = typeRefJson<Json>(PropsLoader.flatten(map("hz")).json()).let { map ->
             if (l.isDebugEnabled) l.debug("using the hazelcast config from: ${Hz::class.java.getResource(string("hz.template"))}")
             val template = String(Hz::class.java.getResourceAsStream(string("hz.template")).run { readBytes().also { close() } })
             StrSubstitutor(object : StrLookup<Any>() {
