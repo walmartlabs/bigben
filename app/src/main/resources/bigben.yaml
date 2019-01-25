@@ -19,7 +19,7 @@ modules:
 
 # hazelcast properties
 hz:
-  template: /hz.template.xml
+  template: file://hz.template.xml
   group:
     name: bigben-dev
     password: bigben-dev

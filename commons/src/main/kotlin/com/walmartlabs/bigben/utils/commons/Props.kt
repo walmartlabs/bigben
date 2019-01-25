@@ -140,22 +140,7 @@ open class PropsLoader(preloaded: Json? = null) {
     fun load(vararg props: String): PropsLoader {
         l.info("loading props")
         props.reversed().map {
-            when {
-                it.startsWith("uri://") -> {
-                    val f = File(it.substring("uri://".length))
-                    l.info("reading properties from the location: $f")
-                    require(f.exists()) { "could not resolve $f to a location" }
-                    val x: Json = omYaml.readValue(f, object : TypeReference<Json>() {}); x to false
-                }
-                it.startsWith("file://") -> {
-                    val f = it.substring("file://".length)
-                    l.info("reading properties from the file: $f")
-                    val url = Props::class.java.classLoader.getResource(f)
-                    require(url != null) { "could not resolve $f to a url" }
-                    val x: Json = omYaml.readValue(url, object : TypeReference<Json>() {}); x to false
-                }
-                else -> throw IllegalArgumentException("unknown properties format: $props")
-            }
+            val x: Json = omYaml.readValue(ResourceLoader.load(it), object : TypeReference<Json>() {}); x to false
         }.run { this + (System.getenv() to true) + (System.getProperties() as Json to true) }
             .fold(emptyMap<String, Any>()) { r, e -> merge(r, e.first, e.second) }
             .run { substitute(this) }.run { unflatten(this) }.let { this.props.set(it) }
@@ -201,5 +186,29 @@ open class PropsLoader(preloaded: Json? = null) {
             } else NULL
         }
         return NULL
+    }
+}
+
+object ResourceLoader {
+
+    private val l = logger<ResourceLoader>()
+
+    fun load(location: String): String {
+        return when {
+            location.startsWith("uri://") -> {
+                val f = File(location.substring("uri://".length))
+                l.info("reading data from the resource: $f")
+                require(f.exists()) { "could not resolve $f to a location" }
+                f.readText()
+            }
+            location.startsWith("file://") -> {
+                val f = location.substring("file://".length)
+                l.info("reading data from the resource: $f")
+                val url = Props::class.java.classLoader.getResource(f)
+                require(url != null) { "could not resolve $f to a location" }
+                File(url.file).readText()
+            }
+            else -> throw IllegalArgumentException("unknown resource format: $location")
+        }
     }
 }

@@ -17,6 +17,7 @@ services:
       - ../app/src/main/resources/bigben.yaml:/dist/bigben-config.yaml
       - ./configs/overrides.yaml:/dist/bigben-overrides.yaml
       - ./configs/log4j.xml:/dist/log4j-overrides.xml
+      - ./configs/hz.xml:/dist/hz.xml
 
   setup_cassandra:
     image: dadarek/wait-for-dependencies

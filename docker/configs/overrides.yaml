@@ -1,5 +1,8 @@
 app.server.port: ${SERVER_PORT}
-cassandra.cluster.contactPoints: cassandra
+hz:
+  template: uri://${APP_ROOT}/hz.xml
+  network.members: ${HOST_IP}
+cassandra.cluster.contactPoints: ${HOST_IP}
 bigben.inbound.topic:
   name: some_topic
   bootstrap.servers: some_servers

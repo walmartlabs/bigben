@@ -20,74 +20,78 @@
 package com.walmartlabs.bigben.utils.hz
 
 import com.google.common.collect.Sets.newConcurrentHashSet
-import com.google.common.util.concurrent.Futures
-import com.hazelcast.core.LifecycleEvent
+import com.hazelcast.core.HazelcastInstanceNotActiveException
+import com.hazelcast.core.LifecycleEvent.LifecycleState.SHUTTING_DOWN
 import com.walmartlabs.bigben.utils.logger
-import com.walmartlabs.bigben.utils.retriable
 import com.walmartlabs.bigben.utils.rootCause
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicReference
-import javax.print.attribute.standard.PrinterStateReason
+import java.lang.Thread.currentThread
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors.newSingleThreadExecutor
+import java.util.concurrent.atomic.AtomicInteger
+import javax.print.attribute.standard.PrinterStateReason.SHUTDOWN
 
 /**
  * Created by smalik3 on 3/1/18
  */
-class ClusterSingleton(service: Service, hz: Hz) {
+class ClusterSingleton(private val service: Service, private val hz: Hz) {
 
-    private val listenerId = AtomicReference<String>()
+    private val listenerId = ConcurrentHashMap<String, String>()
+    private val index = AtomicInteger()
 
     companion object {
         val ACTIVE_SERVICES: MutableSet<String> = newConcurrentHashSet<String>()!!
         private val l = logger<ClusterSingleton>()
+        private val nonRetriables = setOf(HazelcastInstanceNotActiveException::class.java)
     }
 
+    private val executor = newSingleThreadExecutor()
+
     init {
-        Executors.newSingleThreadExecutor().submit {
-            try {
-                Thread.currentThread().name = service.name + "_service_thread"
-                val clusterSingletonLock = hz.hz.getLock(service.name + "_lock")
-                clusterSingletonLock.lock()
-                try {
-                    if (l.isInfoEnabled) l.info("cluster singleton ownership claimed, '{}[{}]' is the new owner: {}",
-                            hz.hz.cluster.localMember, Thread.currentThread().name, service.name)
-                    if (listenerId.get() != null) {
-                        if (l.isInfoEnabled) l.info("Adding the shutdown hook for cluster singleton: {}", service.name)
-                        listenerId.set(hz.hz.lifecycleService.addLifecycleListener { event ->
-                            if (event.state == PrinterStateReason.SHUTDOWN || event.state == LifecycleEvent.LifecycleState.SHUTTING_DOWN) {
-                                if (l.isInfoEnabled) l.info("node is shutting down, destroying the service: {}", service.name)
-                                try {
-                                    service.destroy()
-                                    ACTIVE_SERVICES.remove(service.name)
-                                } catch (e: Exception) {
-                                    l.error("error in destroying the service: {}", service.name, e.rootCause())
-                                }
+        executor.submit(task())
+    }
 
-                            }
-                        })
+    private fun task(): Runnable = Runnable {
+        val lockName = "${service.name}_lock"
+        try {
+            currentThread().name = "${service.name}_service_thread"
+            val clusterSingletonLock = hz.hz.getLock(lockName)
+            clusterSingletonLock.lock()
+            l.info(
+                "cluster singleton elected, '${hz.hz.cluster.localMember.address}/${currentThread().name}' is the new owner for: ${service.name}"
+            )
+            listenerId.computeIfAbsent("listenerId") {
+                hz.hz.apply { l.info("Adding the shutdown hook for cluster singleton: ${service.name}") }
+                    .lifecycleService.addLifecycleListener { event ->
+                    if (event.state == SHUTDOWN || event.state == SHUTTING_DOWN) {
+                        if (l.isInfoEnabled) l.info("node is shutting down, destroying the service: {}", service.name)
+                        try {
+                            service.destroy()
+                            ACTIVE_SERVICES.remove(service.name)
+                        } catch (e: Exception) {
+                            l.error("error in destroying the service: ${service.name}", e.rootCause())
+                        }
                     }
-                    if (l.isInfoEnabled) l.info("starting the cluster singleton service: {}", service.name)
+                }.also {
+                    l.info("initing the cluster singleton service: ${service.name}")
                     service.init()
-                    ACTIVE_SERVICES.add(service.name);
-                    {
-                        if (l.isInfoEnabled) l.info("executing the cluster singleton service: {}", service.name)
-                        service.execute()
-                        Futures.immediateFuture<Any>(null)
-                    }.retriable(service.name)
-
-                } catch (e: Exception) {
-                    l.error("Error in executing cluster singleton service, the service is un-deployed, " +
-                            "and will not be re-deployed any more: {}", service.name, e.rootCause())
-                    try {
-                        service.destroy()
-                    } catch (e1: Exception) {
-                        l.error("error in destroying the service: {}", service.name, e1.rootCause())
-                    }
-
+                    ACTIVE_SERVICES.add(service.name)
                 }
-            } catch (e: Exception) {
-                l.error("error in deploying the service: {}", service.name, e.rootCause())
+            }
+            l.info("executing the cluster singleton service: ${service.name}")
+            service.execute()
+        } catch (e: Exception) {
+            if (e.rootCause()!!::class.java in nonRetriables)
+                l.error("error in running the service: ${service.name}", e.rootCause())
+            else l.error("error in running the service: ${service.name}, retrying...", e.rootCause()) {
+                try {
+                    hz.hz.getLock(lockName).unlock()
+                } catch (e: Exception) {
+                    l.error("error in unlocking cluster singleton", e.rootCause())
+                } finally {
+                    l.info("resubmitting ownership claim task: attempt: ${index.incrementAndGet()}")
+                    executor.submit(task())
+                }
             }
         }
     }
-
 }

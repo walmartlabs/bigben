@@ -28,6 +28,7 @@ import com.walmartlabs.bigben.utils.commons.ModuleRegistry
 import com.walmartlabs.bigben.utils.commons.Props.map
 import com.walmartlabs.bigben.utils.commons.Props.string
 import com.walmartlabs.bigben.utils.commons.PropsLoader
+import com.walmartlabs.bigben.utils.commons.ResourceLoader
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.logger
 import com.walmartlabs.bigben.utils.typeRefJson
@@ -50,7 +51,7 @@ class Hz : Module {
     init {
         val config = typeRefJson<Json>(PropsLoader.flatten(map("hz")).json()).let { map ->
             if (l.isDebugEnabled) l.debug("using the hazelcast config from: ${Hz::class.java.getResource(string("hz.template"))}")
-            val template = String(Hz::class.java.getResourceAsStream(string("hz.template")).run { readBytes().also { close() } })
+            val template = ResourceLoader.load(string("hz.template"))
             StrSubstitutor(object : StrLookup<Any>() {
                 override fun lookup(key: String): String? {
                     return if (map.containsKey(key)) map[key]!!.toString()
