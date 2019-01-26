@@ -27,19 +27,30 @@
 
     <appender name="console" class="org.apache.log4j.ConsoleAppender">
         <layout class="org.apache.log4j.PatternLayout">
-            <param name="ConversionPattern"
-                   value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p [%t] %c{1}:%L - %m%n"/>
+            <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p [%t] %c{1}:%L - %m%n"/>
+        </layout>
+    </appender>
+
+    <appender name="file" class="org.apache.log4j.RollingFileAppender">
+        <param name="append" value="false"/>
+        <param name="maxFileSize" value="100MB"/>
+        <param name="maxBackupIndex" value="3"/>
+        <param name="file" value="${APP_ROOT}/logs/bigben_app_${APP_PORT}.log"/>
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss} %-5p [%t] %c{1}:%L - %m%n"/>
         </layout>
     </appender>
 
     <root>
         <level value="INFO"/>
         <appender-ref ref="console"/>
+        <appender-ref ref="file"/>
     </root>
 
     <logger name="com.walmartlabs.bigben" additivity="false">
         <level value="INFO"/>
         <appender-ref ref="console"/>
+        <appender-ref ref="file"/>
     </logger>
 
 </log4j:configuration>

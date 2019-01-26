@@ -20,6 +20,8 @@ import io.ktor.response.respond
 import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import org.apache.commons.text.StrLookup
+import org.apache.commons.text.StrSubstitutor
 import org.apache.log4j.xml.DOMConfigurator
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -31,9 +33,18 @@ object AppRun {
     @JvmStatic
     fun main(args: Array<String>) {
         System.getenv("APP_ROOT")?.run {
-            if (File(this, "log4j-overrides.xml").exists()) {
+            val logFile = File(this, "log4j-overrides.xml")
+            if (logFile.exists()) {
                 println("configuring logger")
-                DOMConfigurator.configure("log4j-overrides.xml")
+                StrSubstitutor(StrLookup.mapLookup(System.getenv())).run {
+                    logFile.readLines().map { replace(it) }
+                }.joinToString("\n").run {
+                    File(System.getProperty("java.io.tmpdir"), "log4j-overrides-substituted.xml").let {
+                        println("using log file from ${it.absolutePath}")
+                        it.writeText(this)
+                        DOMConfigurator.configure(it.toURI().toURL())
+                    }
+                }
             }
         }
         App()

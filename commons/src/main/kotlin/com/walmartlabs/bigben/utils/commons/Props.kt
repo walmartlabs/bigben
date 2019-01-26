@@ -204,9 +204,9 @@ object ResourceLoader {
             location.startsWith("file://") -> {
                 val f = location.substring("file://".length)
                 l.info("reading data from the resource: $f")
-                val url = Props::class.java.classLoader.getResource(f)
-                require(url != null) { "could not resolve $f to a location" }
-                File(url.file).readText()
+                val ins = Props::class.java.classLoader.getResourceAsStream(f)
+                require(ins != null) { "could not resolve $f to a location" }
+                String(ins.readBytes())
             }
             else -> throw IllegalArgumentException("unknown resource format: $location")
         }
