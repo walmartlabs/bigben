@@ -33,7 +33,7 @@ object AppRun {
     @JvmStatic
     fun main(args: Array<String>) {
         System.getenv("APP_ROOT")?.run {
-            val logFile = File(this, "log4j-overrides.xml")
+            val logFile = File(this, "log4j.xml")
             if (logFile.exists()) {
                 println("configuring logger")
                 StrSubstitutor(StrLookup.mapLookup(System.getenv())).run {

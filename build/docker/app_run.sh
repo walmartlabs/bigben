@@ -3,10 +3,19 @@ set -e
 APP_CONTAINER_NAME=${APP_CONTAINER_NAME:-bigben_app}
 SERVER_PORT=${SERVER_PORT:-8080}
 HZ_PORT=5701
-NUM_INSTANCES=${NUM_INSTANCES:-5}
+NUM_INSTANCES=${NUM_INSTANCES:-1}
 APP_ROOT=/dist
+BUILD_DIR=${PWD}/..
+LOGS_DIR=${LOGS_DIR:-${BUILD_DIR}/../bigben_logs}
+echo "app logs dir set to ${LOGS_DIR}"
+CASSANDRA_SEED_IPS=${CASSANDRA_SEED_IPS:-${HOST_IP}}
+HZ_MEMBER_IPS=${HZ_MEMBER_IPS:-${HOST_IP}}
+
 HOST_IP=${HOST_IP:-`ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'`}
-echo "determined host ip: $HOST_IP"
+
+echo HOST_IP: ${HOST_IP}, SERVER_PORT: ${SERVER_PORT}, \
+HZ_MEMBER_IPS: ${HZ_MEMBER_IPS}, CASSANDRA_SEED_IPS: ${CASSANDRA_SEED_IPS}, \
+HZ_PORT: ${HZ_PORT}, NUM_INSTANCES: ${NUM_INSTANCES}
 
 function stop() {
     echo "stopping app servers, if any"
@@ -26,14 +35,17 @@ function start() {
         app_port=$((${SERVER_PORT} + 101 * $((i - 1))))
         hz_port=$((${HZ_PORT} + i - 1))
         echo "starting ${APP_CONTAINER_NAME}_$app_port at app port: $app_port, hz port: $hz_port"
-        docker run -d --rm \
+        docker run --rm \
         -p ${app_port}:${SERVER_PORT} \
         -p ${hz_port}:${HZ_PORT} \
-        -v ${PWD}/../app/src/main/resources/bigben.yaml:${APP_ROOT}/bigben-config.yaml \
-        -v ${PWD}/configs/overrides.yaml:${APP_ROOT}/bigben-overrides.yaml \
-        -v ${PWD}/configs/log4j.xml:${APP_ROOT}/log4j-overrides.xml \
-        -v ${PWD}/../../bigben_logs:${APP_ROOT}/logs \
+        -v ${BUILD_DIR}/bin/bigben.yaml:${APP_ROOT}/bigben-config.yaml \
+        -v ${BUILD_DIR}/configs/overrides.yaml:${APP_ROOT}/bigben-overrides.yaml \
+        -v ${BUILD_DIR}/configs/log4j.xml:${APP_ROOT}/log4j.xml \
+        -v ${LOGS_DIR}:${LOGS_DIR} \
+        -e ${LOGS_DIR}:${LOGS_DIR} \
         -e HOST_IP="${HOST_IP}" \
+        -e CASSANDRA_SEED_IPS="${CASSANDRA_SEED_IPS}" \
+        -e HZ_MEMBER_IPS="${HZ_MEMBER_IPS}" \
         -e CONFIGS='bigben-overrides,bigben-config' \
         -e SERVER_PORT=${SERVER_PORT} \
         -e APP_PORT=${app_port} \

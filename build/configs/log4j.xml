@@ -35,7 +35,7 @@
         <param name="append" value="false"/>
         <param name="maxFileSize" value="100MB"/>
         <param name="maxBackupIndex" value="3"/>
-        <param name="file" value="${APP_ROOT}/logs/bigben_app_${APP_PORT}.log"/>
+        <param name="file" value="${LOG_FILE}"/>
         <layout class="org.apache.log4j.PatternLayout">
             <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss} %-5p [%t] %c{1}:%L - %m%n"/>
         </layout>
