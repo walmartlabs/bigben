@@ -4,7 +4,7 @@
     <parent>
         <artifactId>bigben</artifactId>
         <groupId>com.walmartlabs.bigben</groupId>
-        <version>1.0.2</version>
+        <version>1.0.3-SNAPSHOT</version>
     </parent>
 
     <artifactId>bigben-cassandra</artifactId>
