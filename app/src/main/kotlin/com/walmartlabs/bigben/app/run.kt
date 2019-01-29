@@ -6,13 +6,17 @@ import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.cron.CronService
 import com.walmartlabs.bigben.extns.APIResponse
 import com.walmartlabs.bigben.utils.commons.Props
+import com.walmartlabs.bigben.utils.stackTraceAsString
 import com.walmartlabs.bigben.utils.typeRefJson
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.features.ContentNegotiation
+import io.ktor.features.StatusPages
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.HttpStatusCode.Companion.BadRequest
+import io.ktor.http.HttpStatusCode.Companion.InternalServerError
 import io.ktor.jackson.jackson
 import io.ktor.request.receive
 import io.ktor.response.header
@@ -93,5 +97,17 @@ private suspend fun ApplicationCall.fromAPIResponse(r: APIResponse) {
 fun Application.configure() {
     install(ContentNegotiation) {
         jackson { enable(INDENT_OUTPUT) }
+    }
+    install(StatusPages) {
+        exception<IllegalArgumentException> { e ->
+            call.response.status(BadRequest)
+            call.respond(mapOf("message" to (e.message ?: "")))
+        }
+        exception<Throwable> { e ->
+            call.response.status(InternalServerError)
+            if (call.request.queryParameters["debug"] != null) {
+                call.respond(mapOf("message" to ((e.message ?: "")), "stacktrace" to e.stackTraceAsString()))
+            } else call.respond(mapOf("message" to (e.message ?: "")))
+        }
     }
 }
