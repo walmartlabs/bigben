@@ -8,7 +8,7 @@ RUN mkdir $APP_ROOT
 RUN chown -R $APPLICATION_USER $APP_ROOT
 USER $APPLICATION_USER
 COPY ./build/bin/bigben.jar $APP_ROOT/bigben.jar
-COPY start.sh $APP_ROOT/start.sh
+COPY ./build/docker/start.sh $APP_ROOT/start.sh
 USER root
 RUN chmod +x $APP_ROOT/start.sh
 WORKDIR $APP_ROOT
