@@ -5,7 +5,7 @@
         <artifactId>bigben</artifactId>
         <version>1.0.3-SNAPSHOT</version>
     </parent>
-    <artifactId>app</artifactId>
+    <artifactId>bigben-app</artifactId>
     <name>BigBen:app</name>
     <url>http://maven.apache.org</url>
     <packaging>takari-jar</packaging>
