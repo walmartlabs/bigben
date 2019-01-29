@@ -8,6 +8,7 @@
     <artifactId>app</artifactId>
     <name>BigBen:app</name>
     <url>http://maven.apache.org</url>
+    <packaging>takari-jar</packaging>
     <properties>
         <slf4j-api.version>1.7.25</slf4j-api.version>
     </properties>
