@@ -7,7 +7,7 @@
         <version>1.0.3-SNAPSHOT</version>
     </parent>
 
-    <artifactId>cron</artifactId>
+    <artifactId>bigben-cron</artifactId>
     <packaging>takari-jar</packaging>
     <name>Bigben:cron</name>
 
