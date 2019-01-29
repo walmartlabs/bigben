@@ -71,9 +71,8 @@ class BigBenTests {
 
     companion object {
         init {
-            System.setProperty("bigben.props", "file://bigben-test.yaml")
+            System.setProperty("configs", "bigben-test,bigben")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
-            EventService.DEBUG_FLAG.set(false)
             BigBen.init()
         }
 

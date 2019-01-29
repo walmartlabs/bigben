@@ -59,7 +59,6 @@ class KafkaTests {
         init {
             System.setProperty("bigben.props", "file://bigben-kafka-test.yaml")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
-            EventService.DEBUG_FLAG.set(false)
             BigBen.init()
         }
     }
