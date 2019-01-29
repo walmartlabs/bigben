@@ -126,34 +126,47 @@ Tenant 1 can configure the events to be delivered in `kafka` topic `t1`, where a
 via a specific `http` url. The usage of tenants will become more clearer with the below explanation of `BigBen` APIs
 
 ## Docker support
-BigBen is dockerized and image (`bigben`) is available on docker hub. The code also contains a 
-docker compose file, which starts `cassandra`, `hazelcast` and `app`.
+BigBen is dockerized and image (`bigben`) is available on docker hub. The code also contains 
+scripts, which start `cassandra`, `hazelcast` and `app`.
 To quickly set up the application for local dev testing, do the following steps:
 1. `git clone $repo`
-2. `cd bigben/docker`
-3. `./run_dockerized_bigben.sh`
-4. wait for application to start on port `8080`
-5. verify that `curl http://localhost:8080/ping` returns `200` 
+2. `cd bigben/build/docker`
+3. execute `./docker_build.sh`
+4. start cassandra container by executing `./cassandra_run.sh`
+5. start app by executing `./app_run.sh`
+6. To run multiple app nodes `export NUM_INSTANCES=3 && ./app_run.sh`
+6. wait for application to start on port `8080`
+7. verify that `curl http://localhost:8080/ping` returns `200`
+8. Use `./cleanup.sh` to stop and remove all `BigBen` related containers 
 
-## How to deploy BigBen in container environment?
-Assuming `Cassandra` is already set up, following are the steps to set up `BigBen` app:
-1. `git clone $repo`
-2. Open to `app/src/main/resources/bigben.yaml`
-    * Modify the `cassandra` related properties
-    * Modify the `hazelcast` related properties
-      - add the comma separated IPs of nodes participating in the cluster
-      - modify any other property if needed
-    * Uncomment the `processor.impl.class` property if you plan to use kafka for receiving events
-        - Go to `kafka` section and add the appropriate topic name, and bootsrap.servers
-        - Add / Modify any other properties as needed
-    * Check the `buckets` section and set the `backlog.check.limit` to some value (e.g. set 1440 for one day backlog check limit)
-    * If you don't want to use `cron` module, remove it from under the `modules` section  
-2. run `docker run -p 8080:8080 bigben`
-4. wait for application to start on port `8080`
-5. verify that `curl http://localhost:8080/ping` returns `200` 
+## Non-docker execution
+`BigBen` can be run without docker as well. Following are the steps
+1. `got clone $repo`
+2. `cd bigben/buid/exec`
+3. execute `./build.sh`
+4. execute `./app_run.sh`
+
+## Env properties
+You can set the following environment properties
+1. `APP_CONTAINER_NAME` (default bigben_app)
+2. `SERVER_PORT` (default 8080)
+3. `HZ_PORT` (default 5701)
+4. `NUM_INSTANCES` (default 1)
+5. `LOGS_DIR` (default bigben/../bigben_logs)
+6. `CASSANDRA_SEED_IPS` (default $HOST_IP)
+7. `HZ_MEMBER_IPS` (default $HOST_IP)
+8. `JAVA_OPTS`
+
+#How to override default config values?
+`BigBen` employs an extensive override system to allow someone to override 
+the default properties. The order of priority is system properties > system env variables >
+overrides > defaults
+The overrides can be defined in `config/overrides.yaml` file.
+The `log4j.xml` can also be changed to change log behavior without 
+recompiling binaries
 
 ## How to setup `Cassandra` for `BigBen`?
-Following are the steps to set up `BigBen`:
+Following are the steps to set up `Cassandra`:
 1. git clone the `master` branch
 2. Set up a Cassandra cluster
 3. create a keyspace `bigben` in `Cassandra` cluster with desired replication

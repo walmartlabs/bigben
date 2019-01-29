@@ -23,6 +23,9 @@
 <hazelcast xsi:schemaLocation="http://www.hazelcast.com/schema/config hazelcast-config-3.5.xsd"
            xmlns="http://www.hazelcast.com/schema/config"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <properties>
+        <property name="hazelcast.logging.type">slf4j</property>
+    </properties>
     <group>
         <name>${group.name bigben}</name>
         <password>${group.password bigben-pass}</password>

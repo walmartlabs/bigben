@@ -1,0 +1,8 @@
+app.server.port: ${SERVER_PORT}
+hz:
+  network.members: ${HZ_MEMBER_IPS}
+cassandra.cluster.contactPoints: ${CASSANDRA_SEED_IPS}
+bigben.inbound.topic:
+  name: some_topic
+  bootstrap.servers: some_servers
+#events.scheduler.enabled: false
