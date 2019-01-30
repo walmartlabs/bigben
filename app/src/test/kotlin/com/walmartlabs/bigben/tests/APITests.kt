@@ -1,7 +1,6 @@
 package com.walmartlabs.bigben.tests
 
 import com.walmartlabs.bigben.BigBen.module
-import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.app.AppRun
 import com.walmartlabs.bigben.app.EventGenerator
 import com.walmartlabs.bigben.entities.EventLoader
@@ -31,8 +30,7 @@ class APITests {
 
     companion object {
         init {
-            System.setProperty("bigben.props", "file://bigben-api-test.yaml")
-            EventService.DEBUG_FLAG.set(false)
+            System.setProperty("configs", "bigben")
             thread { AppRun.main(emptyArray()) }
             AppRun.latch.await()
         }
@@ -48,6 +46,7 @@ class APITests {
     @Test
     fun `test events at the same time`() {
         val server = "http://localhost:8080"
+        val tenant = "test"
 
         assertEquals(runBlocking {
             client.call {
@@ -56,7 +55,7 @@ class APITests {
                 method = Post
                 body = TextContent(
                     ProcessorConfig(
-                        "test", CUSTOM_CLASS,
+                        tenant, CUSTOM_CLASS,
                         mapOf("eventProcessorClass" to "com.walmartlabs.bigben.processors.NoOpCustomClassProcessor")
                     ).json(), Json
                 )
@@ -68,7 +67,7 @@ class APITests {
             client.post<String> {
                 url("$server/generation/random")
                 accept(Json)
-                body = TextContent(EventGenerator.EventGeneration("PT1M", "PT0S", 1000, "java").json(), Json)
+                body = TextContent(EventGenerator.EventGeneration("PT1M", "PT0S", 1000, tenant).json(), Json)
             }
         }
 
@@ -77,7 +76,7 @@ class APITests {
             client.post<String> {
                 url("$server/generation/random")
                 accept(Json)
-                body = TextContent(EventGenerator.EventGeneration("PT1M30S", "PT0S", 1000, "java").json(), Json)
+                body = TextContent(EventGenerator.EventGeneration("PT1M30S", "PT0S", 1000, tenant).json(), Json)
             }
         }.run { typeRefJson<Map<String, Int>>(this).run { ZonedDateTime.parse(entries.first().key) } }
 

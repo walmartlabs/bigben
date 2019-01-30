@@ -44,7 +44,11 @@ object BigBen {
 
     private object Initializer {
         init {
-            System.getenv("CONFIGS")?.run {
+            System.getProperty("configs")?.run {
+                val configs = this.split(",").map { "file://$it.yaml" }
+                l.info("using configs: $configs")
+                load(*configs.toTypedArray())
+            } ?: System.getenv("CONFIGS")?.run {
                 val configs = this.split(",").map { "uri://${System.getenv("APP_ROOT")}/$it.yaml" }
                 l.info("using configs: $configs")
                 load(*configs.toTypedArray())

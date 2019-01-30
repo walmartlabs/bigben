@@ -20,7 +20,6 @@
 package com.walmartlabs.bigben.extns
 
 import com.walmartlabs.bigben.BigBen.module
-import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.utils.hz.Hz
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.logger
@@ -29,13 +28,10 @@ import com.walmartlabs.bigben.utils.stackTraceAsString
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeParseException
-import java.util.*
 
 /**
  * Created by smalik3 on 6/29/18
  */
-private fun String.base64() = Base64.getEncoder().encodeToString(this.json().toByteArray())
-
 private val l = logger("API")
 
 data class APIResponse(
@@ -57,7 +53,7 @@ fun response(f: () -> Any?): APIResponse {
         val message = "please contact engineering team with the below error signature"
         APIResponse(
             mutableMapOf("message"
-                    to (t.message?.let { """${t.message}${if (status == 500) " ($message)" else ""}""" }
+                                 to (t.message?.let { """${t.message}${if (status == 500) " ($message)" else ""}""" }
                 ?: "Unexpected error, $message")).apply {
                 if (status == 500) {
                     this["error"] = mapOf(
@@ -65,7 +61,7 @@ fun response(f: () -> Any?): APIResponse {
                         "node" to module<Hz>().hz.cluster.localMember.address.host,
                         "start_time" to begin,
                         "duration" to (LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli() - begin.toInstant(ZoneOffset.UTC).toEpochMilli())
-                    ).json().run { if (EventService.DEBUG_FLAG.get()) this else base64() }
+                    ).json()
                 }
             }, status
         )
