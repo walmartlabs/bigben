@@ -172,7 +172,7 @@ class EventReceiver(val hz: Hz) {
         if (eventRequest.tenant!! !in module<ProcessorRegistry>().registeredTenants()) {
             val eventResponse = eventRequest.toResponse()
             eventResponse.eventStatus = REJECTED
-            eventResponse.error = Error(400, "tenant not registered / unknown tenant")
+            eventResponse.error = Error(400, "tenant not registered / unknown tenant: ${eventRequest.tenant}")
             l.error("event rejected, unknown tenant. Did you register one in the processors.config?, {}", eventRequest.json())
             return immediateFuture<EventResponse>(eventResponse)
         }

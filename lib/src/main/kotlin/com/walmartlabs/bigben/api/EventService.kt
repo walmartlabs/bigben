@@ -43,7 +43,6 @@ class EventService(
 
     companion object {
         private val l = logger<EventService>()
-        val DEBUG_FLAG = ThreadLocal<Boolean>()
     }
 
     fun clusterStats() = response {
@@ -109,7 +108,7 @@ class EventService(
                         eventResponse.also {
                             it.eventId = id; it.eventTime = eventTime?.toString(); it.payload = payload
                             it.eventStatus = status; if (status != UN_PROCESSED && status != null) it.triggeredAt =
-                                processedAt?.toString()
+                            processedAt?.toString()
                             if (error != null) it.error = com.walmartlabs.bigben.entities.Error(500, error)
                         }.also { if (fire) module<ProcessorRegistry>()(this) }
                     }

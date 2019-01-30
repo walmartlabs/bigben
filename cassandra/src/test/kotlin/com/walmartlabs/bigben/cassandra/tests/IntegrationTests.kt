@@ -22,7 +22,6 @@ package com.walmartlabs.bigben.cassandra.tests
 import com.datastax.driver.core.Session
 import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.BigBen.module
-import com.walmartlabs.bigben.api.EventService
 import com.walmartlabs.bigben.entities.*
 import com.walmartlabs.bigben.extns.bucket
 import com.walmartlabs.bigben.extns.fetch
@@ -40,9 +39,8 @@ class IntegrationTests {
 
     companion object {
         init {
-            System.setProperty("bigben.props", "file://bigben-test.yaml")
+            System.setProperty("configs", "bigben-test")
             System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
-            EventService.DEBUG_FLAG.set(false)
             BigBen.init()
         }
     }
@@ -88,7 +86,9 @@ class IntegrationTests {
                     assertEquals(events["${it.eventTime}-${it.id}"], it)
                     events.remove("${it.eventTime}-${it.id}")
                 }
-                l = module<EventLoader>().load(bucket, it, fetchSize, l.second.last().eventTime!!, l.second.last().id!!, l.first).get()
+                l =
+                    module<EventLoader>().load(bucket, it, fetchSize, l.second.last().eventTime!!, l.second.last().id!!, l.first)
+                        .get()
             }
         }
         assertTrue { events.isEmpty() }
@@ -101,7 +101,9 @@ class IntegrationTests {
             it.bucketId = bucket; it.shard = 1; it.eventTime = bucket.plusSeconds(10)
             it.id = "e1"; it.status = EventStatus.UN_PROCESSED
         }.get()
-        val event = fetch<Event> { it.bucketId = bucket; it.shard = 1; it.eventTime = bucket.plusSeconds(10); it.id = "e1" }.get()!!
+        val event = fetch<Event> {
+            it.bucketId = bucket; it.shard = 1; it.eventTime = bucket.plusSeconds(10); it.id = "e1"
+        }.get()!!
         assertEquals(event.status, EventStatus.UN_PROCESSED)
     }
 }
