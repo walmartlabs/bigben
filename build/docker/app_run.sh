@@ -46,18 +46,18 @@ function start() {
         docker run -d --rm \
         -p ${app_port}:${SERVER_PORT} \
         -p ${hz_port}:${HZ_PORT} \
-        -v ${BUILD_DIR}/bin/bigben.yaml:${APP_ROOT}/bigben-config.yaml \
-        -v ${BUILD_DIR}/configs/overrides.yaml:${APP_ROOT}/bigben-overrides.yaml \
+        -v ${BUILD_DIR}/bin/bigben.yaml:${APP_ROOT}/bigben.yaml \
+        -v ${BUILD_DIR}/configs/overrides.yaml:${APP_ROOT}/overrides.yaml \
         -v ${BUILD_DIR}/configs/log4j.xml:${APP_ROOT}/log4j.xml \
         -v ${LOGS_DIR}:${APP_ROOT}/logs \
-        -e LOG_FILE="${APP_ROOT}/logs/bigben_app_${app_port}.log" \
         -e HOST_IP="${HOST_IP}" \
         -e CASSANDRA_SEED_IPS="${CASSANDRA_SEED_IPS}" \
         -e HZ_MEMBER_IPS="${HZ_MEMBER_IPS}" \
-        -e CONFIGS='bigben-overrides,bigben-config' \
-        -e SERVER_PORT=${SERVER_PORT} \
-        -e APP_PORT=${app_port} \
-        -e JAVA_OPTS="${JAVA_OPTS} -Dhazelcast.local.publicAddress=${HOST_IP}:${hz_port}" \
+        -e JAVA_OPTS="${JAVA_OPTS} -Dbigben.configs=uri://${APP_ROOT}/overrides.yaml,uri://${APP_ROOT}/bigben.yaml \
+        -Dapp.server.port=${SERVER_PORT} \
+        -Dbigben.log.file=${APP_ROOT}/logs/bigben_app_${app_port}.log \
+        -Dbigben.log.config=${APP_ROOT} \
+        -Dhazelcast.local.publicAddress=${HOST_IP}:${hz_port}" \
         --name "${APP_CONTAINER_NAME}_$app_port" sandeepmalik/bigben:1
         let i=i+1
     done

@@ -71,6 +71,15 @@
             </roles>
             <timezone>-8</timezone>
         </developer>
+        <developer>
+            <id>sandeep.malik</id>
+            <name>Sandeep Malik</name>
+            <email>sandeep.malik@gmail.com</email>
+            <roles>
+                <role>Project Lead</role>
+            </roles>
+            <timezone>-8</timezone>
+        </developer>
     </developers>
 
     <dependencyManagement>
@@ -97,8 +106,8 @@
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
-                <artifactId>cron</artifactId>
-                <version>1.0.3-SNAPSHOT</version>
+                <artifactId>bigben-cron</artifactId>
+                <version>1.0.4-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
