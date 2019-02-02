@@ -1,0 +1,2 @@
+inbound.topics.1: my_topic
+inbound.bootstrap.servers.1: my_servers

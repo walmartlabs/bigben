@@ -107,7 +107,7 @@ open class PropsLoader(preloaded: Json? = null) {
         private fun substitute(json: Json): Json {
             val s1 = StrSubstitutor(StrLookup.systemPropertiesLookup())
             val s2 = StrSubstitutor(object : StrLookup<Any>() {
-                override fun lookup(key: String): String {
+                override fun lookup(key: String): String? {
                     return System.getenv(key)
                 }
             })
@@ -162,6 +162,7 @@ open class PropsLoader(preloaded: Json? = null) {
     fun boolean(name: String) = get(name, true)!!.toString().toBoolean()
     @Suppress("UNCHECKED_CAST")
     fun map(name: String) = get(name, true) as Json
+    fun root() = props.get()!!
 
     @Suppress("UNCHECKED_CAST")
     fun list(name: String) = get(name, true) as List<Any>
