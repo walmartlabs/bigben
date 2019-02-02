@@ -309,6 +309,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>2.22.0</version>
                     <configuration>
+                        <!--<forkMode>never</forkMode>-->
                         <skipTests>${skipTests}</skipTests>
                         <systemPropertyVariables>
                             <buildDirectory>${project.build.directory}</buildDirectory>

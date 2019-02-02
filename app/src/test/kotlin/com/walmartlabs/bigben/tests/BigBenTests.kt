@@ -71,8 +71,7 @@ class BigBenTests {
 
     companion object {
         init {
-            System.setProperty("configs", "bigben-test,bigben")
-            System.setProperty("org.slf4j.simpleLogger.log.com.walmartlabs.bigben", "debug")
+            System.setProperty("bigben.configs", "file://bigben-test.yaml,file://bigben.yaml")
             BigBen.init()
         }
 
@@ -82,8 +81,12 @@ class BigBenTests {
     @BeforeClass
     fun `set up tenant`() {
         `clean up db`()
-        eventService.registerProcessor(ProcessorConfig("default", CUSTOM_CLASS,
-                mapOf("eventProcessorClass" to NoOpCustomClassProcessor::class.java.name))).apply { assertEquals(this.status, 200) }
+        eventService.registerProcessor(
+            ProcessorConfig(
+                "default", CUSTOM_CLASS,
+                mapOf("eventProcessorClass" to NoOpCustomClassProcessor::class.java.name)
+            )
+        ).apply { assertEquals(this.status, 200) }
         println("tenant set up done")
     }
 
@@ -141,9 +144,10 @@ class BigBenTests {
         }
 
         //remove event:
-        eventService.schedule(listOf(EventRequest(xrefId, eventTime.plusMinutes(1).toString(), tenant, "P2", REMOVE))).apply {
-            assertEquals(status, 200)
-        }
+        eventService.schedule(listOf(EventRequest(xrefId, eventTime.plusMinutes(1).toString(), tenant, "P2", REMOVE)))
+            .apply {
+                assertEquals(status, 200)
+            }
         eventService.find(xrefId, tenant).apply {
             assertEquals(status, 404)
         }
@@ -161,7 +165,9 @@ class BigBenTests {
                 assertEquals(status, 200)
                 fetch<EventLookup> { it.xrefId = "id_$i"; it.tenant = "default" }.get()!!.apply {
                     assertEquals(shard, i / int("events.receiver.shard.size"))
-                    fetch<Event> { it.bucketId = time; it.shard = shard; it.eventTime = eventTime; it.id = eventId }.get()!!.apply {
+                    fetch<Event> {
+                        it.bucketId = time; it.shard = shard; it.eventTime = eventTime; it.id = eventId
+                    }.get()!!.apply {
                         assertEquals(status, UN_PROCESSED)
                     }
                 }
@@ -205,7 +211,11 @@ class BigBenTests {
         println("buckets: $buckets")
         val shards = range.toList()
         // test back ground load
-        range.forEach { i -> save<Bucket> { it.bucketId = time.minusMinutes(i.toLong()); it.count = 100L; it.status = UN_PROCESSED }.get()!! }
+        range.forEach { i ->
+            save<Bucket> {
+                it.bucketId = time.minusMinutes(i.toLong()); it.count = 100L; it.status = UN_PROCESSED
+            }.get()!!
+        }
         val bm = BucketManager(10, 2 * 60, 60, module())
         bm.getProcessableShardsForOrBefore(time).get()!!
 
@@ -218,7 +228,11 @@ class BigBenTests {
             }
         }
         // test purge:
-        (1..5).forEach { i -> save<Bucket> { it.bucketId = time.plusMinutes(i.toLong()); it.count = 100L; it.status = UN_PROCESSED }.get()!! }
+        (1..5).forEach { i ->
+            save<Bucket> {
+                it.bucketId = time.plusMinutes(i.toLong()); it.count = 100L; it.status = UN_PROCESSED
+            }.get()!!
+        }
         (1..5).forEach { bm.getProcessableShardsForOrBefore(time.plusMinutes(it.toLong())).get()!! }
         bm.purgeIfNeeded()
         (1..5).forEach {
@@ -233,12 +247,15 @@ class BigBenTests {
         var server: HttpServer? = null
         try {
             val port = 8383
-            eventService.registerProcessor(ProcessorConfig("http", HTTP,
+            eventService.registerProcessor(
+                ProcessorConfig(
+                    "http", HTTP,
                     mapOf
-                    (
-                            "url" to "http://localhost:$port/test",
-                            "headers" to mapOf("header" to "Header1")
-                    ))
+                        (
+                        "url" to "http://localhost:$port/test",
+                        "headers" to mapOf("header" to "Header1")
+                    )
+                )
             ).apply { assertEquals(this.status, 200) }
             val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "http", "Payload1")
             println("event request: $eReq")
@@ -286,12 +303,15 @@ class BigBenTests {
         var server: HttpServer? = null
         try {
             val port = 8383
-            eventService.registerProcessor(ProcessorConfig("http", HTTP,
+            eventService.registerProcessor(
+                ProcessorConfig(
+                    "http", HTTP,
                     mapOf
-                    (
-                            "url" to "http://localhost:$port/test",
-                            "headers" to mapOf("header" to "Header1")
-                    ))
+                        (
+                        "url" to "http://localhost:$port/test",
+                        "headers" to mapOf("header" to "Header1")
+                    )
+                )
             ).apply { assertEquals(this.status, 200) }
             val time = nowUTC().plusMinutes(1).withSecond(10).withNano(0)
             val eReq = EventRequest("id123", time.toString(), "http", "Payload1")
@@ -345,12 +365,15 @@ class BigBenTests {
         var server: HttpServer? = null
         try {
             val port = 8383
-            eventService.registerProcessor(ProcessorConfig("http", HTTP,
+            eventService.registerProcessor(
+                ProcessorConfig(
+                    "http", HTTP,
                     mapOf
-                    (
-                            "url" to "http://localhost:$port/test",
-                            "header" to "Header1"
-                    ))
+                        (
+                        "url" to "http://localhost:$port/test",
+                        "header" to "Header1"
+                    )
+                )
             ).apply { assertEquals(this.status, 200) }
             val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "http", "Payload1")
             server = HttpServer.create(InetSocketAddress(port), 0)
@@ -391,12 +414,15 @@ class BigBenTests {
         var server: HttpServer? = null
         try {
             val port = 8383
-            eventService.registerProcessor(ProcessorConfig("http", HTTP,
+            eventService.registerProcessor(
+                ProcessorConfig(
+                    "http", HTTP,
                     mapOf
-                    (
-                            "url" to "http://localhost:$port/test",
-                            "header" to "Header1"
-                    ))
+                        (
+                        "url" to "http://localhost:$port/test",
+                        "header" to "Header1"
+                    )
+                )
             ).apply { assertEquals(this.status, 200) }
             val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "http", "Payload1")
             server = HttpServer.create(InetSocketAddress(port), 0)
@@ -435,12 +461,15 @@ class BigBenTests {
 
     @Test
     fun `test kafka integration - ok case`() {
-        eventService.registerProcessor(ProcessorConfig("kafka", MESSAGING,
+        eventService.registerProcessor(
+            ProcessorConfig(
+                "kafka", MESSAGING,
                 mapOf
-                (
-                        "topic" to "test",
-                        "brokers.url" to ""
-                ))
+                    (
+                    "topic" to "test",
+                    "brokers.url" to ""
+                )
+            )
         ).apply { assertEquals(this.status, 200) }
         val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", "Payload1")
         eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
@@ -449,17 +478,22 @@ class BigBenTests {
     @Test
     fun `test kafka integration - error case`() {
         val x: ScheduledThreadPoolExecutor = (TaskExecutor.Companion::class.memberProperties
-                .filter { it.name == "RETRY_POOL" }[0]
-                .apply { isAccessible = true }.get(TaskExecutor.Companion) as ListeningScheduledExecutorService)
-                .let { it::class.java.getDeclaredField("delegate").apply { isAccessible = true }.get(it) } as ScheduledThreadPoolExecutor
+            .filter { it.name == "RETRY_POOL" }[0]
+            .apply { isAccessible = true }.get(TaskExecutor.Companion) as ListeningScheduledExecutorService)
+            .let {
+                it::class.java.getDeclaredField("delegate").apply { isAccessible = true }.get(it)
+            } as ScheduledThreadPoolExecutor
         val current = x.completedTaskCount
-        eventService.registerProcessor(ProcessorConfig("kafka", MESSAGING,
+        eventService.registerProcessor(
+            ProcessorConfig(
+                "kafka", MESSAGING,
                 mapOf
-                (
-                        "topic" to "test",
-                        "brokers.url" to "",
-                        "fail" to true
-                ))
+                    (
+                    "topic" to "test",
+                    "brokers.url" to "",
+                    "fail" to true
+                )
+            )
         ).apply { assertEquals(this.status, 200) }
         val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", "Payload1")
         eventService.schedule(listOf(eReq)).apply { assertEquals(200, status) }
@@ -469,12 +503,15 @@ class BigBenTests {
 
     @Test(enabled = false)
     fun `test kafka consumer`() {
-        eventService.registerProcessor(ProcessorConfig("kafka", MESSAGING,
+        eventService.registerProcessor(
+            ProcessorConfig(
+                "kafka", MESSAGING,
                 mapOf
-                (
-                        "topic" to "outbound",
-                        "brokers.url" to "localhost:9092"
-                ))
+                    (
+                    "topic" to "outbound",
+                    "brokers.url" to "localhost:9092"
+                )
+            )
         ).apply { assertEquals(this.status, 200) }
         /*val consumer = (BigBen.messageProcessors[0] as MockKafkaProcessor).consumer
         consumer.rebalance(setOf(TopicPartition("inbound", 1)))
@@ -487,24 +524,29 @@ class BigBenTests {
 
     @Test(enabled = false)
     fun `end to end kafka`() {
-        eventService.registerProcessor(ProcessorConfig("kafka", MESSAGING,
+        eventService.registerProcessor(
+            ProcessorConfig(
+                "kafka", MESSAGING,
                 mapOf
-                (
-                        "topic" to "outbound",
-                        "bootstrap.servers" to "localhost:9092"
-                ))
+                    (
+                    "topic" to "outbound",
+                    "bootstrap.servers" to "localhost:9092"
+                )
+            )
         ).apply { assertEquals(this.status, 200) }
 
 
-        val producer = KafkaProducer<String, String>(map("kafka.producer.config").mapKeys { it.key.removePrefix("kafka.producer.config.") } +
-                mapOf
-                (
-                        "topic" to "outbound",
-                        "bootstrap.servers" to "localhost:9092"
-                ))
+        val producer =
+            KafkaProducer<String, String>(map("kafka.producer.config").mapKeys { it.key.removePrefix("kafka.producer.config.") } +
+                                                  mapOf
+                                                      (
+                                                      "topic" to "outbound",
+                                                      "bootstrap.servers" to "localhost:9092"
+                                                  ))
         (1..100).forEach {
             println("sending $it")
-            val eReq = EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", RandomStringGenerator.Builder().build().generate(1024))
+            val eReq =
+                EventRequest("id123", nowUTC().minusSeconds(1).toString(), "kafka", RandomStringGenerator.Builder().build().generate(1024))
             producer.send(ProducerRecord("outbound", eReq.json())).get()
         }
         sleep(3000)
@@ -512,7 +554,8 @@ class BigBenTests {
 
     @Test(enabled = false)
     fun `test consumer`() {
-        val consumer = KafkaConsumer<String, String>(map("kafka.consumer.config") + mapOf("group.id" to UUID.randomUUID().toString()))
+        val consumer =
+            KafkaConsumer<String, String>(map("kafka.consumer.config") + mapOf("group.id" to UUID.randomUUID().toString()))
         consumer.subscribe(setOf("outbound"))
         while (true) {
             println("polling outbound")

@@ -1,3 +1,4 @@
 events:
   receiver:
     shard.size: 10
+  processor.eager.loading: false

@@ -48,6 +48,8 @@ class APITests {
     fun `test events at the same time`() {
         val server = "http://localhost:8080"
 
+        val tenant = "test"
+
         assertEquals(runBlocking {
             client.call {
                 url("$server/events/tenant/register")
@@ -55,7 +57,7 @@ class APITests {
                 method = Post
                 body = TextContent(
                     ProcessorConfig(
-                        "test", CUSTOM_CLASS,
+                        tenant, CUSTOM_CLASS,
                         mapOf("eventProcessorClass" to "com.walmartlabs.bigben.processors.NoOpCustomClassProcessor")
                     ).json(), Json
                 )
@@ -67,7 +69,7 @@ class APITests {
             client.post<String> {
                 url("$server/generation/random")
                 accept(Json)
-                body = TextContent(EventGenerator.EventGeneration("PT1M", "PT0S", 1000, "java").json(), Json)
+                body = TextContent(EventGenerator.EventGeneration("PT1M", "PT0S", 1000, tenant).json(), Json)
             }
         }
 
@@ -76,7 +78,7 @@ class APITests {
             client.post<String> {
                 url("$server/generation/random")
                 accept(Json)
-                body = TextContent(EventGenerator.EventGeneration("PT1M30S", "PT0S", 1000, "java").json(), Json)
+                body = TextContent(EventGenerator.EventGeneration("PT1M30S", "PT0S", 1000, tenant).json(), Json)
             }
         }.run { typeRefJson<Map<String, Int>>(this).run { ZonedDateTime.parse(entries.first().key) } }
 
