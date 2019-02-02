@@ -26,6 +26,8 @@ import com.walmartlabs.bigben.utils.commons.Props.long
 import com.walmartlabs.bigben.utils.commons.Props.map
 import com.walmartlabs.bigben.utils.commons.Props.string
 import com.walmartlabs.bigben.utils.commons.PropsLoader
+import com.walmartlabs.bigben.utils.commons.ResourceLoader
+import com.walmartlabs.bigben.utils.typeRefYaml
 import org.testng.annotations.Test
 import java.util.function.Supplier
 import kotlin.test.assertEquals
@@ -48,30 +50,104 @@ class PropsTests {
         asserts()
     }
 
-    @Test(enabled = false)
+    @Test
     fun `test overrides`() {
         val props = PropsLoader().load("file://overrides.yaml", "file://props.yaml")
-        /*assertTrue(props.exists("a"))
+        assertTrue(props.exists("a"))
         assertTrue(props.exists("a.b"))
-        assertTrue(props.exists("a.c.d"))*/
+        assertTrue(props.exists("a.c.d"))
         assertEquals(props.string("a.c.d"), "y1") // override
         assertEquals(props.string("a.b"), "x")
         assertEquals(props.int("a.e"), 12)
         assertEquals(props.boolean("a.f"), true)
-        assertEquals(props.list("a.g"), listOf(1, 3)) // override
+        assertEquals(props.list("a.g"), listOf(1, 2, 3)) // override => list append
         assertEquals(props.long("a.i", 10), 10)
-        assertEquals(
-            props.map("a"), mapOf(
-                "b" to "x", "c.d" to "y", "e" to 12, "f" to true,
-                "g" to listOf(1, 2), "h" to mapOf("h1" to "H11", "h2" to "H22") // override
-            )
+        val actual = props.map("a")
+        val expected = mapOf(
+            "b" to "x", "c.d" to "y1", "e" to 12, "f" to true,
+            "g" to listOf(1, 2, 3), "h" to mapOf("h1" to "abc", "h2" to "H2", "h3" to System.getProperty("user.home")),
+            "j" to 1
         )
-        assertEquals(
-            PropsLoader.flatten(map("a")), mapOf(
-                "b" to "x", "c.d" to "y", "e" to 12, "f" to true,
-                "g" to listOf(1, 2), "h.h1" to "H11", "h.h2" to "H22" // override
-            )
+        println(expected)
+        println(actual)
+        assertEquals(expected, actual)
+        val actualFlattened = PropsLoader.flatten(props.map("a"))
+        val expectedFlattened = mapOf(
+            "b" to "x", "c.d" to "y1", "e" to 12, "f" to true,
+            "g" to listOf(1, 2, 3), "j" to 1, "h.h1" to "abc", "h.h2" to "H2", "h.h3" to System.getProperty("user.home")
         )
+        println(actualFlattened)
+        println(expectedFlattened)
+        assertEquals(expectedFlattened, actualFlattened)
+    }
+
+    /*@Test
+    fun `test flatten and unflatten`() {
+        //val merged = Props.load("file://sub1-overrides.yaml", "file://sub1.yaml").root()
+        val expected = mapOf(
+            "a" to "b", "c" to
+                    listOf(
+                        "4", "5", mapOf("i1" to "I1"), mapOf("d1" to "D1"), mapOf("G" to "H1"),
+                        mapOf("g" to "h"), mapOf(
+                            "d" to mapOf(
+                                "d11" to System.getProperty("java.home1", "acc"),
+                                "d22" to "D22", "e" to "E22", "l" to
+                                        listOf(
+                                            mapOf("a" to System.getProperty("java.io.tmpdir1", "Aaa")),
+                                            mapOf("a1" to "b1"), mapOf("c" to "d"), mapOf("e" to mapOf("f" to "F1"))
+                                        )
+                            )
+                        ),
+                        mapOf("i" to mapOf("j" to "k11", "l" to "m", "j1" to "J1"))
+                    )
+        )
+        val flattened = PropsLoader.flatten(expected)
+        val unflattened = PropsLoader.unflatten(flattened)
+        assertEquals(expected, unflattened)
+    }
+
+    @Test
+    fun `test list substitutions`() {
+        val comparator = Comparator<Any> { o1, o2 -> o1.toString().compareTo(o2.toString()) }
+        val merged = Props.load("file://sub1-overrides.yaml", "file://sub1.yaml").root()
+        val expected = mapOf(
+            "a" to "b", "c" to
+                    sortedSetOf(
+                        comparator,
+                        "4", "5", mapOf("i1" to "I1"), mapOf("d1" to "D1"), mapOf("G" to "H1"),
+                        mapOf("g" to "h"), mapOf(
+                            "d" to mapOf(
+                                "d11" to System.getProperty("java.home1", "acc"),
+                                "d22" to "D22", "e" to "E22", "l" to
+                                        sortedSetOf(
+                                            comparator,
+                                            mapOf("a" to System.getProperty("java.io.tmpdir1", "Aaa")),
+                                            mapOf("a1" to "b1"), mapOf("c" to "d"), mapOf("e" to mapOf("f" to "F1"))
+                                        )
+                            )
+                        ),
+                        mapOf("i" to mapOf("j" to "k11", "l" to "m", "j1" to "J1"))
+                    )
+        )
+        val flattened = PropsLoader.flatten(merged) as Json
+        val unflattened = PropsLoader.unflatten(flattened)
+        println("merged: $merged")
+        println("flatte: $flattened")
+        println("unflat: $unflattened")
+        println("expect: $expected")
+        TODO("complete the asserts")
+    }*/
+
+    @Test
+    fun `test substitutions in list`() {
+        val s = ResourceLoader.load("file://a.yaml")
+        val yaml = typeRefYaml<Map<String, Any>>(s)
+
+
+        val merged = Props.load("file://b.yaml", "file://a.yaml").root()
+        println(merged)
+        //val unflatten = PropsLoader.unflatten(merged.root())
+        //println(unflatten.yaml())
     }
 
     private fun asserts() {
@@ -84,28 +160,11 @@ class PropsTests {
         assertEquals(boolean("a.f"), true)
         assertEquals(list("a.g"), listOf(1, 2))
         assertEquals(long("a.i", 10), 10)
-        /*assertEquals(
-            map("a"), mapOf(
-                "b" to "x", "c.d" to "y", "e" to 12, "f" to true,
-                "g" to listOf(1, 2), "h" to mapOf("h1" to "H1", "h2" to "H2")
-            )
-        )*/
         assertEquals(
             PropsLoader.flatten(map("a")), mapOf(
                 "b" to "x", "c.d" to "y", "e" to 12, "f" to true,
                 "g" to listOf(1, 2), "h.h1" to "H1", "h.h2" to "H2"
             )
         )
-    }
-
-    @Test(enabled = false)
-    fun `test hocon`() {
-        //val b = PropsLoader().load("file://props.yaml").map("a")
-        //val o = PropsLoader().load("file://overrides.yaml").map("a")
-        System.setProperty("a.j", "10")
-        System.setProperty("a.h.h2", "H2222")
-        val props = PropsLoader().load("file://overrides.yaml", "file://props.yaml")
-        val m = PropsLoader.merge(mutableMapOf(), mutableMapOf("a" to "b"))
-        println(m)
     }
 }

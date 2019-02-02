@@ -1,0 +1,19 @@
+a: b
+c:
+  - d:
+      d11: ${java.home1:-acc}
+      d22: D22
+      e: E22
+      l:
+        - a: ${java.io.tmpdir1:-Aaa}
+        - c: d
+        - e:
+            f: F1
+    d1: D1
+    G: H1
+  - i:
+      j: k11
+      j1: J1
+  - i1: I1
+  - 5
+

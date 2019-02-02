@@ -2,8 +2,7 @@
 
 export HOST_IP=${HOST_IP:-`ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'`}
 export SERVER_PORT=${SERVER_PORT:-8080}
-export APP_ROOT=${PWD}/../configs
-export CONFIGS="overrides,../bin/bigben"
+APP_ROOT=${PWD}/../configs
 export HZ_MEMBER_IPS=${HZ_MEMBER_IPS:-${HOST_IP}}
 export CASSANDRA_SEED_IPS=${CASSANDRA_SEED_IPS:-${HOST_IP}}
 export LOGS_DIR=${LOGS_DIR:-${APP_ROOT}/../../../bigben_logs}
@@ -34,8 +33,10 @@ while [[  ${i} -lt $(($NUM_INSTANCES + 1)) ]]; do
     echo "starting node $i at app port: $app_port, hz port: $hz_port, logs: ${LOGS_DIR}/bigben_app_${app_port}.log"
     LOG_FILE="${LOGS_DIR}/bigben_app_${app_port}.log"
     java ${JAVA_OPTS} \
-        -DLOG_FILE=${LOG_FILE} \
+        -Dbigben.log.config=${APP_ROOT}/log4j.xml \
+        -Dbigben.log.file=${LOG_FILE} \
         -Dapp.server.port=${app_port} \
+        -Dbigben.configs="uri://${APP_ROOT}/overrides.yaml,uri://${APP_ROOT}/../bin/bigben.yaml" \
         -Dhz.network.port=${hz_port} \
         -jar ../bin/bigben.jar > /dev/null &
     if [[ ${NUM_INSTANCES} == 1 ]]; then

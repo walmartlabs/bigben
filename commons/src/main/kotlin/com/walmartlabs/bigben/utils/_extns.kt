@@ -28,13 +28,15 @@ import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.google.common.base.Throwables
+import mu.KotlinLogging
 import org.slf4j.LoggerFactory
 import java.time.ZonedDateTime
 
 /**
  * Created by smalik3 on 2/21/18
  */
-inline fun <reified T : Any> logger() = LoggerFactory.getLogger(unwrapCompanionClass(T::class.java).name)!!
+inline fun <reified T : Any> logger() = KotlinLogging.logger(unwrapCompanionClass(T::class.java).name)
+//LoggerFactory.getLogger(unwrapCompanionClass(T::class.java).name)!!
 
 fun logger(name: String) = LoggerFactory.getLogger(name)!!
 

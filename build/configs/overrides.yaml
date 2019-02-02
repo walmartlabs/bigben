@@ -1,4 +1,3 @@
-app.server.port: ${SERVER_PORT}
 hz:
   network.members: ${HZ_MEMBER_IPS}
 cassandra.cluster.contactPoints: ${CASSANDRA_SEED_IPS}

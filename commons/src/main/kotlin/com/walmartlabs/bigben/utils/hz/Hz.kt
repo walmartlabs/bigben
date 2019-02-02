@@ -49,7 +49,7 @@ class Hz : Module {
     val hz: HazelcastInstance
 
     init {
-        val config = typeRefJson<Json>(PropsLoader.flatten(map("hz")).json()).let { map ->
+        val config = typeRefJson<Json>(PropsLoader.flatten(map("hz"))!!.json()).let { map ->
             if (l.isDebugEnabled) l.debug("using the hazelcast config from: ${Hz::class.java.getResource(string("hz.template"))}")
             val template = ResourceLoader.load(string("hz.template"))
             StrSubstitutor(object : StrLookup<Any>() {

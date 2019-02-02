@@ -31,7 +31,13 @@
     </appender>
 
     <logger name="com.walmartlabs.bigben" additivity="false">
+        <level value="WARN"/>
+        <appender-ref ref="console"/>
+    </logger>
+
+    <logger name="com.walmartlabs.bigben.utils.commons.PropsLoader" additivity="false">
         <level value="DEBUG"/>
         <appender-ref ref="console"/>
     </logger>
+
 </log4j:configuration>

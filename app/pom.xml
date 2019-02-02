@@ -4,11 +4,12 @@
     <parent>
         <groupId>com.walmartlabs.bigben</groupId>
         <artifactId>bigben</artifactId>
-        <version>1.0.2-SNAPSHOT</version>
+        <version>1.0.4-SNAPSHOT</version>
     </parent>
-    <artifactId>app</artifactId>
+    <artifactId>bigben-app</artifactId>
     <name>BigBen:app</name>
     <url>http://maven.apache.org</url>
+    <packaging>takari-jar</packaging>
     <properties>
         <slf4j-api.version>1.7.25</slf4j-api.version>
     </properties>
@@ -27,7 +28,7 @@
         </dependency>
         <dependency>
             <groupId>com.walmartlabs.bigben</groupId>
-            <artifactId>cron</artifactId>
+            <artifactId>bigben-cron</artifactId>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -100,7 +101,7 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>com.walmartlabs.bigben.app.AppRun</mainClass>
+                            <mainClass>com.walmartlabs.bigben.app.RunKt</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

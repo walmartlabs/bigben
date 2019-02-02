@@ -1,8 +1,9 @@
 package com.walmartlabs.bigben.tests
 
+import com.walmartlabs.bigben.BigBen
 import com.walmartlabs.bigben.BigBen.module
-import com.walmartlabs.bigben.app.AppRun
 import com.walmartlabs.bigben.app.EventGenerator
+import com.walmartlabs.bigben.app.main
 import com.walmartlabs.bigben.entities.EventLoader
 import com.walmartlabs.bigben.entities.EventStatus.PROCESSED
 import com.walmartlabs.bigben.processors.ProcessorConfig
@@ -30,13 +31,13 @@ class APITests {
 
     companion object {
         init {
-            System.setProperty("configs", "bigben")
-            thread { AppRun.main(emptyArray()) }
-            AppRun.latch.await()
+            System.setProperty("bigben.configs", "file://bigben-api-test.yaml")
+            thread { main(emptyArray()) }
+            BigBen.init()
         }
     }
 
-    val client = HttpClient(Apache)
+    private val client = HttpClient(Apache)
 
     @AfterClass
     fun teardown() {
@@ -46,6 +47,7 @@ class APITests {
     @Test
     fun `test events at the same time`() {
         val server = "http://localhost:8080"
+
         val tenant = "test"
 
         assertEquals(runBlocking {
@@ -94,8 +96,8 @@ class APITests {
                     total++
                 }
                 l =
-                        module<EventLoader>().load(bucket, 0, 400, l.second.last().eventTime!!, l.second.last().id!!, l.first)
-                            .get()
+                    module<EventLoader>().load(bucket, 0, 400, l.second.last().eventTime!!, l.second.last().id!!, l.first)
+                        .get()
             }
         }
     }
