@@ -108,7 +108,7 @@ class EventService(
                         eventResponse.also {
                             it.eventId = id; it.eventTime = eventTime?.toString(); it.payload = payload
                             it.eventStatus = status; if (status != UN_PROCESSED && status != null) it.triggeredAt =
-                            processedAt?.toString()
+                            processedAt?.toString(); it.deliveryOption = deliveryOption(this)
                             if (error != null) it.error = com.walmartlabs.bigben.entities.Error(500, error)
                         }.also { if (fire) module<ProcessorRegistry>()(this) }
                     }

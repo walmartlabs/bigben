@@ -32,8 +32,11 @@ import com.ning.http.client.AsyncCompletionHandler
 import com.ning.http.client.AsyncHttpClient
 import com.ning.http.client.Response
 import com.walmartlabs.bigben.entities.Event
+import com.walmartlabs.bigben.entities.EventDeliveryOption.FULL_EVENT
+import com.walmartlabs.bigben.entities.EventDeliveryOption.PAYLOAD_ONLY
 import com.walmartlabs.bigben.entities.EventResponse
 import com.walmartlabs.bigben.entities.EventStatus.*
+import com.walmartlabs.bigben.extns.deliveryOption
 import com.walmartlabs.bigben.extns.kvs
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.extns.toResponse
@@ -75,7 +78,7 @@ object ProcessorRegistry : EventProcessor<Event>, Module {
     init {
         if (l.isInfoEnabled) l.info("loading configs")
         configs = ConcurrentHashMap(kvs { it.key = "tenants" }.result { l.error("error in loading tenant configs", it); throw it.rootCause()!! }
-                .map { ProcessorConfig::class.java.fromJson(it.value!!) }.associate { it.tenant!! to it })
+                                        .map { ProcessorConfig::class.java.fromJson(it.value!!) }.associate { it.tenant!! to it })
         if (l.isInfoEnabled) l.info("configs parsed: {}", configs)
     }
 
@@ -95,15 +98,19 @@ object ProcessorRegistry : EventProcessor<Event>, Module {
             e.error = null
             e.processedAt = nowUTC()
 
-            return { getOrCreate(configs[e.tenant]).invoke(e) }.retriable("processor-e-id: ${e.id}",
-                    int("events.processor.max.retries"), int("events.processor.initial.delay"), int("events.processor.backoff.multiplier")).apply {
+            return { getOrCreate(configs[e.tenant]).invoke(e) }.retriable(
+                "processor-e-id: ${e.id}",
+                int("events.processor.max.retries"), int("events.processor.initial.delay"), int("events.processor.backoff.multiplier")
+            ).apply {
                 transform {
                     if (TRIGGERED == e.status) {
                         e.status = e.error?.let { ERROR } ?: PROCESSED
                     }
                 }.catching {
-                    l.error("error in processing event by processor after multiple retries, will be retried later if within " +
-                            "'buckets.backlog.check.limit', e-id: ${e.xrefId}", it.rootCause())
+                    l.error(
+                        "error in processing event by processor after multiple retries, will be retried later if within " +
+                                "'buckets.backlog.check.limit', e-id: ${e.xrefId}", it.rootCause()
+                    )
                     e.status = ERROR
                     e.error = it?.let { getStackTraceAsString(it) } ?: "null error"
                 }
@@ -116,6 +123,13 @@ object ProcessorRegistry : EventProcessor<Event>, Module {
     }
 
     private fun getOrCreate(processorConfig: ProcessorConfig?): EventProcessor<Event> {
+        val eventContent = fun(e: Event): String {
+            return when (deliveryOption(e)) {
+                FULL_EVENT -> e.toResponse().json()
+                PAYLOAD_ONLY -> e.payload!!
+                else -> e.toResponse().json()
+            }
+        }
         return try {
             when (processorConfig?.type) {
                 MESSAGING -> processorCache.get(processorConfig.tenant!!) {
@@ -133,7 +147,7 @@ object ProcessorRegistry : EventProcessor<Event>, Module {
                         {
                             SettableFuture.create<Event>().apply {
                                 try {
-                                    val builder = ASYNC_HTTP_CLIENT.preparePost(processorConfig.props!!["url"].toString()).setBody(it.toResponse().json())
+                                    val builder = ASYNC_HTTP_CLIENT.preparePost(processorConfig.props!!["url"].toString()).setBody(eventContent(it))
                                     @Suppress("UNCHECKED_CAST")
                                     (processorConfig.props!!["headers"] as? Map<String, String>)?.let {
                                         if (l.isDebugEnabled) l.debug("adding custom headers: {}", it)
@@ -183,8 +197,10 @@ object ProcessorRegistry : EventProcessor<Event>, Module {
                                         return@custom it.newInstance(processorConfig.tenant, processorConfig.props) as EventProcessor<Event>
                                 }
                             }
-                            throw IllegalArgumentException("no suitable constructor found for custom processor: $this, " +
-                                    "either a no-args constructor or a constructor with parameters (String, Map<String, Object>) is required")
+                            throw IllegalArgumentException(
+                                "no suitable constructor found for custom processor: $this, " +
+                                        "either a no-args constructor or a constructor with parameters (String, Map<String, Object>) is required"
+                            )
                         }
                     } catch (ex: Exception) {
                         throw RuntimeException(ex.rootCause())
@@ -199,7 +215,7 @@ object ProcessorRegistry : EventProcessor<Event>, Module {
 
     fun register(config: ProcessorConfig?): ProcessorConfig? {
         require(config != null) { "null processor config" }
-        require(config!!.tenant != null && config.tenant!!.trim().isNotEmpty()) { "null or empty tenantId" }
+        require(config.tenant != null && config.tenant!!.trim().isNotEmpty()) { "null or empty tenantId" }
         require(config.type != null) { "null processor type" }
         require(config.props != null && !config.props!!.isEmpty()) { "null or empty properties" }
         if (l.isInfoEnabled) l.info("registering new processor")

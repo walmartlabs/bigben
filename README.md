@@ -274,11 +274,19 @@ A tenant can be registered by calling the following API
     },
     "payload": {
       "type": "string",
-      "description": "an optional event payload"
+      "description": "an optional event payload, must NOT be null with deliveryOption = PAYLOAD_ONLY"
     },
-    "mode": {
+    "mode": { 
       "type": "string",
-      "enum": ["UPSERT", "REMOVE"]
+      "enum": ["UPSERT", "REMOVE"],
+      "default": "UPSERT",
+      "description": "Use REMOVE to delete an event, UPSERT to add/update an event"
+    },
+    "deliveryOption": {
+      "type": "string",
+      "enum": ["FULL_EVENT", "PAYLOAD_ONLY"],
+      "default": "FULL_EVENT",
+      "description": "Use FULL_EVENT to have full event delivered via kafka/http, PAYLOAD_ONLY to have only the payload delivered"
     }
   },
   "required": [

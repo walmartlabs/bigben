@@ -63,13 +63,15 @@ class BucketManager(private val maxBuckets: Int, private val maxProcessingTime: 
     @Volatile
     private var bucketsLoader: BucketsLoader? = null
 
+    private val eventStatuses = setOf(null, EMPTY, UN_PROCESSED, PROCESSED)
+
     fun getProcessableShardsForOrBefore(bucketId: ZonedDateTime): ListenableFuture<out Multimap<ZonedDateTime, Int>> {
         if (bucketsLoader == null) {
             if (l.isInfoEnabled) l.info("starting the background load of previous buckets")
             val fetchSize = int("buckets.background.load.fetch.size")
             bucketsLoader = BucketsLoader(maxBuckets - 1, fetchSize, bucketWidth, bucketId) {
                 buckets[it.bucketId!!] = when (it.status) {
-                    in setOf(null, EMPTY, UN_PROCESSED, PROCESSED) -> BucketSnapshot.with(it.bucketId!!, it.count!!, shardSize, it.status ?: UN_PROCESSED)
+                    in eventStatuses -> BucketSnapshot.with(it.bucketId!!, it.count!!, shardSize, it.status ?: UN_PROCESSED)
                     ERROR -> {
                         require(it.failedShards != null && it.failedShards!!.isNotEmpty()) { "${it.bucketId} is marked $ERROR but has no failed shards information" }
                         if (l.isInfoEnabled) l.info("bucket ${it.bucketId} has shard failures: ${it.failedShards}, scheduling them for reprocessing")
