@@ -83,7 +83,8 @@ data class EventC(@ClusteringColumn @Column(name = "event_time") override var ev
                   @Column(name = "xref_id") override var xrefId: String? = null,
                   @Column(name = "processed_at") override var processedAt: ZonedDateTime? = null,
                   override var payload: String? = null,
-                  @Transient override var eventResponse: EventResponse? = null) : Event
+                  @Transient override var eventResponse: EventResponse? = null,
+                  @Transient override var deliveryOption: EventDeliveryOption? = null) : Event
 
 @Table(name = "lookups")
 data class EventLookupC(@PartitionKey override var tenant: String? = null,

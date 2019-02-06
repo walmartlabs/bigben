@@ -32,17 +32,21 @@ import org.apache.kafka.clients.consumer.MockConsumer
 import org.apache.kafka.clients.consumer.OffsetResetStrategy.EARLIEST
 import org.apache.kafka.clients.producer.MockProducer
 import org.apache.kafka.common.serialization.StringSerializer
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Created by smalik3 on 6/28/18
  */
 class MockMessageProducerFactory : MessageProducerFactory {
+    companion object {
+        val LAST_MESSAGE = AtomicReference<EventResponse>()
+    }
     override fun create(tenant: String, props: Json) = object : KafkaMessageProducer(tenant, props) {
         override fun createProducer(props: Json) = MockProducer<String, String>(true, StringSerializer(), StringSerializer())
         override fun produce(e: EventResponse): ListenableFuture<*> {
             return if (props.containsKey("fail")) {
                 immediateFailedFuture<Any>(Exception()) as ListenableFuture<*>
-            } else super.produce(e)
+            } else super.produce(e).apply { LAST_MESSAGE.set(e) }
         }
     }
 }

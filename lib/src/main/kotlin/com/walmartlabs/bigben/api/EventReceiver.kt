@@ -29,6 +29,7 @@ import com.walmartlabs.bigben.BigBen.entityProvider
 import com.walmartlabs.bigben.BigBen.module
 import com.walmartlabs.bigben.core.ScheduleScanner.Companion.BUCKET_CACHE
 import com.walmartlabs.bigben.entities.*
+import com.walmartlabs.bigben.entities.EventDeliveryOption.PAYLOAD_ONLY
 import com.walmartlabs.bigben.entities.EventStatus.*
 import com.walmartlabs.bigben.extns.*
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.EVENT_RECEIVER_ADD_EVENT
@@ -37,7 +38,6 @@ import com.walmartlabs.bigben.utils.*
 import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.hz.Hz
 import java.time.ZonedDateTime
-import java.util.*
 import kotlin.collections.MutableMap.MutableEntry
 
 /**
@@ -62,35 +62,35 @@ class EventReceiver(val hz: Hz) {
             val eventTime = ZonedDateTime.parse(eventRequest.eventTime)
             val bucketId = utc(bucketize(eventTime.toInstant().toEpochMilli(), scanInterval))
             fetch<EventLookup> { it.xrefId = eventRequest.id; it.tenant = eventRequest.tenant }
-                    .transformAsync {
-                        if (it != null) {
-                            if (it.eventTime == eventTime) {
-                                if (l.isDebugEnabled) l.debug("{}, event update received, no change in event time", eventRequest.id)
-                                save<Event> { e -> e.bucketId = it.bucketId; e.shard = it.shard; e.eventTime = it.eventTime; e.id = it.eventId; e.payload = eventRequest.payload }.transform {
-                                    if (l.isDebugEnabled) l.debug("{}, event updated successfully", eventRequest.id)
-                                    eventRequest.toResponse().apply { eventId = it!!.id; eventStatus = UPDATED }
-                                }
-                            } else {
-                                if (l.isDebugEnabled) l.debug("event update received, event time changed, add new event -> update existing look up -> delete old event")
-                                val oldLookup = it
-                                addEvent0(eventRequest, bucketId, eventTime).transformAsync {
-                                    addLookup0(eventRequest, bucketId, it!!.shard!!, it.id!!, eventTime).transformAsync { removeEvent0(oldLookup) }.transform {
-                                        eventRequest.toResponse().apply { eventId = it!!.eventId; eventStatus = UPDATED }
-                                    }
-                                }
+                .transformAsync {
+                    if (it != null) {
+                        if (it.eventTime == eventTime) {
+                            if (l.isDebugEnabled) l.debug("{}, event update received, no change in event time", eventRequest.id)
+                            save<Event> { e -> e.bucketId = it.bucketId; e.shard = it.shard; e.eventTime = it.eventTime; e.id = it.eventId; e.payload = eventRequest.payload }.transform {
+                                if (l.isDebugEnabled) l.debug("{}, event updated successfully", eventRequest.id)
+                                eventRequest.toResponse().apply { eventId = it!!.id; eventStatus = UPDATED }
                             }
                         } else {
+                            if (l.isDebugEnabled) l.debug("event update received, event time changed, add new event -> update existing look up -> delete old event")
+                            val oldLookup = it
                             addEvent0(eventRequest, bucketId, eventTime).transformAsync {
-                                addLookup0(eventRequest, it!!.bucketId!!, it.shard!!, it.id!!, it.eventTime!!).transform {
-                                    if (l.isDebugEnabled) l.debug("{}, add-event: successful", it!!.xrefId)
-                                    eventRequest.toResponse().apply { eventId = it!!.eventId; eventStatus = ACCEPTED }
+                                addLookup0(eventRequest, bucketId, it!!.shard!!, it.id!!, eventTime).transformAsync { removeEvent0(oldLookup) }.transform {
+                                    eventRequest.toResponse().apply { eventId = it!!.eventId; eventStatus = UPDATED }
                                 }
                             }
                         }
-                    }.catching {
-                        l.error("failed to add event: {}", eventRequest.id, it.rootCause())
-                        eventRequest.toResponse().apply { eventStatus = ERROR }
+                    } else {
+                        addEvent0(eventRequest, bucketId, eventTime).transformAsync {
+                            addLookup0(eventRequest, it!!.bucketId!!, it.shard!!, it.id!!, it.eventTime!!).transform {
+                                if (l.isDebugEnabled) l.debug("{}, add-event: successful", it!!.xrefId)
+                                eventRequest.toResponse().apply { eventId = it!!.eventId; eventStatus = ACCEPTED }
+                            }
+                        }
                     }
+                }.catching {
+                    l.error("failed to add event: {}", eventRequest.id, it.rootCause())
+                    eventRequest.toResponse().apply { eventStatus = ERROR }
+                }
         }()
     }
 
@@ -112,7 +112,7 @@ class EventReceiver(val hz: Hz) {
                 val count = it as Long
                 save<Event> {
                     if (l.isDebugEnabled) l.debug("{}, add-event: event-table: insert", eventRequest.id)
-                    it.id = UUID.randomUUID().toString()
+                    it.id = eventId(eventRequest)
                     it.eventTime = eventTime
                     it.shard = ((count - 1) / Props.int("events.receiver.shard.size")).toInt()
                     it.status = UN_PROCESSED
@@ -126,10 +126,11 @@ class EventReceiver(val hz: Hz) {
     }
 
     private fun removeEvent0(eventLookup: EventLookup): ListenableFuture<EventLookup> {
-        return { remove<Event> { it.eventTime = eventLookup.eventTime; it.id = eventLookup.eventId; it.shard = eventLookup.shard; it.bucketId = eventLookup.bucketId } }.retriable("delete-event-${eventLookup.xrefId}",
-                Props.int("events.receiver.delete.max.retries"),
-                Props.int("events.receiver.delete.initial.delay"),
-                Props.int("events.receiver.delete.backoff.multiplier")
+        return { remove<Event> { it.eventTime = eventLookup.eventTime; it.id = eventLookup.eventId; it.shard = eventLookup.shard; it.bucketId = eventLookup.bucketId } }.retriable(
+            "delete-event-${eventLookup.xrefId}",
+            Props.int("events.receiver.delete.max.retries"),
+            Props.int("events.receiver.delete.initial.delay"),
+            Props.int("events.receiver.delete.backoff.multiplier")
         ).transform { eventLookup }
     }
 
@@ -176,6 +177,13 @@ class EventReceiver(val hz: Hz) {
             l.error("event rejected, unknown tenant. Did you register one in the processors.config?, {}", eventRequest.json())
             return immediateFuture<EventResponse>(eventResponse)
         }
+        if (eventRequest.deliveryOption == PAYLOAD_ONLY && eventRequest.payload == null) {
+            val eventResponse = eventRequest.toResponse()
+            eventResponse.eventStatus = REJECTED
+            eventResponse.error = Error(400, "payload must not be null for deliveryOption $PAYLOAD_ONLY")
+            l.error("event rejected, null payload for '$PAYLOAD_ONLY' option: $eventRequest")
+            return immediateFuture<EventResponse>(eventResponse)
+        }
         try {
             ZonedDateTime.parse(eventRequest.eventTime)
         } catch (e: Exception) {
@@ -197,7 +205,7 @@ class EventReceiver(val hz: Hz) {
     }
 
     internal class CountIncrementer :
-            Idso(EVENT_RECEIVER_ADD_EVENT), EntryProcessor<ZonedDateTime, Bucket?>, EntryBackupProcessor<ZonedDateTime, Bucket?> {
+        Idso(EVENT_RECEIVER_ADD_EVENT), EntryProcessor<ZonedDateTime, Bucket?>, EntryBackupProcessor<ZonedDateTime, Bucket?> {
 
         companion object {
             private val l = logger<CountIncrementer>()

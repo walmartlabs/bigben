@@ -21,6 +21,7 @@ package com.walmartlabs.bigben.kafka
 
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import com.walmartlabs.bigben.entities.EventDeliveryOption.FULL_EVENT
 import com.walmartlabs.bigben.entities.EventResponse
 import com.walmartlabs.bigben.processors.MessageProducer
 import com.walmartlabs.bigben.processors.MessageProducerFactory
@@ -59,15 +60,13 @@ open class KafkaMessageProducer(private val tenant: String, props: Json) : Messa
     override fun produce(e: EventResponse): ListenableFuture<*> {
         if (l.isDebugEnabled) l.debug("producer:begin: tenant: $tenant, topic: $topic, event: ${e.id}")
         return SettableFuture.create<Any>().apply {
-            kafkaProducer.send(ProducerRecord(topic, e.id, e.json())) { recordMetadata, exception ->
+            val content = if (e.deliveryOption == null || e.deliveryOption == FULL_EVENT) e.json() else e.payload
+            kafkaProducer.send(ProducerRecord(topic, e.id, content)) { r, exception ->
                 if (exception != null) {
                     l.error("producer:error: tenant: $tenant, topic: $topic, event: ${e.id}, failure", exception.rootCause())
                     setException(exception.rootCause()!!)
                 } else {
-                    if (l.isDebugEnabled) l.debug(
-                        "producer:success: tenant: $tenant, topic: $topic, event: ${e.id}, "
-                                + "partition: ${recordMetadata.partition()}, offset: ${recordMetadata.offset()}"
-                    )
+                    if (l.isDebugEnabled) l.debug("successfully published, event: ${e.tenant}/${e.id}, topic: ${r.topic()}, partition: ${r.partition()}, offset: ${r.offset()}")
                     set(e)
                 }
             }

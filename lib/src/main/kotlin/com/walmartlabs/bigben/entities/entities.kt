@@ -22,6 +22,7 @@ package com.walmartlabs.bigben.entities
 import com.hazelcast.nio.ObjectDataInput
 import com.hazelcast.nio.ObjectDataOutput
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable
+import com.walmartlabs.bigben.entities.EventDeliveryOption.FULL_EVENT
 import com.walmartlabs.bigben.entities.Mode.UPSERT
 import com.walmartlabs.bigben.hz.HzObjectFactory
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.SHARD_STATUS
@@ -57,6 +58,7 @@ interface Event : EventResponseMixin {
     var processedAt: ZonedDateTime?
     var xrefId: String?
     var payload: String?
+    var deliveryOption: EventDeliveryOption?
 }
 
 interface EventLookup {
@@ -116,13 +118,20 @@ data class ShardStatusList(var list: List<ShardStatus?>? = null) : Idso(SHARD_ST
 }
 
 enum class Mode { UPSERT, REMOVE }
-open class EventRequest(var id: String? = null, var eventTime: String? = null, var tenant: String? = null, var payload: String? = null, var mode: Mode = UPSERT) {
+enum class EventDeliveryOption { FULL_EVENT, PAYLOAD_ONLY }
+open class EventRequest(
+    var id: String? = null, var eventTime: String? = null, var tenant: String? = null,
+    var payload: String? = null, var mode: Mode = UPSERT, var deliveryOption: EventDeliveryOption? = FULL_EVENT
+) {
     override fun toString() = "EventRequest(${json()})"
 }
 
-class EventResponse(id: String? = null, eventTime: String? = null, tenant: String? = null, mode: Mode = UPSERT, payload: String? = null,
-                    var eventId: String? = null, var triggeredAt: String? = null, var eventStatus: EventStatus? = null, var error: Error? = null) :
-        EventRequest(id = id, eventTime = eventTime, tenant = tenant, mode = mode, payload = payload) {
+class EventResponse(
+    id: String? = null, eventTime: String? = null, tenant: String? = null, mode: Mode = UPSERT, payload: String? = null,
+    var eventId: String? = null, var triggeredAt: String? = null, var eventStatus: EventStatus? = null,
+    var error: Error? = null, deliveryOption: EventDeliveryOption? = FULL_EVENT
+) :
+    EventRequest(id = id, eventTime = eventTime, tenant = tenant, mode = mode, payload = payload, deliveryOption = deliveryOption) {
     override fun toString() = "EventResponse(${json()})"
 }
 
