@@ -9,7 +9,7 @@
     <groupId>com.walmartlabs.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.4-SNAPSHOT</version>
+    <version>1.0.5-SNAPSHOT</version>
     <modules>
         <module>commons</module>
         <module>lib</module>
@@ -87,27 +87,27 @@
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-commons</artifactId>
-                <version>1.0.4-SNAPSHOT</version>
+                <version>1.0.5-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.0.4-SNAPSHOT</version>
+                <version>1.0.5-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cassandra</artifactId>
-                <version>1.0.4-SNAPSHOT</version>
+                <version>1.0.5-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-kafka</artifactId>
-                <version>1.0.4-SNAPSHOT</version>
+                <version>1.0.5-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cron</artifactId>
-                <version>1.0.4-SNAPSHOT</version>
+                <version>1.0.5-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>

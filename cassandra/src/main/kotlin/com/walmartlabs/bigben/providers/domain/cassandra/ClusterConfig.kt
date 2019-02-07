@@ -21,35 +21,43 @@ package com.walmartlabs.bigben.providers.domain.cassandra
 
 import com.datastax.driver.core.Cluster
 import com.datastax.driver.core.ConsistencyLevel
-import com.datastax.driver.core.ConsistencyLevel.LOCAL_QUORUM
+import com.datastax.driver.core.ConsistencyLevel.LOCAL_ONE
 import com.datastax.driver.core.SocketOptions.DEFAULT_CONNECT_TIMEOUT_MILLIS
 import com.datastax.driver.core.SocketOptions.DEFAULT_READ_TIMEOUT_MILLIS
 
 /**
  * Created by smalik3 on 3/2/18
  */
-class ClusterConfig {
-    var clusterName: String? = null
-    var contactPoints: String? = null
-    var port = 9042
-    var localDataCenter: String? = null
+data class ClusterConfig(
+    val clusterName: String = "bigben",
+    val contactPoints: String,
+    val port: Int = 9042,
+    val localDataCenter: String?,
 
-    var compression: String? = null
-    var coreConnectionsPerHost = 8
-    var maxHostsPerConnection = 32768
-    var keepTCPConnectionAlive = true
+    val compression: String?,
+    val keepTCPConnectionAlive: Boolean = true,
 
-    var connectionTimeOut = DEFAULT_CONNECT_TIMEOUT_MILLIS
-    var readTimeout = DEFAULT_READ_TIMEOUT_MILLIS
-    var reconnectPeriod = 5L
+    val coreConnectionsPerLocalHost: Int = 1,
+    val maxConnectionsPerLocalHost: Int = 1,
+    val coreConnectionsPerRemoteHost: Int = 1,
+    val maxConnectionsPerRemoteHost: Int = 1,
+    val maxRequestsPerLocalConnection: Int = 32768,
+    val maxRequestsPerRemoteConnection: Int = 2048,
+    val newLocalConnectionThreshold: Int = 3000,
+    val newRemoteConnectionThreshold: Int = 400,
+    val poolTimeoutMillis: Int = 0,
 
-    var username: String? = null
-    var password: String? = null
-    var downgradingConsistency: Boolean = false
+    val connectionTimeOut: Int = DEFAULT_CONNECT_TIMEOUT_MILLIS,
+    val readTimeout: Int = DEFAULT_READ_TIMEOUT_MILLIS,
+    val reconnectPeriod: Long = 5L,
 
-    var writeConsistency: ConsistencyLevel = LOCAL_QUORUM
-    var readConsistency: ConsistencyLevel = LOCAL_QUORUM
-}
+    val username: String?,
+    val password: String?,
+    val downgradingConsistency: Boolean = false,
+
+    val writeConsistency: ConsistencyLevel = LOCAL_ONE,
+    val readConsistency: ConsistencyLevel = LOCAL_ONE
+)
 
 interface ClusterFactory {
     fun create(): Cluster
