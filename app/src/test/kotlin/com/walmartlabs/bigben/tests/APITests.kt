@@ -65,7 +65,7 @@ class APITests {
 
     companion object {
         init {
-            System.setProperty("bigben.configs", "file://bigben-api-test.yaml")
+            System.setProperty("bigben.configs", "file://bigben-api-test.yaml, file://bigben.yaml")
             thread { main(emptyArray()) }
             BigBen.init()
         }

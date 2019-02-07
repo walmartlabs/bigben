@@ -45,7 +45,7 @@ object BigBen {
     private object Initializer {
         init {
             System.getProperty("bigben.configs")?.run {
-                val configs = this.split(",")
+                val configs = this.split(",").map { it.trim() }
                 l.info("using configs: $configs")
                 load(*configs.toTypedArray())
             } ?: {

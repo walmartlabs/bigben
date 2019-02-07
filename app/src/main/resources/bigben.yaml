@@ -65,7 +65,7 @@ cassandra:
 kafka:
   consumers:
     - num.consumers: ${num.consumers:-8}
-      processor.impl.class: com.walmartlabs.bigben.kafka.ProcessorImpl
+      processor.impl.class: ${bigben.kafka.processor.impl.class:-com.walmartlabs.bigben.kafka.ProcessorImpl}
       topics: ${bigben.inbound.topic.name:-null}
       max.poll.wait.time: ${max.poll.wait.time:-10000}
       message.retry.max.count: ${message.retry.max.count:-10}

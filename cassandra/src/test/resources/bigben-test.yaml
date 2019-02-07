@@ -33,8 +33,15 @@ cassandra:
     clusterName: bigben-cluster
     port: 9042
     localDataCenter: null
-    coreConnectionsPerHost: 8
-    maxHostsPerConnection: 32768
+    coreConnectionsPerLocalHost: 1
+    maxConnectionsPerLocalHost: 1
+    coreConnectionsPerRemoteHost: 1
+    maxConnectionsPerRemoteHost: 1
+    maxRequestsPerLocalConnection: 32768
+    maxRequestsPerRemoteConnection: 2048
+    newLocalConnectionThreshold: 3000
+    newRemoteConnectionThreshold: 400
+    poolTimeoutMillis: 0
     keepTCPConnectionAlive: true
     connectionTimeOut: 5000
     readTimeout: 12000
@@ -42,8 +49,8 @@ cassandra:
     username: null
     password: null
     downgradingConsistency: false
-    writeConsistency: "LOCAL_QUORUM"
-    readConsistency: "LOCAL_QUORUM"
+    writeConsistency: LOCAL_ONE
+    readConsistency: LOCAL_ONE
 
 # system properties
 task:

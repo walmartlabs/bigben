@@ -57,7 +57,7 @@ class KafkaTests {
         val latch = CountDownLatch(1)
 
         init {
-            System.setProperty("bigben.props", "file://bigben-kafka-test.yaml")
+            System.setProperty("bigben.configs", "file://bigben-kafka-test.yaml, file://bigben.yaml")
             BigBen.init()
         }
     }
