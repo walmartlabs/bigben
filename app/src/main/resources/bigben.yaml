@@ -12,10 +12,10 @@ modules:
     object: com.walmartlabs.bigben.EventModule
   - name: messaging
     object: com.walmartlabs.bigben.kafka.KafkaModule
-    enabled: false
+    enabled: ${kafka.module.enabled:-false}
   - name: cron
     object: com.walmartlabs.bigben.cron.CronRunner
-    enabled: false
+    enabled: ${cron.module.enabled:-false}
 
 # hazelcast properties
 hz:
@@ -42,8 +42,15 @@ cassandra:
     clusterName: bigben-cluster
     port: 9042
     localDataCenter: null
-    coreConnectionsPerHost: 8
-    maxHostsPerConnection: 32768
+    coreConnectionsPerLocalHost: 1
+    maxConnectionsPerLocalHost: 1
+    coreConnectionsPerRemoteHost: 1
+    maxConnectionsPerRemoteHost: 1
+    maxRequestsPerLocalConnection: 32768
+    maxRequestsPerRemoteConnection: 2048
+    newLocalConnectionThreshold: 3000
+    newRemoteConnectionThreshold: 400
+    poolTimeoutMillis: 0
     keepTCPConnectionAlive: true
     connectionTimeOut: 5000
     readTimeout: 12000
@@ -51,33 +58,33 @@ cassandra:
     username: null
     password: null
     downgradingConsistency: false
-    writeConsistency: "LOCAL_QUORUM"
-    readConsistency: "LOCAL_QUORUM"
+    writeConsistency: LOCAL_ONE
+    readConsistency: LOCAL_ONE
 
 # kafka consumer properties
 kafka:
   consumers:
-    - num.consumers: 8
+    - num.consumers: ${num.consumers:-8}
       processor.impl.class: com.walmartlabs.bigben.kafka.ProcessorImpl
-      topics: ${bigben.inbound.topic.name:-<enter topic here>}
-      max.poll.wait.time: 10000
-      message.retry.max.count: 10
+      topics: ${bigben.inbound.topic.name:-null}
+      max.poll.wait.time: ${max.poll.wait.time:-10000}
+      message.retry.max.count: ${message.retry.max.count:-10}
       config:
         key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
         value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
-        bootstrap.servers: ${bigben.inbound.topic.bootstrap.servers:-<enter bootstrap servers here>}
+        bootstrap.servers: ${bigben.inbound.topic.bootstrap.servers:-null}
         #fetch.min.bytes: 1
-        group.id: bigben-inbound
-        #heartbeat.interval.ms: 3000
+        group.id: ${group.id:-bigben-inbound}
+        heartbeat.interval.ms: ${heartbeat.interval.ms:-3000}
         session.timeout.ms: 30000
-        auto.offset.reset: latest
+        auto.offset.reset: ${auto.offset.reset:-latest}
         fetch.max.bytes: 324000
         max.poll.interval.ms: 30000
         max.poll.records: 100
         receive.buffer.bytes: 65536
         request.timeout.ms: 60000
         #send.buffer.bytes: 131072
-        enable.auto.commit: false
+        enable.auto.commit: ${enable.auto.commit:-false}
   producer:
     config: # this is default kafka producer config, these values will be used if not supplied during the tenant registration
       key.serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -96,7 +103,6 @@ task:
     backoff.multiplier: 2
 
 app.server.port: 8080
-
 generic.future.max.get.time: 60
 
 events:
@@ -125,7 +131,7 @@ events:
 
 # bucket manager / loader related properties
 buckets:
-  backlog.check.limit: 300
+  backlog.check.limit: 1440 # 1 Day
   background:
     load.fetch.size: 100
     load.wait.interval.seconds: 15

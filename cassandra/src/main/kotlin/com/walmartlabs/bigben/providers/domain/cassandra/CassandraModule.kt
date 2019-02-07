@@ -94,8 +94,10 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
         return mappingManager.mapper(selector::class.java).let {
             when (selector) {
                 is EventC -> {
-                    require(selector.eventTime != null && selector.id != null &&
-                            selector.shard != null && selector.shard!! >= 0) { "event keys not provided: $selector" }
+                    require(
+                        selector.eventTime != null && selector.id != null &&
+                                selector.shard != null && selector.shard!! >= 0
+                    ) { "event keys not provided: $selector" }
                     it.getAsync(selector.bucketId, selector.shard, selector.eventTime, selector.id, readConsistency).transform { it }
                 }
                 is BucketC -> {
@@ -123,8 +125,10 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
             val m = it as Mapper<Any>
             when (selector) {
                 is EventC -> {
-                    require(selector.eventTime != null && selector.id != null && selector.bucketId != null &&
-                            selector.shard != null && selector.shard!! >= 0) { "event keys not provided: $selector" }
+                    require(
+                        selector.eventTime != null && selector.id != null && selector.bucketId != null &&
+                                selector.shard != null && selector.shard!! >= 0
+                    ) { "event keys not provided: $selector" }
                 }
                 is BucketC -> {
                     require(selector.bucketId != null) { "bucket id not provided: $selector" }
@@ -150,8 +154,10 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
             val m = it as Mapper<Any>
             when (selector) {
                 is EventC -> {
-                    require(selector.eventTime != null && selector.id != null &&
-                            selector.shard != null && selector.shard!! >= 0) { "event keys not provided: $selector" }
+                    require(
+                        selector.eventTime != null && selector.id != null &&
+                                selector.shard != null && selector.shard!! >= 0
+                    ) { "event keys not provided: $selector" }
                 }
                 is BucketC -> {
                     require(selector.bucketId != null) { "bucket id not provided: $selector" }
@@ -170,35 +176,34 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
     }
 
     override fun create(): Cluster {
-        return Cluster.builder().withCodecRegistry(CodecRegistry()
-                .register(EnumCodec(EventStatus.values().toSet()))
-                .register(ZdtCodec()))
-                .withClusterName(clusterConfig.clusterName)
-                .withPort(clusterConfig.port)
-                .also {
-                    if (clusterConfig.compression != null)
-                        it.withCompression(ProtocolOptions.Compression.valueOf(clusterConfig.compression!!))
+        return Cluster.builder()
+            .withCodecRegistry(CodecRegistry().register(EnumCodec(EventStatus.values().toSet())).register(ZdtCodec()))
+            .withClusterName(clusterConfig.clusterName)
+            .withPort(clusterConfig.port)
+            .also { clusterConfig.compression?.run { it.withCompression(ProtocolOptions.Compression.valueOf(this)) } }
+            .withRetryPolicy(if (clusterConfig.downgradingConsistency) DowngradingConsistencyRetryPolicy.INSTANCE else DefaultRetryPolicy.INSTANCE)
+            .also {
+                clusterConfig.localDataCenter?.run {
+                    it.withLoadBalancingPolicy(TokenAwarePolicy(DCAwareRoundRobinPolicy.builder().withLocalDc(this).withUsedHostsPerRemoteDc(0).build()))
                 }
-                .withRetryPolicy(if (clusterConfig.downgradingConsistency) DowngradingConsistencyRetryPolicy.INSTANCE else DefaultRetryPolicy.INSTANCE)
-                .also {
-                    if (clusterConfig.localDataCenter != null)
-                        it.withLoadBalancingPolicy(TokenAwarePolicy(DCAwareRoundRobinPolicy.builder().withLocalDc(clusterConfig.localDataCenter).withUsedHostsPerRemoteDc(0).build()))
+            }
+            .withReconnectionPolicy(ConstantReconnectionPolicy(clusterConfig.reconnectPeriod))
+            .withSocketOptions(SocketOptions().apply {
+                connectTimeoutMillis = clusterConfig.connectionTimeOut
+                readTimeoutMillis = clusterConfig.readTimeout
+                keepAlive = clusterConfig.keepTCPConnectionAlive
+            })
+            .withPoolingOptions(PoolingOptions().apply {
+                clusterConfig.apply {
+                    setConnectionsPerHost(LOCAL, coreConnectionsPerLocalHost, maxConnectionsPerLocalHost)
+                    setConnectionsPerHost(REMOTE, coreConnectionsPerRemoteHost, maxConnectionsPerRemoteHost)
                 }
-                .withReconnectionPolicy(ConstantReconnectionPolicy(clusterConfig.reconnectPeriod))
-                .withSocketOptions(SocketOptions().apply {
-                    connectTimeoutMillis = clusterConfig.connectionTimeOut
-                    readTimeoutMillis = clusterConfig.readTimeout
-                    keepAlive = clusterConfig.keepTCPConnectionAlive
-                })
-                .withPoolingOptions(PoolingOptions().apply {
-                    setConnectionsPerHost(LOCAL, clusterConfig.coreConnectionsPerHost, clusterConfig.maxHostsPerConnection)
-                    setConnectionsPerHost(REMOTE, 0, 0)
-                    heartbeatIntervalSeconds = 60
-                }).also { if (clusterConfig.username != null) it.withCredentials(clusterConfig.username, clusterConfig.password) }
-                .addContactPoints(*(clusterConfig.contactPoints?.split(",")?.toTypedArray()
-                        ?: throw ExceptionInInitializerError("contact points not provided")))
-                .apply { decorate(this) }
-                .build()
+                heartbeatIntervalSeconds = 60
+            })
+            .also { clusterConfig.username?.run { it.withCredentials(this, clusterConfig.password) } }
+            .addContactPoints(*clusterConfig.contactPoints.split(",").toTypedArray())
+            .apply { decorate(this) }
+            .build()
     }
 
     protected open fun decorate(builder: Cluster.Builder) {
