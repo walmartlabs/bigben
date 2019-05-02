@@ -141,8 +141,8 @@ To quickly set up the application for local dev testing, do the following steps:
 
 ## Non-docker execution
 `BigBen` can be run without docker as well. Following are the steps
-1. `got clone $repo`
-2. `cd bigben/buid/exec`
+1. `git clone $repo`
+2. `cd bigben/build/exec`
 3. execute `./build.sh`
 4. execute `./app_run.sh`
 
