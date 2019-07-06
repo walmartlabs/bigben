@@ -20,20 +20,33 @@
 package com.walmartlabs.bigben.kafka
 
 import com.google.common.util.concurrent.ListenableFuture
-import com.walmartlabs.bigben.utils.*
+import com.walmartlabs.bigben.utils.Json
 import com.walmartlabs.bigben.utils.commons.Module
 import com.walmartlabs.bigben.utils.commons.ModuleRegistry
 import com.walmartlabs.bigben.utils.commons.Props
 import com.walmartlabs.bigben.utils.commons.PropsLoader
-import org.apache.kafka.clients.consumer.*
+import com.walmartlabs.bigben.utils.done
+import com.walmartlabs.bigben.utils.logger
+import com.walmartlabs.bigben.utils.reduce
+import com.walmartlabs.bigben.utils.retriable
+import com.walmartlabs.bigben.utils.rootCause
+import com.walmartlabs.bigben.utils.transform
+import org.apache.kafka.clients.consumer.CommitFailedException
+import org.apache.kafka.clients.consumer.Consumer
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.WakeupException
 import java.lang.Thread.currentThread
 import java.util.concurrent.Executors.newFixedThreadPool
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.Lock
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 object KafkaModule : Module {
 
@@ -115,11 +128,18 @@ abstract class KafkaMessageProcessor(private val props: PropsLoader) : Runnable 
                 owned.set(null)
             }
         })
-        val tasks = LinkedBlockingQueue<() -> Unit>()
+        val tasks = mutableListOf<() -> Unit>()
         val inPoll = AtomicBoolean(false)
+        val taskLock: Lock = ReentrantLock()
+
         while (!closed.get()) {
             try {
-                mutableListOf<() -> Unit>().run { tasks.drainTo(this); this.forEach { it() } }
+                taskLock.withLock {
+                    if (l.isDebugEnabled) l.debug("processing pending tasks")
+                    tasks.forEach { it() }
+                    tasks.clear()
+                    if (l.isDebugEnabled) l.debug("pending tasks processed successfully")
+                }
                 inPoll.set(true)
                 if (l.isDebugEnabled) l.debug("starting the poll for topic(s): $topics")
                 val records = consumer.poll(props.long("max.poll.wait.time"))
@@ -129,7 +149,7 @@ abstract class KafkaMessageProcessor(private val props: PropsLoader) : Runnable 
                     val (offsets, range) = records.groupBy { TopicPartition(it.topic(), it.partition()) }.run {
                         mapValues { OffsetAndMetadata(it.value.maxBy { it.offset() }!!.offset() + 1) } to
                                 mapValues { "[${it.value.minBy { it.offset() }!!.offset()}-${it.value.maxBy { it.offset() }!!.offset()}]" }
-                                    .mapKeys { "${it.key.topic()}[${it.key.partition()}]" }.toSortedMap()
+                                        .mapKeys { "${it.key.topic()}[${it.key.partition()}]" }.toSortedMap()
                     }
                     val partitions = records.partitions().apply {
                         if (l.isDebugEnabled)
@@ -165,14 +185,14 @@ abstract class KafkaMessageProcessor(private val props: PropsLoader) : Runnable 
                         }
                     }.apply {
                         if (l.isDebugEnabled) l.debug("submitting records for processing: $range")
-                        records.map { it ->
+                        records.map {
                             { process(it) }.retriable(
-                                "${it.topic()}/${it.partition()}/${it.offset()}/${it.key()}",
-                                maxRetries = props.int("message.retry.max.count")
+                                    "${it.topic()}/${it.partition()}/${it.offset()}/${it.key()}",
+                                    maxRetries = props.int("message.retry.max.count")
                             )
                         }.reduce().transform { this }.done({
                             l.error("error in processing messages: $range", it.rootCause())
-                            tasks.add(this)
+                            taskLock.withLock { tasks += this }
                             if (l.isDebugEnabled) l.debug("adding tasks for partition resume and offset commits")
                             if (inPoll.get()) {
                                 if (l.isDebugEnabled) l.debug("waking up consumer stuck in poll")
@@ -183,7 +203,7 @@ abstract class KafkaMessageProcessor(private val props: PropsLoader) : Runnable 
                                 l.debug("messages processed successfully: $range")
                                 l.debug("adding tasks for partition resume and offset commits")
                             }
-                            tasks.add(this)
+                            taskLock.withLock { tasks += this }
                             if (inPoll.get()) {
                                 if (l.isDebugEnabled) l.debug("waking up consumer stuck in poll")
                                 consumer.wakeup()
@@ -200,8 +220,8 @@ abstract class KafkaMessageProcessor(private val props: PropsLoader) : Runnable 
                 } else {
                     if (numUnknownExceptionRetries-- > 0) l.warn("unknown exception, ignoring", rc)
                     else l.error(
-                        "unknown exception, giving up after $numUnknownExceptionRetries retries, closing the consumer",
-                        rc
+                            "unknown exception, giving up after $numUnknownExceptionRetries retries, closing the consumer",
+                            rc
                     )
                     closed.set(true)
                 }
