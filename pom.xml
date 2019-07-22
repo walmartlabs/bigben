@@ -9,7 +9,7 @@
     <groupId>com.walmartlabs.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.7</version>
+    <version>1.0.8-SNAPSHOT</version>
     <modules>
         <module>commons</module>
         <module>lib</module>
@@ -87,27 +87,27 @@
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-commons</artifactId>
-                <version>1.0.7</version>
+                <version>1.0.8-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.0.7</version>
+                <version>1.0.8-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cassandra</artifactId>
-                <version>1.0.7</version>
+                <version>1.0.8-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-kafka</artifactId>
-                <version>1.0.7</version>
+                <version>1.0.8-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cron</artifactId>
-                <version>1.0.7</version>
+                <version>1.0.8-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -390,7 +390,7 @@
     <scm>
         <connection>scm:git:https://github.com/walmartlabs/bigben.git</connection>
         <developerConnection>scm:git:https://github.com/walmartlabs/bigben</developerConnection>
-        <tag>bigben-1.0.7</tag>
+        <tag>HEAD</tag>
         <url>scm:git:https://github.com/walmartlabs/bigben.git</url>
     </scm>
 
