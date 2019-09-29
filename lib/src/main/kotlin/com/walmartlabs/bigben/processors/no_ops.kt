@@ -24,12 +24,19 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.walmartlabs.bigben.entities.Event
 import com.walmartlabs.bigben.entities.EventResponse
 import com.walmartlabs.bigben.utils.Json
+import com.walmartlabs.bigben.utils.logger
 
 /**
  * Created by smalik3 on 6/25/18
  */
 class NoOpCustomClassProcessor(tenant: String, props: Json) : EventProcessor<Event> {
+
+    companion object {
+        val l = logger("/dev/null")
+    }
+
     override fun invoke(t: Event): ListenableFuture<Event> {
+        l.debug { "redirecting event: $t" }
         return immediateFuture(t)
     }
 }

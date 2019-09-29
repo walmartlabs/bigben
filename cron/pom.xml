@@ -22,9 +22,8 @@
             <version>7.0.2</version>
         </dependency>
         <dependency>
-            <groupId>com.datastax.cassandra</groupId>
-            <artifactId>cassandra-driver-extras</artifactId>
-            <version>3.3.0</version>
+            <groupId>com.walmartlabs.bigben</groupId>
+            <artifactId>bigben-cassandra</artifactId>
         </dependency>
     </dependencies>
 
