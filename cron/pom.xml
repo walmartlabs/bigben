@@ -24,7 +24,7 @@
         <dependency>
             <groupId>com.datastax.cassandra</groupId>
             <artifactId>cassandra-driver-extras</artifactId>
-            <version>3.3.0</version>
+            <version>3.8.0</version>
         </dependency>
     </dependencies>
 
