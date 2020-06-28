@@ -314,8 +314,109 @@ A tenant can be registered by calling the following API
 
 fires an event without changing its final status
 
-## cron APIs
-coming up...
+## Cron support
+`BigBen` provides full support for scheduling of cron expressions in a 
+distributed, fault tolerant manner. `BigBen` uses [cron-utils](https://github.com/jmrozanec/cron-utils) 
+open source package to handle cron parsing and calculating execution times.  
+Please see more details on various types of crons supported by the `cron-utils` package. 
+The coverage is quite exhaustive (QUARTZ, UNIX, Cron4J, and Spring).
+
+### How are crons executed?
+`BigBen` uses `hazelcast` to create a lock-free distributed cron execution system.
+`hazelcast` partitions its data in `271` partitions and it takes care of distributing 
+these partitions equally among the cluster nodes. All the cron expressions are hashed to 
+these partitions, which means crons get distributed across the cluster.
+
+Each node then spawns a thread (pool) called `cron-runner` executes every second and 
+checks which **local** crons are ready to execute. Note that there's no cross 
+node communication or locking involved in executing these crons. 
+Each cron requires a `tenant` which dictates how the cron is to be triggered 
+(much like any other event in `BigBen`).
+
+## cron execution guarantees
+`BigBen` aims to guarantee that
+1. As long as at least one node is available, the cron will execute
+2. A cron will always be executed on one node only (If the node goes down then the 
+subsequent executions will happen on another node)
+3. Each cron trigger is tried four times (like other events in `BigBen`) 
+(default is now, 1 second later, 2 seconds later, 4 seconds later)
+4. If all tries result in failure (e.g. if tenant's http service is not 
+responding or kafka cluster is down) and if cron log events support is enabled
+ (see below) then the event is stored in log table with the (last) associated failure. 
+ All intermediate failures are also logged in the configured `log4j` appenders as well.
+5. The minimum execution interval supported is 1 second.      
+
+## cron event log support
+`BigBen` can optionally record each execution of cron trigger in a table called `cron-events`
+(see `bigben-schema.cql` for table details).
+
+The `cron-events` uses fully qualified cron-id (a combination of user
+supplied cron-id, cron-type (e.g. QUARTZ, UNIX, etc), tenant) and a `logGranularity`
+time unit as partition keys and the cron `executionTime` as the event time.
+The table also stores what event is triggered at the trigger time. The `cron-events`
+also supports log event retention as well.
+
+E.g. you can set up a cron top execute every 1 minute and keep records 
+grouped together at DAILY level with retention of 1 week for each event.
+
+This support is optional. By default, the log events are turned off.
+
+_the cron log events are stored with consistency ONE_. You can use a different 
+consistency by providing `cron.log.events.write.consistency` in `bigben.yaml`
         
-    
-    
+## cron APIs
+`POST /cron`
+
+Sets up a cron. (**_requires tenant to be set up first_**)
+
+Sample request payload with event log enabled:
+```json
+{
+	"tenant": "tenant1",
+	"id": "cronId1",
+	"expression": "*/5 * * * * ? *",
+	"type": "QUARTZ",
+	"logGranularity": "MINUTES",
+	"retention": 2,
+	"retentionUnits": "MINUTES"
+}
+```     
+Sample request payload with event log disabled:
+```json
+{
+	"tenant": "tenant1",
+	"id": "cronId1",
+	"expression": "*/5 * * * * ? *",
+	"type": "QUARTZ"
+}
+```  
+The response comes back with a `description` that tells how the cron 
+will be executed.
+
+Sample response payload:
+```json
+{
+  "cron": {
+    "id": "cronId1",
+    "expression": "*/5 * * * * ? *",
+    "type": "QUARTZ",
+    "tenant": "tenant1",
+    "logGranularity": "MINUTES",
+    "retention": 2,
+    "retentionUnits": "MINUTES"
+  },
+  "description": "every 5 seconds"
+}
+```      
+That's it! This cron will execute every 5 seconds as long as any node in cluster 
+is alive.
+
+`GET /cron/{tenant}/{id}`
+
+Returns all crons (if multiple types) identified by this tenant and 
+cronId combination. 
+
+`DELETE /cron/{tenant}/{id}/{type}`
+
+Deletes a cron with specific combination. 
+

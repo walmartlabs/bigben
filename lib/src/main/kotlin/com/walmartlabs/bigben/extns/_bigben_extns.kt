@@ -20,6 +20,7 @@
 package com.walmartlabs.bigben.extns
 
 import com.walmartlabs.bigben.BigBen.entityProvider
+import com.walmartlabs.bigben.entities.Error
 import com.walmartlabs.bigben.entities.Event
 import com.walmartlabs.bigben.entities.EventDeliveryOption
 import com.walmartlabs.bigben.entities.EventDeliveryOption.FULL_EVENT
@@ -40,13 +41,15 @@ fun Event.toResponse() = eventResponse?.let { it }
     ?: EventResponse(
         id = xrefId, eventId = id, triggeredAt = processedAt?.toString(),
         tenant = tenant, eventTime = eventTime?.toString(), payload = payload,
-        eventStatus = status, deliveryOption = deliveryOption(this)
+        eventStatus = status, deliveryOption = deliveryOption(this), error = Error(-1, error)
     )
 
 fun EventResponse.event() = entityProvider<Event>().let { it.raw(it.selector(Event::class.java)) }.also {
     val t = ZonedDateTime.parse(triggeredAt)
     it.tenant = tenant; it.xrefId = id; it.eventTime = ZonedDateTime.parse(eventTime)!!; it.payload = payload
-    it.id = eventId; it.bucketId = t.bucket(); it.processedAt = t; if (eventId == null) it.deliveryOption = deliveryOption
+    it.id = eventId; it.bucketId = t.bucket(); it.processedAt = t
+    if (eventId == null) it.deliveryOption = deliveryOption
+    it.error = error?.message
 }
 
 fun BitSet.toSet(): MutableSet<Int> = stream().boxed().collect(Collectors.toSet())!!

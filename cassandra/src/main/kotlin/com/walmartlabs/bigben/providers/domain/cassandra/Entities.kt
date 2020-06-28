@@ -19,10 +19,21 @@
  */
 package com.walmartlabs.bigben.providers.domain.cassandra
 
-import com.datastax.driver.mapping.annotations.*
+import com.datastax.driver.core.ConsistencyLevel
+import com.datastax.driver.mapping.annotations.ClusteringColumn
+import com.datastax.driver.mapping.annotations.Column
+import com.datastax.driver.mapping.annotations.PartitionKey
+import com.datastax.driver.mapping.annotations.Table
+import com.datastax.driver.mapping.annotations.Transient
 import com.hazelcast.nio.ObjectDataInput
 import com.hazelcast.nio.ObjectDataOutput
-import com.walmartlabs.bigben.entities.*
+import com.walmartlabs.bigben.entities.Bucket
+import com.walmartlabs.bigben.entities.Event
+import com.walmartlabs.bigben.entities.EventDeliveryOption
+import com.walmartlabs.bigben.entities.EventLookup
+import com.walmartlabs.bigben.entities.EventResponse
+import com.walmartlabs.bigben.entities.EventStatus
+import com.walmartlabs.bigben.entities.KV
 import com.walmartlabs.bigben.extns.utc
 import com.walmartlabs.bigben.hz.HzObjectFactory.Companion.BIGBEN_FACTORY_ID
 import com.walmartlabs.bigben.hz.HzObjectFactory.ObjectId.BUCKET
@@ -32,13 +43,25 @@ import java.util.*
 /**
  * Created by smalik3 on 2/26/18
  */
+
+interface ConsistencyOverride {
+    fun read(): ConsistencyLevel? = null
+    fun write(): ConsistencyLevel? = null
+    fun delete(): ConsistencyLevel? = null
+}
+
+interface TTLOverride {
+    fun ttl(): Int = 0
+}
+
 @Table(name = "buckets")
 data class BucketC(@PartitionKey @Column(name = "id") override var bucketId: ZonedDateTime? = null,
                    override var status: EventStatus? = null,
                    override var count: Long? = null,
                    @Column(name = "processed_at") override var processedAt: ZonedDateTime? = null,
                    @Column(name = "modified_at") override var updatedAt: ZonedDateTime? = null,
-                   @Column(name = "failed_shards", codec = FailedShardsCodec::class) override var failedShards: Set<Int>? = null) : Bucket {
+                   @Column(name = "failed_shards", codec = FailedShardsCodec::class)
+                   override var failedShards: Set<Int>? = null) : Bucket, ConsistencyOverride {
     @Transient
     override fun getFactoryId() = BIGBEN_FACTORY_ID
 
@@ -84,7 +107,7 @@ data class EventC(@ClusteringColumn @Column(name = "event_time") override var ev
                   @Column(name = "processed_at") override var processedAt: ZonedDateTime? = null,
                   override var payload: String? = null,
                   @Transient override var eventResponse: EventResponse? = null,
-                  @Transient override var deliveryOption: EventDeliveryOption? = null) : Event
+                  @Transient override var deliveryOption: EventDeliveryOption? = null) : Event, ConsistencyOverride
 
 @Table(name = "lookups")
 data class EventLookupC(@PartitionKey override var tenant: String? = null,
@@ -94,11 +117,11 @@ data class EventLookupC(@PartitionKey override var tenant: String? = null,
                         @Column(name = "event_time") override var eventTime: ZonedDateTime? = null,
                         @Column(name = "event_id") override var eventId: String? = null,
                         override var payload: String? = null,
-                        @Column(name = "l_m") var lastModified: ZonedDateTime? = null) : EventLookup
+                        @Column(name = "l_m") var lastModified: ZonedDateTime? = null) : EventLookup, ConsistencyOverride
 
 @Table(name = "kv_table")
 data class KVC(@PartitionKey override var key: String? = null,
                @ClusteringColumn override var column: String? = null,
                override var value: String? = null,
                @Column(name = "l_m") var lastModified: ZonedDateTime? = null
-) : KV
+) : KV, ConsistencyOverride

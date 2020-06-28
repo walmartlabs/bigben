@@ -19,21 +19,14 @@
  */
 package com.walmartlabs.bigben.cron
 
-import com.cronutils.model.CronType
-import com.cronutils.model.definition.CronDefinitionBuilder
-import com.cronutils.model.time.ExecutionTime
-import com.cronutils.parser.CronParser
 import com.hazelcast.map.AbstractEntryProcessor
 import com.hazelcast.nio.ObjectDataInput
 import com.hazelcast.nio.ObjectDataOutput
 import com.hazelcast.nio.serialization.DataSerializable
-import com.walmartlabs.bigben.extns.utc
 import com.walmartlabs.bigben.utils.fromJson
 import com.walmartlabs.bigben.utils.json
 import com.walmartlabs.bigben.utils.typeRefJson
 import java.io.Serializable
-import java.time.ZoneId
-import java.time.ZonedDateTime
 
 /**
  * Created by smalik3 on 7/6/18
@@ -52,34 +45,13 @@ class CronDeleteEntryProcessor(cronId: String? = null) : DataSerializableEntryPr
 class CronEntryProcessor(c: String? = null) : DataSerializableEntryProcessor<Int, Crons>(c, true) {
     override fun process(entry: MutableMap.MutableEntry<Int, Crons?>): Any? {
         val cron = Cron::class.java.fromJson(value!!)
-        return entry.setValue(entry.value.apply { CronRunner.crons.values.forEach { this!!.crons[cron.cronId()] = cron } }).let { null }
-    }
-}
-
-class CronMatchExecutionTimeProcessor(millis: Long? = null) : DataSerializableEntryProcessor<Int, Crons>(millis?.toString(), true) {
-    override fun process(entry: MutableMap.MutableEntry<Int, Crons>): List<String> {
-        val zdt = utc(value!!.toLong())
-        return ArrayList(entry.value.crons.filter { it.value.executionTime().isMatch(zdt) }.values.map { it.json() })
+        return entry.setValue(entry.value.apply { CronRunner.crons.values.forEach { this!!.crons[cron.fqdnCronId()] = cron } }).let { null }
     }
 }
 
 class CronUpdateExecutionTimeEntryProcessor(cronId: String? = null, lastExecution: String? = null) : DataSerializableEntryProcessor<Int, Crons>((cronId to lastExecution).json(), true) {
     override fun process(entry: MutableMap.MutableEntry<Int, Crons?>): Any? {
         val (cronId, lastExecution) = typeRefJson<Pair<String, String>>(value!!)
-        return entry.setValue(entry.value.apply { this!!.crons[cronId]?.let { it.lastExecutionTime = ZonedDateTime.parse(lastExecution) } }).let { null }
-    }
-}
-
-fun main(args: Array<String>) {
-    val c = CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX)).parse("* * * * *")
-    val et = ExecutionTime.forCron(c)
-    var zdt = ZonedDateTime.now(ZoneId.of("UTC"))
-    var z = zdt
-    println(zdt)
-    (1..10).forEach {
-        val match = et.isMatch(z)
-        z = z.plusSeconds(1)
-        zdt = et.nextExecution(zdt).get()
-        println("match = $match, zdt = $zdt, z = $z")
+        return entry.setValue(entry.value.apply { this!!.crons[cronId]?.let { it.lastExecutionTime = lastExecution } }).let { null }
     }
 }
