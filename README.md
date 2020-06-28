@@ -296,7 +296,16 @@ A tenant can be registered by calling the following API
   ]
 }
 ```
-
+```json
+[{ 
+    "id":"1000001",
+    "eventTime":"2020-06-28T00:00:00Z",
+    "tenant":"1",
+    "payload":"send_email",
+    "mode":"UPSERT",
+    "deliveryOption":"PAYLOAD_ONLY"
+}]
+```
 ### find an event
 `GET /events/find?id=?&tenant=?`
 
