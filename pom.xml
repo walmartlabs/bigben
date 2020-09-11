@@ -9,7 +9,7 @@
     <groupId>com.walmartlabs.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.7-SNAPSHOT</version>
+    <version>1.0.9-SNAPSHOT</version>
     <modules>
         <module>commons</module>
         <module>lib</module>
@@ -33,14 +33,14 @@
         <jackson-module-kotlin.version>2.9.4.1</jackson-module-kotlin.version>
         <commons-lang3.version>3.7</commons-lang3.version>
         <commons-text.version>1.2</commons-text.version>
-        <ktor.version>1.1.1</ktor.version>
+        <ktor.version>1.1.2</ktor.version>
         <skipTests>true</skipTests>
     </properties>
 
     <repositories>
         <repository>
             <id>jcenter</id>
-            <url>http://jcenter.bintray.com</url>
+            <url>https://jcenter.bintray.com</url>
         </repository>
     </repositories>
 
@@ -87,27 +87,27 @@
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-commons</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cassandra</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-kafka</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cron</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>

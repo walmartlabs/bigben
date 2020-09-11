@@ -3,7 +3,7 @@ set -e
 CASSANDRA_CONTAINER_NAME=${CASSANDRA_CONTAINER_NAME:-bigben_cassandra}
 CASSANDRA_PORT=${CASSANDRA_PORT:-9042}
 CASSANDRA_GOSSIP_PORT=${CASSANDRA_GOSSIP_PORT:-7000}
-HOST_IP=${HOST_IP:-`ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'`}
+HOST_IP=${HOST_IP:-`ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.*'`}
 echo "determined host ip: $HOST_IP"
 echo "stopping ${CASSANDRA_CONTAINER_NAME}, if running"
 docker stop ${CASSANDRA_CONTAINER_NAME} || true

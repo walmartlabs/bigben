@@ -64,14 +64,8 @@ fun Application.routes() {
         post("/generation/random") { call.respond(EventGenerator.generateEvents(call.receive())) }
         route("/cron") {
             post { call.fromAPIResponse(CronService.upsert(call.receive())) }
-            get("/describe") { call.fromAPIResponse(CronService.describe(call.receive())) }
             get("/{tenant}/{id}") {
-                call.fromAPIResponse(
-                    CronService.get(
-                        call.parameters["tenant"]!!, call.parameters["id"]!!,
-                        call.request.queryParameters["describe"]?.toBoolean()
-                    )
-                )
+                call.fromAPIResponse(CronService.get(call.parameters["tenant"]!!, call.parameters["id"]!!))
             }
             delete("/{tenant}/{id}/{type}") {
                 call.fromAPIResponse(CronService.delete(call.parameters["tenant"]!!, call.parameters["id"]!!, call.parameters["type"]!!))
