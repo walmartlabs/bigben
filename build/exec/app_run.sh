@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export HOST_IP=${HOST_IP:-`ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'`}
+export HOST_IP=${HOST_IP:-`ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.*'`}
 export SERVER_PORT=${SERVER_PORT:-8080}
 APP_ROOT=${PWD}/../configs
 export HZ_MEMBER_IPS=${HZ_MEMBER_IPS:-${HOST_IP}}
