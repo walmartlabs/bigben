@@ -56,7 +56,7 @@ function start() {
         -e JAVA_OPTS="${JAVA_OPTS} -Dbigben.configs=uri://${APP_ROOT}/overrides.yaml,uri://${APP_ROOT}/bigben.yaml \
         -Dapp.server.port=${SERVER_PORT} \
         -Dbigben.log.file=${APP_ROOT}/logs/bigben_app_${app_port}.log \
-        -Dbigben.log.config=${APP_ROOT} /log4j.xml \
+        -Dbigben.log.config=${APP_ROOT}/log4j.xml \
         -Dhazelcast.local.publicAddress=${HOST_IP}:${hz_port}" \
         --name "${APP_CONTAINER_NAME}_$app_port" sandeepmalik/bigben:1
         let i=i+1
