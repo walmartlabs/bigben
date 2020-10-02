@@ -1,3 +1,11 @@
+***
+# NOTICE:
+ 
+## This repository has been archived and is not supported.
+ 
+[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
+***
+
 # BigBen
 `BigBen` is a generic, multi-tenant, time-based event scheduler and cron 
 scheduling framework based on `Cassandra` and `Hazelcast`
