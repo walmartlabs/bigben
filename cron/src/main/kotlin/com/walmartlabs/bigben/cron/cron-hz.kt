@@ -34,7 +34,7 @@ import com.walmartlabs.bigben.utils.commons.Props.int
  */
 data class Crons @JvmOverloads constructor(var crons: MutableMap<String, Cron> = HashMap()) : DataSerializable {
     override fun writeData(out: ObjectDataOutput) = out.run { writeInt(crons.size); crons.forEach { writeUTF(it.value.json()) } }
-    override fun readData(ins: ObjectDataInput) = ins.run { (1..readInt()).forEach { Cron::class.java.fromJson(readUTF()).apply { crons[cronId()] = this } } }
+    override fun readData(ins: ObjectDataInput) = ins.run { (1..readInt()).forEach { Cron::class.java.fromJson(readUTF()).apply { crons[fqdnCronId()] = this } } }
 }
 
 class CronMapStore : MapStore<Int, Crons> {
