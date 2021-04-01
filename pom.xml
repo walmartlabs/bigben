@@ -9,7 +9,7 @@
     <groupId>com.walmartlabs.bigben</groupId>
     <artifactId>bigben</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.7-SNAPSHOT</version>
+    <version>1.0.9-SNAPSHOT</version>
     <modules>
         <module>commons</module>
         <module>lib</module>
@@ -40,7 +40,7 @@
     <repositories>
         <repository>
             <id>jcenter</id>
-            <url>http://jcenter.bintray.com</url>
+            <url>https://jcenter.bintray.com</url>
         </repository>
     </repositories>
 
@@ -87,27 +87,27 @@
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-commons</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-lib</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cassandra</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-kafka</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>com.walmartlabs.bigben</groupId>
                 <artifactId>bigben-cron</artifactId>
-                <version>1.0.7-SNAPSHOT</version>
+                <version>1.0.9-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>

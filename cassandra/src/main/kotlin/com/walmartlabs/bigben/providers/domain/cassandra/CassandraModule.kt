@@ -19,16 +19,33 @@
  */
 package com.walmartlabs.bigben.providers.domain.cassandra
 
-import com.datastax.driver.core.*
+import com.datastax.driver.core.Cluster
+import com.datastax.driver.core.CodecRegistry
 import com.datastax.driver.core.HostDistance.LOCAL
 import com.datastax.driver.core.HostDistance.REMOTE
-import com.datastax.driver.core.policies.*
+import com.datastax.driver.core.PoolingOptions
+import com.datastax.driver.core.PreparedStatement
+import com.datastax.driver.core.ProtocolOptions
+import com.datastax.driver.core.Session
+import com.datastax.driver.core.SocketOptions
+import com.datastax.driver.core.policies.ConstantReconnectionPolicy
+import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
+import com.datastax.driver.core.policies.DefaultRetryPolicy
+import com.datastax.driver.core.policies.DowngradingConsistencyRetryPolicy
+import com.datastax.driver.core.policies.TokenAwarePolicy
 import com.datastax.driver.mapping.Mapper
 import com.datastax.driver.mapping.Mapper.Option.consistencyLevel
 import com.datastax.driver.mapping.Mapper.Option.saveNullFields
+import com.datastax.driver.mapping.Mapper.Option.ttl
 import com.datastax.driver.mapping.MappingManager
 import com.google.common.util.concurrent.ListenableFuture
-import com.walmartlabs.bigben.entities.*
+import com.walmartlabs.bigben.entities.Bucket
+import com.walmartlabs.bigben.entities.EntityProvider
+import com.walmartlabs.bigben.entities.Event
+import com.walmartlabs.bigben.entities.EventLoader
+import com.walmartlabs.bigben.entities.EventLookup
+import com.walmartlabs.bigben.entities.EventStatus
+import com.walmartlabs.bigben.entities.KV
 import com.walmartlabs.bigben.extns.nowUTC
 import com.walmartlabs.bigben.utils.commons.Module
 import com.walmartlabs.bigben.utils.commons.ModuleRegistry
@@ -54,8 +71,8 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
         private val session: Session
 
         private val clusterConfig = ClusterConfig::class.java.fromJson(map("cassandra.cluster").json())
-        private val writeConsistency = consistencyLevel(clusterConfig.writeConsistency)
-        private val readConsistency = consistencyLevel(clusterConfig.readConsistency)
+        private val writeConsistency = clusterConfig.writeConsistency
+        private val readConsistency = clusterConfig.readConsistency
 
         init {
             l.info("initialing the Cassandra module")
@@ -77,7 +94,7 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
             Bucket::class.java -> BucketC() as T
             EventLookup::class.java -> EventLookupC() as T
             KV::class.java -> KVC() as T
-            else -> throw IllegalArgumentException("unknown entity $type")
+            else -> type.newInstance()
         }
     }
 
@@ -91,12 +108,14 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
     }
 
     override fun fetch(selector: T): ListenableFuture<T?> {
+        val readC = (selector as? ConsistencyOverride)?.read()?.let { it } ?: readConsistency
         return mappingManager.mapper(selector::class.java).let {
+            val readConsistency = consistencyLevel(readC)
             when (selector) {
                 is EventC -> {
                     require(
-                        selector.eventTime != null && selector.id != null &&
-                                selector.shard != null && selector.shard!! >= 0
+                            selector.eventTime != null && selector.id != null &&
+                                    selector.shard != null && selector.shard!! >= 0
                     ) { "event keys not provided: $selector" }
                     it.getAsync(selector.bucketId, selector.shard, selector.eventTime, selector.id, readConsistency).transform { it }
                 }
@@ -115,7 +134,7 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
                 else -> throw IllegalArgumentException("unknown selector: $selector")
             }
         }.apply {
-            transform { if (l.isDebugEnabled) l.debug("fetched entity: {}", it) }
+            transform { if (l.isDebugEnabled) l.debug("fetched entity: {}, readConsistency: {}", it, readC) }
         }
     }
 
@@ -126,8 +145,8 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
             when (selector) {
                 is EventC -> {
                     require(
-                        selector.eventTime != null && selector.id != null && selector.bucketId != null &&
-                                selector.shard != null && selector.shard!! >= 0
+                            selector.eventTime != null && selector.id != null && selector.bucketId != null &&
+                                    selector.shard != null && selector.shard!! >= 0
                     ) { "event keys not provided: $selector" }
                 }
                 is BucketC -> {
@@ -141,10 +160,13 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
                     require(selector.key != null && selector.column != null) { "kv keys not provided: $selector" }
                     selector.lastModified = nowUTC()
                 }
-                else -> throw IllegalArgumentException("unknown selector: $selector")
             }
-            if (l.isDebugEnabled) l.debug("saving entity {}", selector)
-            m.saveAsync(selector, saveNullFields(false), writeConsistency).transform { _ -> if (l.isDebugEnabled) l.debug("saved entity {}", selector); selector }
+            val writeConsistency = (selector as? ConsistencyOverride)?.write()?.let { it } ?: writeConsistency
+            val ttl = (selector as? TTLOverride)?.ttl()?.let { it } ?: 0
+
+            if (l.isDebugEnabled) l.debug("saving entity {}, ttl: {}, writeConsistency: {}", selector, ttl, writeConsistency)
+            m.saveAsync(selector, saveNullFields(false), consistencyLevel(writeConsistency), ttl(ttl))
+                    .transform { if (l.isDebugEnabled) l.debug("saved entity {}", selector); selector }
         }
     }
 
@@ -155,8 +177,8 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
             when (selector) {
                 is EventC -> {
                     require(
-                        selector.eventTime != null && selector.id != null &&
-                                selector.shard != null && selector.shard!! >= 0
+                            selector.eventTime != null && selector.id != null &&
+                                    selector.shard != null && selector.shard!! >= 0
                     ) { "event keys not provided: $selector" }
                 }
                 is BucketC -> {
@@ -168,42 +190,42 @@ open class CassandraModule<T : Any> : EntityProvider<T>, ClusterFactory, EventLo
                 is KVC -> {
                     require(selector.key != null && selector.column != null) { "kv keys not provided: $selector" }
                 }
-                else -> throw IllegalArgumentException("unknown selector: $selector")
             }
-            if (l.isDebugEnabled) l.debug("deleting entity: {}", selector)
-            m.deleteAsync(selector, writeConsistency).transform { _ -> if (l.isDebugEnabled) l.debug("deleted entity {}", selector); selector }
+            val deleteConsistency = (selector as? ConsistencyOverride)?.delete()?.let { it } ?: writeConsistency
+            if (l.isDebugEnabled) l.debug("deleting entity: {}, deleteConsistency: $deleteConsistency", selector)
+            m.deleteAsync(selector, consistencyLevel(deleteConsistency)).transform { if (l.isDebugEnabled) l.debug("deleted entity {}", selector); selector }
         }
     }
 
     override fun create(): Cluster {
         return Cluster.builder()
-            .withCodecRegistry(CodecRegistry().register(EnumCodec(EventStatus.values().toSet())).register(ZdtCodec()))
-            .withClusterName(clusterConfig.clusterName)
-            .withPort(clusterConfig.port)
-            .also { clusterConfig.compression?.run { it.withCompression(ProtocolOptions.Compression.valueOf(this)) } }
-            .withRetryPolicy(if (clusterConfig.downgradingConsistency) DowngradingConsistencyRetryPolicy.INSTANCE else DefaultRetryPolicy.INSTANCE)
-            .also {
-                clusterConfig.localDataCenter?.run {
-                    it.withLoadBalancingPolicy(TokenAwarePolicy(DCAwareRoundRobinPolicy.builder().withLocalDc(this).withUsedHostsPerRemoteDc(0).build()))
+                .withCodecRegistry(CodecRegistry().register(EnumCodec(EventStatus.values().toSet())).register(ZdtCodec()))
+                .withClusterName(clusterConfig.clusterName)
+                .withPort(clusterConfig.port)
+                .also { clusterConfig.compression?.run { it.withCompression(ProtocolOptions.Compression.valueOf(this)) } }
+                .withRetryPolicy(if (clusterConfig.downgradingConsistency) DowngradingConsistencyRetryPolicy.INSTANCE else DefaultRetryPolicy.INSTANCE)
+                .also {
+                    clusterConfig.localDataCenter?.run {
+                        it.withLoadBalancingPolicy(TokenAwarePolicy(DCAwareRoundRobinPolicy.builder().withLocalDc(this).withUsedHostsPerRemoteDc(0).build()))
+                    }
                 }
-            }
-            .withReconnectionPolicy(ConstantReconnectionPolicy(clusterConfig.reconnectPeriod))
-            .withSocketOptions(SocketOptions().apply {
-                connectTimeoutMillis = clusterConfig.connectionTimeOut
-                readTimeoutMillis = clusterConfig.readTimeout
-                keepAlive = clusterConfig.keepTCPConnectionAlive
-            })
-            .withPoolingOptions(PoolingOptions().apply {
-                clusterConfig.apply {
-                    setConnectionsPerHost(LOCAL, coreConnectionsPerLocalHost, maxConnectionsPerLocalHost)
-                    setConnectionsPerHost(REMOTE, coreConnectionsPerRemoteHost, maxConnectionsPerRemoteHost)
-                }
-                heartbeatIntervalSeconds = 60
-            })
-            .also { clusterConfig.username?.run { it.withCredentials(this, clusterConfig.password) } }
-            .addContactPoints(*clusterConfig.contactPoints.split(",").toTypedArray())
-            .apply { decorate(this) }
-            .build()
+                .withReconnectionPolicy(ConstantReconnectionPolicy(clusterConfig.reconnectPeriod))
+                .withSocketOptions(SocketOptions().apply {
+                    connectTimeoutMillis = clusterConfig.connectionTimeOut
+                    readTimeoutMillis = clusterConfig.readTimeout
+                    keepAlive = clusterConfig.keepTCPConnectionAlive
+                })
+                .withPoolingOptions(PoolingOptions().apply {
+                    clusterConfig.apply {
+                        setConnectionsPerHost(LOCAL, coreConnectionsPerLocalHost, maxConnectionsPerLocalHost)
+                        setConnectionsPerHost(REMOTE, coreConnectionsPerRemoteHost, maxConnectionsPerRemoteHost)
+                    }
+                    heartbeatIntervalSeconds = 60
+                })
+                .also { clusterConfig.username?.run { it.withCredentials(this, clusterConfig.password) } }
+                .addContactPoints(*clusterConfig.contactPoints.split(",").toTypedArray())
+                .apply { decorate(this) }
+                .build()
     }
 
     protected open fun decorate(builder: Cluster.Builder) {
